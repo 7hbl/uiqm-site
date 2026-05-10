@@ -18,7 +18,7 @@ const UVClient = self.UVClient;
 /**
  * @type {import('../uv').UVConfig}
  */
-const __uv$config = self['{{__uv$config}}'];
+const __uv$config = self['__uv$config'];
 
 /**
  * @type {string}
@@ -1371,3 +1371,4 @@ function __uvHook(window) {
     }
   );
 }
+

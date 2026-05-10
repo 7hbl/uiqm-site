@@ -2,19 +2,19 @@
 <html>
   <head>
     <base href="/" />
-    <title>{{mask}}{{InvisiProxy LTS | Error}}</title>
+    <title>InvisiProxy LTS | Error</title>
     <meta itemprop="http-status" content="404" />
-    {{ifSEO}}{{
+    ifSEO
     <meta
       name="description"
       content="InvisiProxy is a secure web proxy service with support for many sites. Bypass filters and freely enjoy a safer private browsing experience or unblock websites on devices such as Chromebooks and at places like school or work without downloading anything."
     />
-    }}
+    
     <!--HEAD-CONTENT-->
     <script src="https://unpkg.com/tsparticles@3.8.1/tsparticles.bundle.min.js" defer data-module></script>
-    {{inline}}{{
-    <script src="{{route}}{{assets/js/csel.js}}{{inline}}" defer></script>
-    }}
+    inline
+    <script src="assets/js/csel.jsinline" defer></script>
+    
     <style>
       body {
         color: #eceff4;
@@ -54,21 +54,21 @@
     <!-- IMPORTANT-IVINSERT-DONOTDELETE -->
     <div id="mainbody" class="fullwidth">
       <div class="box-error text-center">
-        <h1>{{mask}}{{Site Error!}}</h1>
+        <h1>Site Error!</h1>
         <h2>
-          {{mask}}{{Reload the page or do Ctrl+R!!! This fixes a lot of issues}}
+          Reload the page or do Ctrl+R!!! This fixes a lot of issues
         </h2>
         <h2>
-          {{mask}}{{Blame BareMux! There are no bare clients.... reloading the page will resolve this issue.}}
+          Blame BareMux! There are no bare clients.... reloading the page will resolve this issue.
         </h2>
         <p>
-          {{mask}}{{Might be doing some maintenance or the web server is down.}}
+          Might be doing some maintenance or the web server is down.
         </p>
-        <p>{{mask}}{{In that case wait a bit until it is resolved!}}</p>
+        <p>In that case wait a bit until it is resolved!</p>
         <br />
         <p>
           Invalid URL? View the
-          <a href="{{route}}{{/questions}}" class="bluelink">FAQ page</a> for
+          <a href="/questions" class="bluelink">FAQ page</a> for
           help!
         </p>
       </div>
@@ -79,3 +79,4 @@
     <!-- IMPORTANT-IVINSERT-DONOTDELETE -->
   </body>
 </html>
+

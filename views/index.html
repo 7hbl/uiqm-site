@@ -7,23 +7,18 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>">
     <script src="/gmt/index.js"></script>
     <script>
-        // Aggressive Cache/DB nuking on start to prevent "Ghost Schema" errors
         window._proxyReady = (async () => {
             const clearDB = (name) => new Promise(res => {
                 const r = indexedDB.deleteDatabase(name);
                 r.onsuccess = r.onerror = r.onblocked = () => res();
             });
-
             try {
-                // Delete common Scramjet DB names directly (Edge InPrivate fix)
-                await clearDB('__sj');
-                await clearDB('sj');
+                await clearDB('__sj'); await clearDB('sj');
                 if (indexedDB.databases) {
                     const dbs = await indexedDB.databases();
                     await Promise.all(dbs.map(db => clearDB(db.name)));
                 }
             } catch (_) {}
-
             await new Promise((resolve, reject) => {
                 const s = document.createElement('script');
                 s.src = '/worker/working.all.js';
@@ -112,7 +107,6 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                 const regs = await navigator.serviceWorker.getRegistrations();
                 await Promise.all(regs.map(r => r.unregister()));
                 await new Promise(res => { const r = indexedDB.deleteDatabase('__sj'); r.onsuccess = r.onerror = res; });
-                await new Promise(res => { const r = indexedDB.deleteDatabase('sj'); r.onsuccess = r.onerror = res; });
             } catch (_) {}
             location.reload();
         };
@@ -150,13 +144,8 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                         prefix: SCRAMJET_PREFIX,
                         files: { wasm: '/worker/working.wasm.wasm', all: '/worker/working.all.js', sync: '/worker/working.sync.js' }
                     });
-                    
-                    // RETRY LOGIC for the IDB error
-                    try {
-                        await sj.init();
-                    } catch (e) {
+                    try { await sj.init(); } catch (e) {
                         if (e.name === 'NotFoundError' || e.message.includes('object store')) {
-                            console.warn('IDB Schema mismatch. Nuking and retrying...');
                             await new Promise(r => { const req = indexedDB.deleteDatabase('__sj'); req.onsuccess = req.onerror = r; });
                             await sj.init();
                         } else throw e;

@@ -35,7 +35,7 @@ const cspHeaders = [
 const emptyMethods = ['GET', 'HEAD'];
 
 class UVServiceWorker extends Ultraviolet.EventEmitter {
-  constructor(config = self['{{__uv$config}}']) {
+  constructor(config = self['__uv$config']) {
     super();
     if (!config.prefix) config.prefix = '/service/';
     this.config = config;
@@ -46,7 +46,7 @@ class UVServiceWorker extends Ultraviolet.EventEmitter {
   }
   /**
    *
-   * @param {Event & {request: Request}} param0
+   * @param {Event & {request: Request param0
    * @returns
    */
   route({ request }) {
@@ -56,7 +56,7 @@ class UVServiceWorker extends Ultraviolet.EventEmitter {
   }
   /**
    *
-   * @param {Event & {request: Request}} param0
+   * @param {Event & {request: Request param0
    * @returns
    */
   async fetch({ request }) {
@@ -422,8 +422,8 @@ function errorTemplate(trace, fetchedURL) {
         uvVersion.textContent = ${JSON.stringify('3.2.7')};
     `;
 
-  return '{{ultraviolet-error}}'.replace(
-    '{{src}}',
+  return 'ultraviolet-error'.replace(
+    'src',
     'data:application/javascript,' + encodeURIComponent(script)
   );
 }
@@ -446,3 +446,4 @@ function renderError(err, fetchedURL) {
     headers: headers,
   });
 }
+

@@ -1,27 +1,28 @@
 [
   {
     "name": "Webretro Collection",
-    "path": "{{route}}{{/webretro}}",
+    "path": "/webretro",
     "img": "genesis.webp"
   },
   {
     "name": "GBA Emulator",
-    "path": "{{route}}{{/webretro}}?core=mgba",
+    "path": "/webretro?core=mgba",
     "img": "gba.webp"
   },
   {
     "name": "NES Emulator",
-    "path": "{{route}}{{/webretro}}?core=nestopia",
+    "path": "/webretro?core=nestopia",
     "img": "nes.webp"
   },
   {
     "name": "SNES Emulator",
-    "path": "{{route}}{{/webretro}}?core=snes9x",
+    "path": "/webretro?core=snes9x",
     "img": "snes.webp"
   },
   {
     "name": "N64 Emulator",
-    "path": "{{route}}{{/webretro}}?core=mupen64plus_next",
+    "path": "/webretro?core=mupen64plus_next",
     "img": "nintendo64.webp"
   }
 ]
+

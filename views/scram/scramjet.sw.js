@@ -14,7 +14,6 @@ async function handleRequest(event) {
         await scramjet.loadConfig();
         if (scramjet.route(event)) return scramjet.fetch(event);
     } catch (e) {
-        // If the SW hits the IDB error, it will recover on next reload
         console.warn('[UIQM SW] Fetch error:', e);
     }
     return fetch(event.request);

@@ -8,9 +8,9 @@
     origin = location;
   _addEventListener('keydown', (event) => {
     if (event.ctrlKey && event.code === 'KeyM' && event.isTrusted) {
-      if (localStorage.getItem('{{hu-lts}}-loader-key') !== navigator.userAgent)
-        localStorage.setItem('{{hu-lts}}-loader-key', navigator.userAgent);
-      else localStorage.removeItem('{{hu-lts}}-loader-key');
+      if (localStorage.getItem('hu-lts-loader-key') !== navigator.userAgent)
+        localStorage.setItem('hu-lts-loader-key', navigator.userAgent);
+      else localStorage.removeItem('hu-lts-loader-key');
       _window.location.reload();
     }
   });
@@ -43,11 +43,11 @@
     if (currentDoc.currentScript) currentDoc.currentScript.remove();
   };
   if (
-    _window.localStorage.getItem('{{hu-lts}}-loader-key') !==
+    _window.localStorage.getItem('hu-lts-loader-key') !==
     navigator.userAgent
   )
     return displayErrorPage();
-  const lastUpdated = '{{cacheVal}}',
+  const lastUpdated = 'cacheVal',
     retrieveUrl = (pathname) => {
       let capturedUrl = new URL(pathname, origin),
         capturedParams = new URLSearchParams(capturedUrl.search);
@@ -188,8 +188,8 @@
                             )
                               elementCopy.addEventListener('click', (event) => {
                                 event.preventDefault();
-                                if (attrValue === '{{route}}{{/}}')
-                                  attrValue = '{{route}}{{/index}}';
+                                if (attrValue === '/')
+                                  attrValue = '/index';
                                 loadPage(new URL(attrValue, origin))();
                               });
                             else if (nodeName === 'link') {
@@ -318,3 +318,4 @@
     };
   loadAttachments();
 })();
+

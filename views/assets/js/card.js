@@ -36,3 +36,4 @@ const handleMouseMove = (element) => {
 shimmerEffects.forEach(handleMouseMove);
 shimmerEffects.forEach(handleMouseLeave);
 })();
+

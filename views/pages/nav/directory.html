@@ -1,13 +1,13 @@
 <!doctype html>
 <html>
   <head>
-    <title>{{mask}}{{InvisiProxy LTS | Web Emulation}}</title>
-    {{ifSEO}}{{
+    <title>InvisiProxy LTS | Web Emulation</title>
+    ifSEO
     <meta
       name="description"
       content="InvisiProxy is a secure web proxy service with support for many sites. Bypass filters and freely enjoy a safer private browsing experience or unblock websites on devices such as Chromebooks and at places like school or work without downloading anything."
     />
-    }}
+    
     <!--HEAD-CONTENT-->
     <script src="https://unpkg.com/tsparticles@3.8.1/tsparticles.bundle.min.js" defer data-module></script>
     <link
@@ -20,10 +20,10 @@
     />
     <script src="https://unpkg.com/@popperjs/core@2" defer data-module></script>
     <script src="https://unpkg.com/tippy.js@6" defer></script>
-    {{inline}}{{
-    <script src="{{route}}{{assets/js/csel.js}}{{inline}}" defer></script>
-    <script src="{{route}}{{assets/js/common.js}}{{inline}}" defer></script>
-    }}
+    inline
+    <script src="assets/js/csel.jsinline" defer></script>
+    <script src="assets/js/common.jsinline" defer></script>
+    
   </head>
 
   <body>
@@ -39,46 +39,46 @@
         <div class="box-image-container">
           <img
             class="box-pr-logo"
-            src="{{route}}{{/assets/img/directory_splash.webp}}"
-            {{ifSEO}}{{
+            src="/assets/img/directory_splash.webp"
+            ifSEO
             alt="InvisiProxy Browsing Splash"
-            }}
+            
           />
         </div>
         <div class="box-text-container">
           <p class="box-badge">
-            <span class="box-default-badge">Tip</span>{{mask}}{{If you can't find your game simply look it up via the Web Proxies page!}}
+            <span class="box-default-badge">Tip</span>If you can't find your game simply look it up via the Web Proxies page!
           </p>
           <h1>
-            {{mask}}{{ InvisiProxy LTS features a wide selection of unblocked
-            games, emulators and utilities. }}
+             InvisiProxy LTS features a wide selection of unblocked
+            games, emulators and utilities. 
           </h1>
           <h2 class="box-description">
-            {{mask}}{{ Here you can find cool stuff like emulators and games!
+             Here you can find cool stuff like emulators and games!
             Using projects like webretro and Ruffle you can now play emulated
-            games in your browser from legacy consoles or flash.}}<br />
+            games in your browser from legacy consoles or flash.<br />
           </h2>
           <h2 class="box-description">
-            {{mask}}{{ Select a directory below: }}
+             Select a directory below: 
           </h2>
           <div class="box-button-container">
             <a
-              href="{{route}}{{/emulators}}"
+              href="/emulators"
               class="box-button tippy-button"
-              data-tippy-content="{{mask}}{{Emulators [Webretro v6.5]: Fully ported RetroArch with over 20 emulators featured!}}"
-              >{{mask}}{{Emulators}}</a
+              data-tippy-content="Emulators [Webretro v6.5]: Fully ported RetroArch with over 20 emulators featured!"
+              >Emulators</a
             >
             <a
-              href="{{route}}{{/web-games}}"
+              href="/web-games"
               class="box-button tippy-button"
-              data-tippy-content="{{mask}}{{Web Games [Collection]: Collection of popular web games, including WebGL and HTML5 games.}}"
-              >{{mask}}{{Web Games}}</a
+              data-tippy-content="Web Games [Collection]: Collection of popular web games, including WebGL and HTML5 games."
+              >Web Games</a
             >
             <a
-              href="{{route}}{{/flash-games}}"
+              href="/flash-games"
               class="box-button tippy-button"
-              data-tippy-content="{{mask}}{{Flash Games [Collection]: Collection of Flash games emulated via Ruffle.}}"
-              >{{mask}}{{Flash Games}}</a
+              data-tippy-content="Flash Games [Collection]: Collection of Flash games emulated via Ruffle."
+              >Flash Games</a
             >
           </div>
         </div>
@@ -90,3 +90,4 @@
     <!-- IMPORTANT-IVINSERT-DONOTDELETE -->
   </body>
 </html>
+

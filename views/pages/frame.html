@@ -1,18 +1,18 @@
 <!doctype html>
 <html>
   <head>
-    <title>{{mask}}{{InvisiProxy LTS}}</title>
-    {{ifSEO}}{{
+    <title>InvisiProxy LTS</title>
+    ifSEO
     <meta
       name="description"
       content="InvisiProxy is a secure web proxy service with support for many sites. Bypass filters and freely enjoy a safer private browsing experience or unblock websites on devices such as Chromebooks and at places like school or work without downloading anything."
     />
-    }}
+    
     <!--HEAD-CONTENT-->
-    <script src="{{route}}{{/scram/scramjet.all.js}}" defer data-module></script>
-    <script src="{{route}}{{/baremux/index.js}}" defer data-module></script>
-    <script src="{{route}}{{/uv/uv.bundle.js}}" defer data-module></script>
-    <script src="{{route}}{{/uv/uv.config.js}}" defer data-module></script>
+    <script src="/scram/scramjet.all.js" defer data-module></script>
+    <script src="/baremux/index.js" defer data-module></script>
+    <script src="/uv/uv.bundle.js" defer data-module></script>
+    <script src="/uv/uv.config.js" defer data-module></script>
     <link
       rel="stylesheet"
       href="https://unpkg.com/tippy.js@6/dist/backdrop.css"
@@ -21,11 +21,11 @@
       rel="stylesheet"
       href="https://unpkg.com/tippy.js@6/animations/shift-away.css"
     />
-    {{inline}}{{
-    <script src="{{route}}{{/assets/js/register-sw.js}}{{inline}}" defer></script>
-    <script src="{{route}}{{assets/js/csel.js}}{{inline}}" defer></script>
-    <script src="{{route}}{{assets/js/common.js}}{{inline}}" defer></script>
-    }}
+    inline
+    <script src="/assets/js/register-sw.jsinline" defer></script>
+    <script src="assets/js/csel.jsinline" defer></script>
+    <script src="assets/js/common.jsinline" defer></script>
+    
   </head>
 
   <body>
@@ -35,7 +35,7 @@
       <div class="loader-w"></div>
     </div>
     <div class="omnibar" id="pr-sj">
-      <a class="logo" href="{{route}}{{/browsing}}" role="img" aria-label="InvisiProxy Logo"></a>
+      <a class="logo" href="/browsing" role="img" aria-label="InvisiProxy Logo"></a>
       <button title="Back"><i class="fas fa-arrow-left"></i></button>
       <button title="Forward"><i class="fas fa-arrow-right"></i></button>
       <button title="Refresh"><i class="fas fa-redo-alt"></i></button>
@@ -170,3 +170,4 @@
     </script>
   </body>
 </html>
+

@@ -19,9 +19,9 @@ const getDomain = () =>
     location.host.replace(/^(?:www|beta)\./, ''),
   // This is used for stealth mode when visiting external sites.
   goFrame = (url) => {
-    localStorage.setItem('{{hu-lts}}-frame-url', url);
-    if (location.pathname !== '{{route}}{{/s}}')
-      location.href = '{{route}}{{/s}}?cache={{cacheVal}}';
+    localStorage.setItem('hu-lts-frame-url', url);
+    if (location.pathname !== '/s')
+      location.href = '/s?cache=cacheVal';
     else document.getElementById('frame').src = url;
   },
   /* Used to set functions for the goProx object at the bottom.
@@ -59,28 +59,28 @@ const getDomain = () =>
 
 /* READ SETTINGS */
 
-const storageId = '{{hu-lts}}-storage',
+const storageId = 'hu-lts-storage',
   storageObject = () => JSON.parse(localStorage.getItem(storageId)) || {},
   readStorage = (name) => storageObject()[name];
 
 /* OMNIBOX */
 
 const searchEngines = Object.freeze({
-    '{{Startpage}}': 'startpage.com/sp/search?query=',
-    // '{{Google}}': 'google.com/search?q=',
-    '{{Bing}}': 'bing.com/search?q=',
-    '{{DuckDuckGo}}': 'duckduckgo.com/?q=',
-    '{{Brave}}': 'search.brave.com/search?q=',
+    'Startpage': 'startpage.com/sp/search?query=',
+    // 'Google': 'google.com/search?q=',
+    'Bing': 'bing.com/search?q=',
+    'DuckDuckGo': 'duckduckgo.com/?q=',
+    'Brave': 'search.brave.com/search?q=',
   }),
-  defaultSearch = '{{defaultSearch}}',
+  defaultSearch = 'defaultSearch',
   autocompletes = Object.freeze({
     // Startpage has used both Google's and Bing's autocomplete.
     // For now, just use Bing.
-    '{{Startpage}}': 'www.bing.com/AS/Suggestions?csr=1&cvid=0&qry=',
-    // '{{Google}}': 'www.google.com/complete/search?client=gws-wiz&callback=_&q=',
-    '{{Bing}}': 'www.bing.com/AS/Suggestions?csr=1&cvid=0&qry=',
-    '{{DuckDuckGo}}': 'duckduckgo.com/ac/?q=',
-    '{{Brave}}': 'search.brave.com/api/suggest?q=',
+    'Startpage': 'www.bing.com/AS/Suggestions?csr=1&cvid=0&qry=',
+    // 'Google': 'www.google.com/complete/search?client=gws-wiz&callback=_&q=',
+    'Bing': 'www.bing.com/AS/Suggestions?csr=1&cvid=0&qry=',
+    'DuckDuckGo': 'duckduckgo.com/ac/?q=',
+    'Brave': 'search.brave.com/api/suggest?q=',
   }),
   autocompleteUrls = Object.values(autocompletes).map(
     (url) => 'https://' + url
@@ -99,16 +99,16 @@ const searchEngines = Object.freeze({
     return suggestion;
   },
   responseHandlers = Object.freeze({
-    '{{Startpage}}': (jsonData) => responseHandlers['{{Bing}}'](jsonData),
-    /* '{{Google}}': (jsonData) =>
+    'Startpage': (jsonData) => responseHandlers['Bing'](jsonData),
+    /* 'Google': (jsonData) =>
       jsonData[0].map(([suggestion]) =>
         formatSuggestion(suggestion, ['<b>', '</b>'])
       ),
     */
-    '{{Bing}}': (jsonData) =>
+    'Bing': (jsonData) =>
       jsonData.s.map(({ q }) => formatSuggestion(q, ['\ue000', '\ue001'])),
-    '{{DuckDuckGo}}': (jsonData) => jsonData.map(({ phrase }) => phrase),
-    '{{Brave}}': (jsonData) => jsonData[1],
+    'DuckDuckGo': (jsonData) => jsonData.map(({ phrase }) => phrase),
+    'Brave': (jsonData) => jsonData[1],
   });
 
 // Get the autocomplete results for a given search query in JSON format.
@@ -357,13 +357,13 @@ const RammerheadEncode = async (baseUrl) => {
     api = {
       // Make a new Rammerhead session and do something with it.
       newsession(callback) {
-        get('{{route}}{{/newsession}}', callback);
+        get('/newsession', callback);
       },
 
       // Check if a session with the specified ID exists, then do something.
       sessionexists(id, callback) {
         get(
-          '{{route}}{{/sessionexists}}?id=' + encodeURIComponent(id),
+          '/sessionexists?id=' + encodeURIComponent(id),
           (res) => {
             if (res === 'exists') return callback(true);
             if (res === 'not found') return callback(false);
@@ -376,7 +376,7 @@ const RammerheadEncode = async (baseUrl) => {
       shuffleDict(id, callback) {
         console.log('Shuffling', id);
         get(
-          '{{route}}{{/api/shuffleDict}}?id=' + encodeURIComponent(id),
+          '/api/shuffleDict?id=' + encodeURIComponent(id),
           (res) => {
             callback(JSON.parse(res));
           }
@@ -466,7 +466,7 @@ const RammerheadEncode = async (baseUrl) => {
     if (id === rhACDict.id && rhACDict.dict)
       return new Promise((resolve) => {
         resolve(
-          `{{route}}{{/}}${id}/` +
+          `/${id}/` +
             new StrShuffler(rhACDict.dict).shuffle(baseUrl)
         );
       });
@@ -475,7 +475,7 @@ const RammerheadEncode = async (baseUrl) => {
         if (id === rhACDict.id) rhACDict.dict = shuffleDict;
         // Encode the URL with Rammerhead's encoding table and return the URL.
         resolve(
-          `{{route}}{{/}}${id}/` + new StrShuffler(shuffleDict).shuffle(baseUrl)
+          `/${id}/` + new StrShuffler(shuffleDict).shuffle(baseUrl)
         );
       });
     });
@@ -516,11 +516,11 @@ const RammerheadEncode = async (baseUrl) => {
  */
 const preparePage = async () => {
   // This won't break the service workers as they store the variable separately.
-  uvConfig = self['{{__uv$config}}'];
+  uvConfig = self['__uv$config'];
   sjObject = self['$scramjetLoadController'];
   if (sjObject)
     sjEncode = new (sjObject().ScramjetController)({
-      prefix: '{{route}}{{/scram/network/}}',
+      prefix: '/scram/network/',
     }).encodeUrl;
 
   // Object.freeze prevents goProx from accidentally being edited.
@@ -537,7 +537,7 @@ const preparePage = async () => {
 
     webleste: urlHandler(location.protocol + '//b.' + getDomain()),
 
-    osu: urlHandler(location.origin + '{{route}}{{/archive/osu}}'),
+    osu: urlHandler(location.origin + '/archive/osu'),
 
     agar: urlHandler(sjUrl('https://agar.io')),
 
@@ -671,7 +671,7 @@ const preparePage = async () => {
           sjLoaded = false;
         if (sjObject) {
           autocompleteChannel = new MessageChannel();
-          callAfterWorkers(['{{route}}{{/scram/scramjet.sw.js}}'], (worker) => {
+          callAfterWorkers(['/scram/scramjet.sw.js'], (worker) => {
             worker.active.postMessage({ type: 'requestAC' }, [
               autocompleteChannel.port2,
             ]);
@@ -791,16 +791,16 @@ const preparePage = async () => {
   // Load the frame for stealth mode if it exists.
   const windowFrame = document.getElementById('frame'),
     loadFrame = () => {
-      windowFrame.src = localStorage.getItem('{{hu-lts}}-frame-url');
+      windowFrame.src = localStorage.getItem('hu-lts-frame-url');
       return true;
     };
   if (windowFrame) {
     if (uvConfig && sjObject)
       (await callAfterWorkers(
         [
-          '{{route}}{{/scram/scramjet.sw.js}}',
-          '{{route}}{{/uv/sw.js}}',
-          '{{route}}{{/uv/sw-blacklist.js}}',
+          '/scram/scramjet.sw.js',
+          '/uv/sw.js',
+          '/uv/sw-blacklist.js',
         ],
         loadFrame,
         2,
@@ -843,7 +843,7 @@ const preparePage = async () => {
       AOS.init();
     });
 
-    fetch('{{route}}{{/assets/json/splash.json}}', {
+    fetch('/assets/json/splash.json', {
       mode: 'same-origin',
     }).then((response) => {
       response.json().then((splashList) => {
@@ -855,7 +855,7 @@ const preparePage = async () => {
 
   // Load in relevant JSON files used to organize large sets of data.
   // This first one is for links, whereas the rest are for navigation menus.
-  fetch('{{route}}{{/assets/json/links.json}}', {
+  fetch('/assets/json/links.json', {
     mode: 'same-origin',
   }).then((response) => {
     response.json().then((huLinks) => {
@@ -879,7 +879,7 @@ const preparePage = async () => {
 
     if (navList) {
       // List items stored in JSON format will be returned as a JS object.
-      const data = await fetch(`{{route}}{{/assets/json/}}${filename}.json`, {
+      const data = await fetch(`/assets/json/${filename}.json`, {
         mode: 'same-origin',
       }).then((response) => response.json());
 
@@ -918,7 +918,7 @@ const preparePage = async () => {
               (credits = document.createElement('p')));
 
             a.href = '#';
-            img.src = `{{route}}{{/assets/img/}}${dir}/` + item.img;
+            img.src = `/assets/img/${dir}/` + item.img;
             title.textContent = item.name;
             desc.textContent = item.description;
             credits.textContent = item.credits;
@@ -926,7 +926,7 @@ const preparePage = async () => {
             if (filename === 'par-nav') {
               if (item.credits === 'truf')
                 desc.innerHTML +=
-                  '<br>{{mask}}{{Credits: Check out the full site at }}<a target="_blank" href="{{route}}{{/truffled}}">{{mask}}{{truffled.lol}}</a> //{{mask}}{{ discord.gg/vVqY36mzvj}}';
+                  '<br>Credits: Check out the full site at <a target="_blank" href="/truffled">truffled.lol</a> // discord.gg/vVqY36mzvj';
             }
 
             a.appendChild(img);
@@ -941,7 +941,7 @@ const preparePage = async () => {
               // emulib-nav
               () =>
                 goFrame(
-                  '{{route}}{{/webretro}}?core=' +
+                  '/webretro?core=' +
                     item.core +
                     '&rom=' +
                     item.rom
@@ -953,7 +953,7 @@ const preparePage = async () => {
               // h5-nav
               item.custom && goProx[item.custom]
                 ? () => goProx[item.custom]('window')
-                : () => goFrame('{{route}}{{/archive/g/}}' + item.path),
+                : () => goFrame('/archive/g/' + item.path),
             ];
 
             a.addEventListener(
@@ -980,7 +980,7 @@ const preparePage = async () => {
 
             a.addEventListener('click', (e) => {
               e.preventDefault();
-              goFrame('{{route}}{{/flash}}?swf=' + item);
+              goFrame('/flash?swf=' + item);
             });
 
             navList.appendChild(a);
@@ -996,3 +996,4 @@ if ('loading' === document.readyState)
   addEventListener('DOMContentLoaded', preparePage);
 else preparePage();
 })();
+

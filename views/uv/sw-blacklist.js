@@ -1,6 +1,6 @@
-importScripts('{{route}}{{/uv/uv.bundle.js}}');
-importScripts('{{route}}{{/uv/uv.config.js}}');
-importScripts(self['{{__uv$config}}'].sw || '{{route}}{{/uv/uv.sw.js}}');
+importScripts('/uv/uv.bundle.js');
+importScripts('/uv/uv.config.js');
+importScripts(self['__uv$config'].sw || '/uv/uv.sw.js');
 
 /*
 
@@ -32,7 +32,7 @@ const uv = new UVServiceWorker();
 
 // Get list of blacklisted domains.
 const blacklist = {};
-fetch('{{route}}{{/assets/json/blacklist.json}}').then((request) => {
+fetch('/assets/json/blacklist.json').then((request) => {
   request.json().then((jsonData) => {
     // Organize each domain by their tld (top level domain) ending.
     jsonData.forEach((domain) => {
@@ -83,3 +83,4 @@ self.addEventListener('fetch', (event) => {
     })()
   );
 });
+
