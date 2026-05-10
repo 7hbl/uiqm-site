@@ -1,10 +1,44 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const input = document.getElementById('term-input');
     const output = document.getElementById('term-output-lines');
     const terminal = document.getElementById('terminal-shell');
     const frame = document.getElementById('proxy-frame');
     const loading = document.getElementById('proxy-loading');
     const proxyShell = document.getElementById('proxy-shell');
+
+    // --- Proxy Initialization ---
+    let sjEncode = null;
+    
+    const initProxy = async () => {
+        try {
+            // Register Scramjet Service Worker
+            if ('serviceWorker' in navigator) {
+                await navigator.serviceWorker.register('/worker/sw.js', {
+                    scope: '/worker/'
+                });
+            }
+
+            // Setup BareMux Transport
+            const { BareMuxConnection } = window.BareMux || {};
+            if (BareMuxConnection) {
+                const conn = new BareMuxConnection('/gmt/');
+                // Connect to the internal Wisp/Bare server
+                await conn.setTransport('/cron/', { wisp: (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/wisp/' });
+            }
+
+            // Setup Scramjet Encoder
+            const sjObject = window.$scramjetLoadController;
+            if (sjObject) {
+                sjEncode = new (sjObject().ScramjetController)({
+                    prefix: '/worker/network/',
+                }).encodeUrl;
+            }
+        } catch (e) {
+            console.error('Proxy Init Error:', e);
+        }
+    };
+
+    await initProxy();
 
     const print = (text, type = '') => {
         const div = document.createElement('div');
@@ -16,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const runCommand = (cmd) => {
         const raw = cmd.trim();
-        if (!raw) return; // FIX: ignores empty input
+        if (!raw) return;
 
         const parts = raw.split(' ');
         const base = parts[0].toLowerCase();
@@ -36,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (base === 'creds') {
             print('CREDITS:', 'system');
             print('Huge thanks to <a href="https://github.com/QuiteAFancyEmerald" target="_blank" style="color:white">QuiteAFancyEmerald</a> for the original InvisiProxy engine.');
-            print('This terminal fork is just skidded with a heart <3 :)', 'system');
+            print('This terminal fork is just skidded :)', 'system');
             return;
         }
 
@@ -47,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.body.setAttribute('data-theme', color === 'red' ? 'default' : color);
                 print(`Theme updated: ${color}.`, 'system');
             } else {
-                print(`Error: theme "${color}" not found. Type "help" for list.`, 'system');
+                print(`Error: theme "${color}" not found.`, 'system');
             }
             return;
         }
@@ -66,11 +100,19 @@ document.addEventListener('DOMContentLoaded', () => {
             proxyShell.style.display = 'block';
             loading.style.display = 'flex';
             frame.style.display = 'block';
-            frame.src = '/worker/' + encodeURIComponent(url);
+
+            // Encode URL using Scramjet or fall back to simple prefix
+            let encoded = url;
+            if (sjEncode) {
+                encoded = sjEncode(url);
+            } else {
+                encoded = '/worker/' + encodeURIComponent(url);
+            }
+            
+            frame.src = encoded;
             return;
         }
 
-        // Unknown Command Handling
         print(`Command not found: ${base}. Type "help" for a list of commands.`, 'system');
     };
 
