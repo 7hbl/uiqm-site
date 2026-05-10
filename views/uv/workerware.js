@@ -52,7 +52,7 @@ class WorkerWare {
   }
   info() {
     return {
-      version: '0.1.0',
+      'version': '0.1.0',
       middlewares: this._middlewares,
       options: this._opt,
     };

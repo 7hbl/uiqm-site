@@ -3,7 +3,7 @@
   "host": "0.0.0.0",
   "pathname": "/",
   "minifyScripts": true,
-  "randomizeIdentifiers": true,
+  "randomizeIdentifiers": false,
   "production": true,
   "disguiseFiles": false,
   "usingSEO": false
