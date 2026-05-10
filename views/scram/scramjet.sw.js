@@ -5,35 +5,24 @@ try {
     const { ScramjetServiceWorker } = $scramjetLoadWorker();
     scramjet = new ScramjetServiceWorker();
 } catch (e) {
-    console.error('[UIQM SW] Failed to init Scramjet:', e);
+    console.error('[UIQM SW] Init error:', e);
 }
 
 async function handleRequest(event) {
     if (!scramjet) return fetch(event.request);
     try {
         await scramjet.loadConfig();
-        if (scramjet.route(event)) {
-            return scramjet.fetch(event);
-        }
+        if (scramjet.route(event)) return scramjet.fetch(event);
     } catch (e) {
-        console.warn('[UIQM SW] Route error:', e);
+        // If the SW hits the IDB error, it will recover on next reload
+        console.warn('[UIQM SW] Fetch error:', e);
     }
     return fetch(event.request);
 }
 
-self.addEventListener('install', () => {
-    console.log('[UIQM SW] Installed');
-    self.skipWaiting();
-});
-
-self.addEventListener('activate', event => {
-    console.log('[UIQM SW] Activated');
-    event.waitUntil(self.clients.claim());
-});
-
-self.addEventListener('fetch', event => {
-    event.respondWith(handleRequest(event));
-});
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', event => event.respondWith(handleRequest(event)));
 
 self.addEventListener('message', event => {
     if (event.data.type === 'requestAC') {

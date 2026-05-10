@@ -5,38 +5,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UIQM Web Proxy | Private Terminal</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>">
-
-    <!-- BareMux loads first (sync) -->
     <script src="/gmt/index.js"></script>
-
     <script>
-        // Wipe ALL stale IDB data, then dynamically load working.all.js.
-        // We do this because working.all.js opens IndexedDB on load, and
-        // a schema mismatch throws NotFoundError that nothing can catch
-        // if we use a static <script> tag.
+        // Aggressive Cache/DB nuking on start to prevent "Ghost Schema" errors
         window._proxyReady = (async () => {
-            // 1. Clear stale IndexedDB (fully awaited, no race)
+            const clearDB = (name) => new Promise(res => {
+                const r = indexedDB.deleteDatabase(name);
+                r.onsuccess = r.onerror = r.onblocked = () => res();
+            });
+
             try {
+                // Delete common Scramjet DB names directly (Edge InPrivate fix)
+                await clearDB('__sj');
+                await clearDB('sj');
                 if (indexedDB.databases) {
                     const dbs = await indexedDB.databases();
-                    await Promise.all(dbs.map(db => new Promise(res => {
-                        const r = indexedDB.deleteDatabase(db.name);
-                        r.onsuccess = r.onerror = r.onblocked = res;
-                    })));
+                    await Promise.all(dbs.map(db => clearDB(db.name)));
                 }
             } catch (_) {}
 
-            // 2. Dynamically load working.all.js only after IDB is clean
             await new Promise((resolve, reject) => {
                 const s = document.createElement('script');
                 s.src = '/worker/working.all.js';
                 s.onload = resolve;
-                s.onerror = () => reject(new Error('Failed to load /worker/working.all.js'));
+                s.onerror = () => reject(new Error('Failed to load proxy engine'));
                 document.head.appendChild(s);
             });
         })();
     </script>
-
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body { background: #0a0a0a; color: #ff0000; font-family: 'Courier New', Courier, monospace; overflow: hidden; height: 100vh; width: 100vw; }
@@ -96,202 +92,106 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             </form>
         </div>
     </div>
-
     <script>
     document.addEventListener('DOMContentLoaded', async () => {
-        const input      = document.getElementById('term-input');
-        const output     = document.getElementById('term-output-lines');
-        const terminal   = document.getElementById('terminal-shell');
-        const frame      = document.getElementById('proxy-frame');
-        const loading    = document.getElementById('proxy-loading');
-        const proxyShell = document.getElementById('proxy-shell');
+        const input = document.getElementById('term-input'), output = document.getElementById('term-output-lines');
+        const terminal = document.getElementById('terminal-shell'), frame = document.getElementById('proxy-frame');
+        const loading = document.getElementById('proxy-loading'), proxyShell = document.getElementById('proxy-shell');
         const statusLine = document.getElementById('status-line');
 
-        const WISP_URL        = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
-        const BARE_MUX_WORKER = '/gmt/worker.js';
-        const SCRAMJET_SW     = '/worker/working.sw.js';
-        const TRANSPORT_MJS   = '/unix/index.mjs';
-        const SCRAMJET_PREFIX = '/worker/network/';
+        const WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
+        const BARE_MUX_WORKER = '/gmt/worker.js', SCRAMJET_SW = '/worker/working.sw.js';
+        const TRANSPORT_MJS = '/unix/index.mjs', SCRAMJET_PREFIX = '/worker/network/';
 
         let sjEncode = null;
+        const print = (h, c = '') => { const d = document.createElement('div'); d.className = 'line ' + c; d.innerHTML = h; output.appendChild(d); terminal.scrollTop = terminal.scrollHeight; };
+        const setStatus = (m, c = 'yellow') => statusLine.innerHTML = `<span style="color:${c}">${m}</span>`;
 
-        const print = (html, cls = '') => {
-            const d = document.createElement('div');
-            d.className = 'line ' + cls;
-            d.innerHTML = html;
-            output.appendChild(d);
-            terminal.scrollTop = terminal.scrollHeight;
-        };
-
-        const setStatus = (msg, color = 'yellow') =>
-            statusLine.innerHTML = `<span style="color:${color}">${msg}</span>`;
-
-        // Fully reset: unregister all SWs + clear IDB, then reload
         const hardReset = async () => {
             try {
                 const regs = await navigator.serviceWorker.getRegistrations();
                 await Promise.all(regs.map(r => r.unregister()));
-                if (indexedDB.databases) {
-                    const dbs = await indexedDB.databases();
-                    dbs.forEach(db => indexedDB.deleteDatabase(db.name));
-                }
+                await new Promise(res => { const r = indexedDB.deleteDatabase('__sj'); r.onsuccess = r.onerror = res; });
+                await new Promise(res => { const r = indexedDB.deleteDatabase('sj'); r.onsuccess = r.onerror = res; });
             } catch (_) {}
             location.reload();
         };
 
-        // Wait for SW to reach 'activated' state, with a timeout.
-        // navigator.serviceWorker.ready can hang forever if the SW errors — this doesn't.
-        const waitForSWActivation = (reg, timeoutMs = 15000) => new Promise((resolve, reject) => {
-            // Already active
-            if (reg.active && reg.active.state === 'activated') return resolve(reg);
-
-            const deadline = setTimeout(() => reject(new Error('SW activation timeout')), timeoutMs);
-            const done = (r) => { clearTimeout(deadline); resolve(r); };
-            const fail = (e) => { clearTimeout(deadline); reject(e); };
-
-            const watchSW = (sw) => {
+        const waitForSW = (reg) => new Promise((res, rej) => {
+            if (reg.active?.state === 'activated') return res(reg);
+            const t = setTimeout(() => rej(new Error('SW Timeout')), 15000);
+            const check = (sw) => {
                 if (!sw) return;
-                if (sw.state === 'activated') return done(reg);
-                if (sw.state === 'redundant') return fail(new Error('SW became redundant'));
-                sw.addEventListener('statechange', function handler() {
-                    if (sw.state === 'activated') { sw.removeEventListener('statechange', handler); done(reg); }
-                    if (sw.state === 'redundant') { sw.removeEventListener('statechange', handler); fail(new Error('SW became redundant')); }
-                });
+                if (sw.state === 'activated') { clearTimeout(t); res(reg); }
+                sw.addEventListener('statechange', () => { if (sw.state === 'activated') { clearTimeout(t); res(reg); } });
             };
-
-            // Watch whichever SW is currently progressing
-            watchSW(reg.installing || reg.waiting || reg.active);
-            reg.addEventListener('updatefound', () => watchSW(reg.installing));
-        });
-
-        // Poll until SW controls this page
-        const waitForController = (ms = 12000) => new Promise(resolve => {
-            if (navigator.serviceWorker.controller) return resolve(true);
-            const t0 = Date.now();
-            const id = setInterval(() => {
-                if (navigator.serviceWorker.controller) { clearInterval(id); resolve(true); }
-                else if (Date.now() - t0 > ms)          { clearInterval(id); resolve(false); }
-            }, 100);
+            check(reg.installing || reg.waiting || reg.active);
         });
 
         const initProxy = async () => {
             try {
-                // Await IDB clear + dynamic working.all.js load
                 setStatus('Clearing cache...');
                 await window._proxyReady;
 
-                if (!navigator.serviceWorker) {
-                    setStatus('Service Workers not supported in this browser.', 'red');
-                    return;
-                }
-
-                // 1. BareMux / Wisp transport
                 setStatus('Connecting transport...');
                 if (window.BareMux) {
                     const conn = new BareMux.BareMuxConnection(BARE_MUX_WORKER);
                     await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
                 }
 
-                // 2. Register SW and wait for activation (NOT navigator.serviceWorker.ready
-                //    which hangs forever if SW fails)
                 setStatus('Registering Service Worker...');
                 const reg = await navigator.serviceWorker.register(SCRAMJET_SW, { scope: '/worker/' });
-                await waitForSWActivation(reg, 15000);
+                await waitForSW(reg);
 
-                // 3. Init Scramjet — sends routing config to SW via postMessage
                 setStatus('Loading proxy engine...');
                 if (window.$scramjetLoadController) {
                     const { ScramjetController } = await window.$scramjetLoadController();
                     const sj = new ScramjetController({
                         prefix: SCRAMJET_PREFIX,
-                        files: {
-                            wasm: '/worker/working.wasm.wasm',
-                            all:  '/worker/working.all.js',
-                            sync: '/worker/working.sync.js',
-                        }
+                        files: { wasm: '/worker/working.wasm.wasm', all: '/worker/working.all.js', sync: '/worker/working.sync.js' }
                     });
-                    await sj.init();
+                    
+                    // RETRY LOGIC for the IDB error
+                    try {
+                        await sj.init();
+                    } catch (e) {
+                        if (e.name === 'NotFoundError' || e.message.includes('object store')) {
+                            console.warn('IDB Schema mismatch. Nuking and retrying...');
+                            await new Promise(r => { const req = indexedDB.deleteDatabase('__sj'); req.onsuccess = req.onerror = r; });
+                            await sj.init();
+                        } else throw e;
+                    }
                     sjEncode = url => sj.encodeUrl(url);
                 }
 
-                // 4. Wait for SW to control this page (poll)
-                setStatus('Syncing channel...');
-                const controlled = await waitForController(12000);
-                if (!controlled) {
-                    setStatus('Sync failed — resetting...', 'orange');
-                    setTimeout(hardReset, 500);
-                    return;
-                }
-
                 setStatus('Secure Channel Active. System ready.', '#00ff00');
-                input.disabled = false;
-                input.focus();
-
+                input.disabled = false; input.focus();
             } catch (e) {
-                console.error('Init error:', e);
-                setStatus(`Error: ${e.message} — resetting in 3s`, 'red');
-                setTimeout(hardReset, 3000);
+                console.error(e);
+                setStatus(`Error: ${e.message} — Auto-Repairing...`, 'red');
+                setTimeout(hardReset, 2000);
             }
-        };
-
-        const navigate = (url) => {
-            print(`Routing to ${url}...`, 'system');
-            proxyShell.style.display = 'block';
-            loading.style.display = 'flex';
-            frame.src = sjEncode ? sjEncode(url) : (SCRAMJET_PREFIX + encodeURIComponent(url));
         };
 
         const runCommand = raw => {
-            raw = raw.trim();
-            if (!raw) return;
-            if (input.disabled) { print('Channel not ready yet.', 'system'); return; }
-
+            raw = raw.trim(); if (!raw) return;
             print(`<span class="term-prefix">root@uiqm:~$</span> ${raw}`);
             const [base, ...args] = raw.split(' ');
-
-            switch (base.toLowerCase()) {
-                case 'help':
-                    print('Commands: <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
-                    break;
-                case 'creds':
-                    print('Engine by <a href="https://github.com/QuiteAFancyEmerald" target="_blank" style="color:white">QuiteAFancyEmerald</a>');
-                    print('This terminal fork is just skidded :p <3', 'system');
-                    break;
-                case 'theme': {
-                    const c = args[0]?.toLowerCase();
-                    const valid = ['red','green','blue','white','pink','purple','cyan'];
-                    if (valid.includes(c)) {
-                        document.body.setAttribute('data-theme', c === 'red' ? 'default' : c);
-                        print(`Theme: ${c}`, 'system');
-                    } else {
-                        print('Valid themes: red, green, blue, white, pink, purple, cyan', 'system');
-                    }
-                    break;
-                }
-                case 'clear':
-                    output.innerHTML = '';
-                    break;
-                default:
-                    if (raw.includes('.') && !raw.includes(' ')) {
-                        let url = raw;
-                        if (!url.startsWith('http')) url = 'https://' + url;
-                        navigate(url);
-                    } else {
-                        print(`Command not found: ${base}`, 'system');
-                    }
-            }
+            if (base === 'help') print('Commands: <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
+            else if (base === 'creds') { print('Engine by QuiteAFancyEmerald'); print('This terminal fork is just skidded :p <3', 'system'); }
+            else if (base === 'theme') { const c = args[0]?.toLowerCase(), v = ['red','green','blue','white','pink','purple','cyan']; if (v.includes(c)) { document.body.setAttribute('data-theme', c==='red'?'default':c); print(`Theme: ${c}`, 'system'); } }
+            else if (base === 'clear') output.innerHTML = '';
+            else if (raw.includes('.') && !raw.includes(' ')) {
+                let url = raw; if (!url.startsWith('http')) url = 'https://' + url;
+                proxyShell.style.display = 'block'; loading.style.display = 'flex';
+                frame.src = sjEncode ? sjEncode(url) : (SCRAMJET_PREFIX + encodeURIComponent(url));
+            } else print(`Command not found: ${base}`, 'system');
         };
 
-        input.addEventListener('keydown', e => {
-            if (e.key === 'Enter') { e.preventDefault(); runCommand(input.value); input.value = ''; }
-        });
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runCommand(input.value); input.value = ''; } });
         document.addEventListener('click', () => { if (!input.disabled) input.focus(); });
-        frame.onload = () => {
-            loading.style.display = 'none';
-            print('Tunnel established.', 'system');
-        };
-
-        await initProxy();
+        frame.onload = () => { loading.style.display = 'none'; print('Tunnel established.', 'system'); };
+        initProxy();
     });
     </script>
 </body>
