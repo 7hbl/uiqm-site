@@ -3,10 +3,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const output = document.getElementById('output');
     const terminal = document.getElementById('terminal');
 
-    // Focus input on click anywhere
-    terminal.addEventListener('click', () => input.focus());
+    // Always keep input focused
+    document.addEventListener('click', () => input.focus());
 
-    const addLine = (text, type = '') => {
+    const print = (text, type = '') => {
         const div = document.createElement('div');
         div.className = `line ${type}`;
         div.innerHTML = text;
@@ -14,61 +14,61 @@ document.addEventListener('DOMContentLoaded', () => {
         terminal.scrollTop = terminal.scrollHeight;
     };
 
-    const handleCommand = (cmd) => {
-        const parts = cmd.trim().split(' ');
-        const baseCmd = parts[0].toLowerCase();
+    const processCommand = (raw) => {
+        const cmd = raw.trim();
+        const parts = cmd.split(' ');
+        const base = parts[0].toLowerCase();
         const args = parts.slice(1);
 
-        addLine(`<span class="prompt-prefix">root@uiqm:~$</span> ${cmd}`);
+        print(`<span class="prompt-label">root@uiqm:~$</span> ${raw}`);
 
-        if (baseCmd === 'help') {
-            addLine('available commands:', 'system');
-            addLine('<span class="help-cmd">theme [color]</span> - changes terminal text color');
-            addLine('  options: red (default), green, blue, white', 'system');
+        if (base === 'help') {
+            print('Available commands:', 'system');
+            print(' <span style="color:white">theme [color]</span> - Change text color');
+            print(' <span style="color:white">clear</span> - Clear screen');
+            print(' <span style="color:white">[url]</span> - Open site through proxy');
             return;
         }
 
-        if (baseCmd === 'theme') {
+        if (base === 'theme') {
             const color = args[0]?.toLowerCase();
-            const themes = ['red', 'green', 'blue', 'white'];
-            if (themes.includes(color)) {
+            const valid = ['red', 'green', 'blue', 'white'];
+            if (valid.includes(color)) {
                 document.body.setAttribute('data-theme', color === 'red' ? 'default' : color);
-                addLine(`theme changed to ${color}`, 'system');
+                print(`Theme updated to ${color}.`, 'system');
             } else {
-                addLine('usage: theme [red|green|blue|white]', 'system');
+                print('Error: usage "theme [red/green/blue/white]"', 'system');
             }
             return;
         }
 
-        if (baseCmd === 'clear') {
+        if (base === 'clear') {
             output.innerHTML = '';
             return;
         }
 
-        // URL Handling
         if (cmd) {
             let url = cmd;
             if (!url.includes('.') || url.includes(' ')) {
-                // If it's a search, use DuckDuckGo
                 url = 'https://duckduckgo.com/?q=' + encodeURIComponent(cmd);
             } else if (!url.startsWith('http')) {
                 url = 'https://' + url;
             }
 
-            addLine(`proxying to: ${url}...`, 'system');
+            print(`Routing via Scramjet...`, 'system');
             
-            // Defaulting to Scramjet (/worker/)
-            // Fallback logic could be complex purely client-side, but usually we just route.
+            // Default to Scramjet as requested. 
+            // The backend routes /worker/ to Scramjet.
             setTimeout(() => {
                 window.location.href = '/worker/' + encodeURIComponent(url);
-            }, 500);
+            }, 600);
         }
     };
 
     input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
-            const cmd = input.value;
-            handleCommand(cmd);
+            const val = input.value;
+            processCommand(val);
             input.value = '';
         }
     });
