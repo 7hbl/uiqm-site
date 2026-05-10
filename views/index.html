@@ -44,6 +44,9 @@
         #back-btn { position: fixed; top: 20px; right: 20px; padding: 10px 20px; background: rgba(0,0,0,0.8); border: 2px solid currentColor; color: inherit; cursor: pointer; z-index: 100; font-family: inherit; font-weight: bold; text-shadow: 0 0 5px currentColor; box-shadow: 0 0 10px rgba(255,0,0,0.3); transition: all 0.2s; display: none; }
         #back-btn:hover { background: #ff0000; color: #fff; box-shadow: 0 0 20px #ff0000; }
         #terminal-shell { padding: 20px; height: 100%; overflow-y: auto; position: relative; z-index: 5; text-shadow: 0 0 5px currentColor; }
+        .live-status { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 10px; font-weight: bold; }
+        .pulse-ball { width: 10px; height: 10px; background: #00ff00; border-radius: 50%; box-shadow: 0 0 10px #00ff00; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.2); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
         .ascii-art { white-space: pre; font-size: 8px; line-height: 8px; margin-bottom: 20px; opacity: 0.9; }
         .line { margin-bottom: 5px; min-height: 1.2em; word-break: break-all; line-height: 1.4; }
         .system { opacity: 0.7; font-style: italic; }
@@ -64,6 +67,10 @@
             <div id="proxy-loading"><pre>   CONNECTING TO TUNNEL...</pre></div>
         </div>
         <div id="terminal-shell">
+            <div class="live-status">
+                <div class="pulse-ball"></div>
+                <span style="color: #00ff00;">LIVE USERS: <span id="user-count">...</span></span>
+            </div>
             <div class="ascii-art">
           $$\                                                       $$\                                                               
           \__|                                                      $$ |                                                              
@@ -171,8 +178,16 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             raw = raw.trim(); if (!raw) return;
             print(`<span class="term-prefix">root@uiqm:~$</span> ${raw}`);
             const [base, ...args] = raw.split(' ');
-            if (base === 'help') print('Commands: <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
-            else if (base === 'creds') { print('Engine by QuiteAFancyEmerald'); print('This terminal fork is just skidded :p <3', 'system'); }
+            if (base === 'help') print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
+            else if (base === 'creds') { 
+                print('Proxy Engine by QuiteAFancyEmerald'); 
+                print('Games provided by <a href="https://github.com/NoahsAmazingTutoringHelp" target="_blank" style="color:white;text-decoration:underline;">NoahsAmazingTutoringHelp</a>', 'system');
+                print('UI & Terminal fork by @uiqm', 'system'); 
+            }
+            else if (base === 'games') {
+                print('Redirecting to Games Hub...', 'system');
+                setTimeout(() => location.href = '/games', 500);
+            }
             else if (base === 'theme') { const c = args[0]?.toLowerCase(), v = ['red','green','blue','white','pink','purple','cyan']; if (v.includes(c)) { document.body.setAttribute('data-theme', c==='red'?'default':c); print(`Theme: ${c}`, 'system'); } }
             else if (base === 'clear') output.innerHTML = '';
             else if (raw.includes('.') && !raw.includes(' ')) {
@@ -186,6 +201,14 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
         input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runCommand(input.value); input.value = ''; } });
         document.addEventListener('click', () => { if (!input.disabled) input.focus(); });
         frame.onload = () => { loading.style.display = 'none'; print('Tunnel established.', 'system'); };
+        
+        // Mock live users
+        const updateUsers = () => {
+            const count = Math.floor(Math.random() * (450 - 380) + 380);
+            document.getElementById('user-count').innerText = count;
+        };
+        updateUsers(); setInterval(updateUsers, 10000);
+        
         initProxy();
     });
     </script>

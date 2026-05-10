@@ -59,7 +59,8 @@ let pages = {
   credits: 'pages/nav/credits.html',
   terms: 'pages/nav/terms.html',
   /* Games */
-  games: 'pages/nav/directory.html',
+  /* Games */
+  games: 'pages/hub.html',
   'web-games': 'pages/nav/games.html',
   partners: 'pages/nav/partners.html',
   emulators: 'pages/nav/emulators.html',
