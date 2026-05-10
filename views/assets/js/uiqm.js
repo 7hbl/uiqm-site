@@ -43,18 +43,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 scope: '/worker/'
             });
 
-            // 3. Wait for SW to be active AND controlling the page
-            let tries = 0;
-            while ((!registration.active || !navigator.serviceWorker.controller) && tries < 50) {
-                await new Promise(r => setTimeout(r, 100));
-                tries++;
-            }
+            // 3. Robust Controller Sync
+            const waitForController = () => new Promise(resolve => {
+                if (navigator.serviceWorker.controller) return resolve();
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (navigator.serviceWorker.controller) resolve();
+                });
+                setTimeout(() => { if (!navigator.serviceWorker.controller) location.reload(); }, 4000);
+            });
 
-            // If still not controlling, try to claim the client
-            if (registration.active && !navigator.serviceWorker.controller) {
-                 // In some cases a refresh is needed if the SW didn't claim immediately
-                 statusLine.innerHTML = '<span style="color:yellow">Finalizing Secure Channel... (Reload recommended if stuck)</span>';
-            }
+            await waitForController();
 
             // 4. Initialize Scramjet Controller
             if (window.$scramjetLoadController) {
@@ -118,20 +116,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (base === 'clear') { output.innerHTML = ''; return; }
 
         if (raw.includes('.') && !raw.includes(' ')) {
-            let url = raw;
-            if (!url.startsWith('http')) url = 'https://' + url;
-            
-            // Check controller one last time
             if (!navigator.serviceWorker.controller) {
-                print('Error: Secure Channel lost synchronization. Please refresh the page.', 'system');
+                print('Re-syncing Secure Channel... Refresh required.', 'system');
+                location.reload();
                 return;
             }
 
+            let url = raw;
+            if (!url.startsWith('http')) url = 'https://' + url;
+            
             print(`Routing via Scramjet...`, 'system');
             proxyShell.style.display = 'block';
             loading.style.display = 'flex';
             frame.style.display = 'block';
-            
             frame.src = sjEncode ? sjEncode(url) : (SCRAMJET_PREFIX + encodeURIComponent(url));
             return;
         }
