@@ -3,15 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UIQM Web Proxy | Console</title>
-    <!-- Smiling Eyes Icon -->
+    <title>UIQM Web Proxy | Private Terminal</title>
+    <!-- Favicon: Eyes Only -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="/assets/css/uiqm.css">
 </head>
 <body data-theme="default">
 
-    <div id="terminal">
-        <div class="ascii-art">
+    <div id="app">
+        <!-- Proxy Shell -->
+        <div id="proxy-shell">
+            <iframe id="proxy-frame" title="UIQM Proxy Frame"></iframe>
+            <div id="proxy-loading">
+                <pre>
+   LOADING...
+   UNBLOCKING SECURE CHANNEL
+                </pre>
+            </div>
+        </div>
+
+        <!-- Terminal Shell -->
+        <div id="terminal-shell">
+            <div class="ascii-art">
           $$\                                                       $$\                                                               
           \__|                                                      $$ |                                                              
 $$\   $$\ $$\  $$$$$$\  $$$$$$\$$$$\        $$\  $$\  $$\  $$$$$$\  $$$$$$$\         $$$$$$\   $$$$$$\   $$$$$$\  $$\   $$\ $$\   $$\ 
@@ -23,22 +36,23 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                     $$ |                                                            $$ |                                    $$\   $$ |
                     $$ |                                                            $$ |                                    \$$$$$$  |
                     \__|                                                            \__|                                     \______/ 
-        </div>
+            </div>
 
-        <div class="line">uiqm web proxy [version 6.9.6]</div>
-        <div class="line">@uiqm on discord for help</div>
-        <div class="line">created by - @uiqm on discord</div>
-        <br>
-        <div class="line">enter in a url to open thats blocked, type help for cmds.</div>
-        
-        <div id="output"></div>
+            <div class="line">uiqm web proxy [version 6.9.6]</div>
+            <div class="line">@uiqm on discord for help</div>
+            <div class="line">created by - @uiqm on discord</div>
+            <br>
+            <div class="line">enter in a url to open thats blocked, type help for cmds.</div>
+            
+            <div id="term-output-lines"></div>
 
-        <div class="prompt-container">
-            <span class="prompt-label">root@uiqm:~$</span>
-            <input type="text" id="terminal-input" autofocus spellcheck="false" autocomplete="off">
+            <form id="term-input-row" onsubmit="return false;">
+                <span class="term-prefix">root@uiqm:~$</span>
+                <input type="text" id="term-input" autofocus spellcheck="false" autocomplete="off">
+            </form>
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="/assets/js/uiqm.js" defer></script>
 </body>
 </html>

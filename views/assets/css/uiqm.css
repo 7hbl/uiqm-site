@@ -1,0 +1,123 @@
+:root {
+  --bg: #000000;
+  --text: #ff0000;
+  --glow: rgba(255, 0, 0, 0.4);
+  --font: 'Courier New', Courier, monospace;
+}
+
+[data-theme="green"] { --text: #00ff00; --glow: rgba(0, 255, 0, 0.4); }
+[data-theme="blue"] { --text: #00ccff; --glow: rgba(0, 204, 255, 0.4); }
+[data-theme="white"] { --text: #ffffff; --glow: rgba(255, 255, 255, 0.2); }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  position: relative;
+}
+
+/* CRT Overlay */
+body::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%),
+              linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
+  background-size: 100% 2px, 3px 100%;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+#proxy-shell {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  z-index: 1;
+  background: #000;
+  display: none; /* dynamic show */
+}
+
+#proxy-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: none;
+}
+
+#proxy-loading {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: #000;
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 2;
+  color: var(--text);
+  text-align: center;
+}
+
+#terminal-shell {
+  flex: 1;
+  padding: 30px;
+  overflow-y: auto;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+}
+
+.ascii-art {
+  white-space: pre;
+  font-size: 0.5vw;
+  line-height: 1.1;
+  margin-bottom: 30px;
+  text-shadow: 0 0 10px var(--glow);
+  font-weight: bold;
+}
+
+.line {
+  margin-bottom: 6px;
+  font-size: 1.1rem;
+}
+
+.system { opacity: 0.6; }
+
+#term-input-row {
+  display: flex;
+  margin-top: 10px;
+}
+
+.term-prefix {
+  color: #00ff00;
+  margin-right: 12px;
+  font-weight: bold;
+}
+
+#term-input {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 1.1rem;
+  flex: 1;
+  outline: none;
+  caret-color: var(--text);
+}
+
+@keyframes flicker {
+  0% { opacity: 0.98; }
+  10% { opacity: 0.95; }
+  20% { opacity: 1; }
+  100% { opacity: 0.99; }
+}
+
+#terminal-shell { animation: flicker 0.1s infinite; }
