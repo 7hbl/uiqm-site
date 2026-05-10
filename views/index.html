@@ -93,6 +93,17 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             terminal.scrollTop = terminal.scrollHeight;
         };
 
+        // Wipe any stale Scramjet IndexedDB databases that cause schema errors
+        const clearStaleIDB = async () => {
+            try {
+                const dbs = await indexedDB.databases();
+                await Promise.all(dbs.map(db => new Promise(res => {
+                    const r = indexedDB.deleteDatabase(db.name);
+                    r.onsuccess = r.onerror = res;
+                })));
+            } catch (e) { /* browsers without indexedDB.databases() */ }
+        };
+
         const initProxy = async () => {
             try {
                 if (!navigator.serviceWorker) {
@@ -106,15 +117,12 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                     await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
                 }
 
-                // 2. Register Scramjet SW
+                // 2. Register Scramjet SW (skipWaiting + clients.claim is in the SW)
                 await navigator.serviceWorker.register(SCRAMJET_SW, { scope: '/worker/' });
+                await navigator.serviceWorker.ready;
 
-                // 3. Wait for SW to be active
-                const reg = await navigator.serviceWorker.ready;
-                while (!reg.active) await new Promise(r => setTimeout(r, 50));
-
-                // 4. Init ScramjetController FIRST — this sends the routing config to the SW
-                //    WITHOUT this step, scramjet.route() in the SW always returns false
+                // 3. Init ScramjetController — sends routing config to the SW
+                //    MUST happen before user can type, otherwise SW doesn't know what to intercept
                 if (window.$scramjetLoadController) {
                     const { ScramjetController } = await window.$scramjetLoadController();
                     const sj = new ScramjetController({
@@ -125,12 +133,21 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                             sync: '/worker/working.sync.js',
                         }
                     });
-                    // init() posts the config to the SW so it knows which URLs to intercept
-                    await sj.init();
+                    try {
+                        await sj.init();
+                    } catch (e) {
+                        // IndexedDB schema mismatch from stale browser cache — wipe and retry
+                        if (e.name === 'NotFoundError' || e.name === 'VersionError') {
+                            await clearStaleIDB();
+                            await sj.init();
+                        } else {
+                            throw e;
+                        }
+                    }
                     sjEncode = (url) => sj.encodeUrl(url);
                 }
 
-                // 5. Wait for controller AFTER init (SW may need to claim)
+                // 4. Wait for SW to control this page
                 if (!navigator.serviceWorker.controller) {
                     await new Promise(resolve => {
                         navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
@@ -138,7 +155,6 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                     });
                 }
 
-                // 6. Now safe to let the user type
                 isReady = true;
                 statusLine.innerHTML = '<span style="color:#00ff00">Secure Channel Active. System ready.</span>';
                 input.disabled = false;
@@ -146,7 +162,7 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
 
             } catch (e) {
                 console.error('Init failed:', e);
-                statusLine.innerHTML = '<span style="color:red">Init Error. See console.</span>';
+                statusLine.innerHTML = '<span style="color:red">Init Error: ' + e.message + '</span>';
             }
         };
 
