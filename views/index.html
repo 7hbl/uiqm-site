@@ -69,7 +69,7 @@
         <div id="terminal-shell">
             <div class="live-status">
                 <div class="pulse-ball"></div>
-                <span style="color: #00ff00;">LIVE USERS: <span id="user-count">...</span></span>
+                <span style="color: #00ff00;">LIVE USERS: <span id="user-count">1</span></span>
             </div>
             <div class="ascii-art">
           $$\                                                       $$\                                                               
@@ -180,9 +180,9 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             const [base, ...args] = raw.split(' ');
             if (base === 'help') print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
             else if (base === 'creds') { 
-                print('Proxy Engine by QuiteAFancyEmerald'); 
+                print('Proxy Engine by <a href="https://github.com/QuiteAFancyEmerald" target="_blank" style="color:white;text-decoration:underline;">QuiteAFancyEmerald</a>'); 
                 print('Games provided by <a href="https://github.com/NoahsAmazingTutoringHelp" target="_blank" style="color:white;text-decoration:underline;">NoahsAmazingTutoringHelp</a>', 'system');
-                print('UI & Terminal fork by @uiqm', 'system'); 
+                print('UI & Terminal fork by <a href="https://github.com/7hbl" target="_blank" style="color:white;text-decoration:underline;">@uiqm</a>', 'system'); 
             }
             else if (base === 'games') {
                 print('Redirecting to Games Hub...', 'system');
@@ -204,7 +204,7 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
         
         // Mock live users
         const updateUsers = () => {
-            const count = Math.floor(Math.random() * (450 - 380) + 380);
+            const count = Math.floor(Math.random() * (3 - 1) + 1);
             document.getElementById('user-count').innerText = count;
         };
         updateUsers(); setInterval(updateUsers, 10000);

@@ -59,7 +59,6 @@ let pages = {
   credits: 'pages/nav/credits.html',
   terms: 'pages/nav/terms.html',
   /* Games */
-  /* Games */
   games: 'pages/hub.html',
   'web-games': 'pages/nav/games.html',
   partners: 'pages/nav/partners.html',
@@ -110,7 +109,7 @@ let externalPages = {
 
 // Override the route names below when usingSEO is disabled in config.json.
 let altPaths = {
-  games: 'books',
+  games: 'games',
   'web-games': 'dictionary',
   emulators: 'catalogue',
   'flash-games': 'textbook',
