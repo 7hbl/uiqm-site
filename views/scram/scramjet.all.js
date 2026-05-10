@@ -321,7 +321,7 @@ ${l}`}}if((0,n.U5)("rewriterLogs",r.base))for(let e of s.errors)console.error("o
                         issues.}}
                         </li>
                         <li>
-                        {{mask}}{{Troubleshooting the error on the }}<a href="""{{/github/scramjet}}" target="_blank">{{mask}}{{Scramjet GitHub.}}</a>
+                        {{mask}}{{Troubleshooting the error on the }}<a href="{{route}}{{/github/scramjet}}" target="_blank">{{mask}}{{Scramjet GitHub.}}</a>
                         </li>
                         <li>
                         {{mask}}{{Try a different proxy engine via the settings panel.}}
@@ -344,7 +344,7 @@ ${l}`}}if((0,n.U5)("rewriterLogs",r.base))for(let e of s.errors)console.error("o
                     ><i class="nf nf-fa-heart"></i>
                 </p>
                 </div>
-                <script src="self.location.href"></script>
+                <script src="{{src}}"></script>
             </body>
             </html>
         `}function i(e,t){let r={"content-type":"text/html"};return crossOriginIsolated&&(r["Cross-Origin-Embedder-Policy"]="require-corp"),new Response(n(String(e),t),{status:500,headers:r})}r.d(t,{B:()=>n,v:()=>i})},1403:function(e,t,r){r.d(t,{H:()=>n});class n{handle;origin;syncToken=0;promises={};messageChannel=new MessageChannel;connected=!1;constructor(e,t){this.handle=e,this.origin=t,this.messageChannel.port1.addEventListener("message",e=>{"scramjet$type"in e.data&&("init"===e.data.scramjet$type?this.connected=!0:this.handleMessage(e.data))}),this.messageChannel.port1.start(),this.handle.postMessage({scramjet$type:"init",scramjet$port:this.messageChannel.port2},[this.messageChannel.port2])}handleMessage(e){let t=this.promises[e.scramjet$token];t&&(t(e),delete this.promises[e.scramjet$token])}async fetch(e){let t=this.syncToken++,r={scramjet$type:"fetch",scramjet$token:t,scramjet$request:{url:e.url,body:e.body,headers:Array.from(e.headers.entries()),method:e.method,mode:e.mode,destinitation:e.destination}},n=e.body?[e.body]:[];this.handle.postMessage(r,n);let{scramjet$response:i}=await new Promise(e=>{this.promises[t]=e});return!!i&&new Response(i.body,{headers:i.headers,status:i.status,statusText:i.statusText})}}},5790:function(e,t,r){r.d(t,{Pf:()=>m,V3:()=>S,dT:()=>w});var n=r(5956),i=r(8228),a=r(6684),s=r(1472),o=r(1478),l=r(1427),c=r(37),u=r(4435),d=r(884),h=r(2614),p=r(2015),f=r(8665).A;function g(e){return e.status>=300&&e.status<400}async function m(e,t){try{let r,n,o=new URL(e.url);if(o.pathname===this.config.files.wasm)return fetch(this.config.files.wasm).then(async e=>{let t=await e.arrayBuffer(),r=btoa(new Uint8Array(t).reduce((e,t)=>(e.push(String.fromCharCode(t)),e),[]).join("")),n="";return n+=`if ('document' in self && document.currentScript) { document.currentScript.remove(); }

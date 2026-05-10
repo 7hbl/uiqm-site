@@ -1,5 +1,5 @@
-<h1>maskInvisiProxy LTS (v6.x.x)</h1>
-ifSEO{{
+<h1>{{mask}}{{InvisiProxy LTS (v6.x.x)}}</h1>
+{{ifSEO}}{{
 <p>
   <img
     src="https://github.com/QuiteAFancyEmerald/InvisiProxy/workflows/CI-Production/badge.svg"
@@ -13,30 +13,30 @@ ifSEO{{
 }}
 <br />
 <p>
-  mask{{Read below for information if the official site is blocked or for
+  {{mask}}{{Read below for information if the official site is blocked or for
   obtaining more links. Can't deploy using any of the free options below? Check
   out Railway or look into cheap, paid VPS hosting solutions.}}
 </p>
 <p>
   <strong
-    >mask{{Be sure to join Titanium Network's Discord for more official site
+    >{{mask}}{{Be sure to join Titanium Network's Discord for more official site
     links:}}</strong
   >
-  <a href="route/titaniumnetwork-discord">maskhttps://discord.gg/unblock</a>
+  <a href="{{route}}{{/titaniumnetwork-discord}}">{{mask}}{{https://discord.gg/unblock}}</a>
 </p>
 <br />
-<h3>maskGitHub Codespaces</h3>
+<h3>{{mask}}{{GitHub Codespaces}}</h3>
 <details>
-  <summary>maskSetup Instructions</summary>
+  <summary>{{mask}}{{Setup Instructions}}</summary>
 
-  - maskFork (and star!) this repository to your GitHub account<br />
-  - maskHead to the official
-  <a href="route/codespaces">Codespaces</a> website (ensure you
+  - {{mask}}{{Fork (and star!) this repository to your GitHub account}}<br />
+  - {{mask}}{{Head to the official}}
+  <a href="{{route}}{{/codespaces}}">Codespaces</a> website (ensure you
   have a GitHub account already made)<br />
   - Select <strong>New Codespaces</strong> and look for
-  <em>mask[USERNAME]/InvisiProxy</em> on your account<br />
+  <em>{{mask}}{{[USERNAME]/InvisiProxy}}</em> on your account<br />
   - Ensure the branch is set to <code>master</code> and the dev container
-  configuration is set to <strong>maskInvisiProxy LTS</strong><br />
+  configuration is set to <strong>{{mask}}{{InvisiProxy LTS}}</strong><br />
   - Select <strong>Create Codespace</strong> and allow the container to setup<br />
   - Type <code>npm run fresh-install</code> and <code>npm start</code> in the terminal<br />
   - Click "Make public" on the application popup, then access the deployed
@@ -45,102 +45,102 @@ ifSEO{{
 <br />
 <h2>How to Setup</h2>
 <h4>
-  mask{{It is highly recommended you switch branches via your IDE to a production
+  {{mask}}{{It is highly recommended you switch branches via your IDE to a production
   released branch. Often the master branch contains unstable or WIP changes.}}
 </h4>
 <h4>
-  maskExample: v6.x_production instead of master
+  {{mask}}{{Example: v6.x_production instead of master}}
 </h4>
 <h3>Terminal</h3>
 <p>
-  mask{{Either use the button above to deploy to the deployment options above or type
+  {{mask}}{{Either use the button above to deploy to the deployment options above or type
   the commands below on a dedicated server:}}
 </p>
-<pre><code>maskgit clone --recurse-submodules https://github.com/QuiteAFancyEmerald/InvisiProxy.git
+<pre><code>{{mask}}{{git clone --recurse-submodules https://github.com/QuiteAFancyEmerald/InvisiProxy.git}}
 
-maskcd InvisiProxy
+{{mask}}{{cd InvisiProxy}}
 
-maskgit submodule init
+{{mask}}{{git submodule init}}
 
-<span >mask{{# Using the configuration file you can automatically use pm2 if you are hosting on a VPS!</span>
+<span >{{mask}}{{# Using the configuration file you can automatically use pm2 if you are hosting on a VPS!</span>
 
 npm run fresh-install
 
 npm start
 }}
-<span >mask{{# Or on subsequent uses...</span>
+<span >{{mask}}{{# Or on subsequent uses...</span>
 npm restart
 }}
-<span >mask# If you encounter any build errors...</span>
+<span >{{mask}}{{# If you encounter any build errors...}}</span>
 npm <span>run</span><span> build
 </span>
 <span ># If you encounter any service errors...</span>
-npm <span>run</span><span>mask proxy-validator</span>
+npm <span>run</span><span>{{mask}}{{ proxy-validator}}</span>
 </code></pre>
 <p>
-  mask{{This website is hosted locally with Scramjet, Ultraviolet (Wisp, Bare-Mux,
+  {{mask}}{{This website is hosted locally with Scramjet, Ultraviolet (Wisp, Bare-Mux,
   EpoxyTransport, CurlTransport) and Rammerhead built-in.}}
 </p>
 <h3>Configuration</h3>
 <h4>Server Configuration Setup</h4>
 <p>
-  maskThe default place for the proxy when its started is
+  {{mask}}{{The default place for the proxy when its started is}}
   <code>http://localhost:8080</code>, but you can change it if needed in
   <code>./ecosystem.config.js</code>. You can also modify the other
-  configuration values at <code>./config.json</code>. mask{{To clarify you change the
+  configuration values at <code>./config.json</code>. {{mask}}{{To clarify you change the
   PORT and other production metrics via }}<code>./ecosystem.config.js</code>.
-  maskLocalized changes for source randomization, auto-minify, etc. are located in
+  {{mask}}{{Localized changes for source randomization, auto-minify, etc. are located in}}
   <code>./config.json</code>.
 </p>
 <br />
-<h4>maskTor/Onion Routing Setup</h4>
+<h4>{{mask}}{{Tor/Onion Routing Setup}}</h4>
 <p>
-  maskSimply host Tor using this guide:
-  <a href="route/tr"
-    >maskhttps://tb-manual.torproject.org/installation/</a
+  {{mask}}{{Simply host Tor using this guide:}}
+  <a href="{{route}}{{/tr}}"
+    >{{mask}}{{https://tb-manual.torproject.org/installation/}}</a
   >
 </p>
 <p>
-  mask{{If you are hosting InvisiProxy LTS on a VPS utilizing Ubuntu consider
+  {{mask}}{{If you are hosting InvisiProxy LTS on a VPS utilizing Ubuntu consider
   attaching Tor to systemctl for easier production management. Once Tor is up
   and running on either Linux or Windows it will work automatically with InvisiProxy LTS when enabled by the user via the Settings menu.}}
 </p>
 <br />
-<h4>maskProxy Configuration</h4>
+<h4>{{mask}}{{Proxy Configuration}}</h4>
 <p>
-  mask{{The primary location for tweaking any web proxy related settings assigned via
-  the Settings menu is }}<code>mask./views/assets/js/register-sw.js</code>.mask{{ Here you
+  {{mask}}{{The primary location for tweaking any web proxy related settings assigned via
+  the Settings menu is }}<code>{{mask}}{{./views/assets/js/register-sw.js}}</code>.{{mask}}{{ Here you
   can modify the provided transport options set locally via a cookie, swap out
   SOCKS5 proxies, change Onion routing ports, specify a blacklist, and more.}}
 </p>
 <ul>
   <li>
-    <code>maskstockSW</code>: mask{{The default service worker configuration file for
+    <code>{{mask}}{{stockSW}}</code>: {{mask}}{{The default service worker configuration file for
     Ultraviolet. For InvisiProxy however adblocking is automatically enabled
     so this is not used by default.}}
   </li>
   <li>
-    <code>maskblacklistSW</code>: mask{{A modified version of Ultraviolet that allows for
+    <code>{{mask}}{{blacklistSW}}</code>: {{mask}}{{A modified version of Ultraviolet that allows for
     blacklisting domains and adblocking.}}
   </li>
   <li>
-    <code>maskproxyUrl</code>:mask{{ Specifies a SOCKS5 protocol URL defaulting to the
+    <code>{{mask}}{{proxyUrl}}</code>:{{mask}}{{ Specifies a SOCKS5 protocol URL defaulting to the
     default Tor proxy port. This can be swapped out with any valid port or
     SOCK5s proxy.}}
   </li>
   <li>
-    <code>masktransports</code>:mask{{ Specifies any provided ports to be swapped via
+    <code>{{mask}}{{transports}}</code>:{{mask}}{{ Specifies any provided ports to be swapped via
     Bare-Mux and utilize Wisp.}}
   </li>
-  <li><code>maskwispUrl</code>:mask Modify the pathname or url handling for Wisp</li>
+  <li><code>{{mask}}{{wispUrl}}</code>:{{mask}}{{ Modify the pathname or url handling for Wisp}}</li>
   <li>
-    <code>maskdefaultMode</code>:mask{{ Specify the default transport used globally (can
+    <code>{{mask}}{{defaultMode}}</code>:{{mask}}{{ Specify the default transport used globally (can
     be swapped by the users still via the Settings menu)}}
   </li>
   <li>
-    <code>maskScramjetController</code>:mask{{ This constructor allows you to swap out the
+    <code>{{mask}}{{ScramjetController}}</code>:{{mask}}{{ This constructor allows you to swap out the
     prefix used for Scramjet dynamically and specify file locations. Note you
-    may need to edit }}<code>mask./views/scram/scramjet.sw</code>mask{{ when changing file
+    may need to edit }}<code>{{mask}}{{./views/scram/scramjet.sw}}</code>{{mask}}{{ when changing file
     names.}}
   </li>
 </ul>

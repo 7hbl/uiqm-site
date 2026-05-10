@@ -20,8 +20,8 @@ const getDomain = () =>
   // This is used for stealth mode when visiting external sites.
   goFrame = (url) => {
     localStorage.setItem('{{hu-lts}}-frame-url', url);
-    if (location.pathname !== '""{{/s}}')
-      location.href = '""{{/s}}?cache={{cacheVal}}';
+    if (location.pathname !== '{{route}}{{/s}}')
+      location.href = '{{route}}{{/s}}?cache={{cacheVal}}';
     else document.getElementById('frame').src = url;
   },
   /* Used to set functions for the goProx object at the bottom.
@@ -357,13 +357,13 @@ const RammerheadEncode = async (baseUrl) => {
     api = {
       // Make a new Rammerhead session and do something with it.
       newsession(callback) {
-        get('""{{/newsession}}', callback);
+        get('{{route}}{{/newsession}}', callback);
       },
 
       // Check if a session with the specified ID exists, then do something.
       sessionexists(id, callback) {
         get(
-          '""{{/sessionexists}}?id=' + encodeURIComponent(id),
+          '{{route}}{{/sessionexists}}?id=' + encodeURIComponent(id),
           (res) => {
             if (res === 'exists') return callback(true);
             if (res === 'not found') return callback(false);
@@ -376,7 +376,7 @@ const RammerheadEncode = async (baseUrl) => {
       shuffleDict(id, callback) {
         console.log('Shuffling', id);
         get(
-          '""{{/api/shuffleDict}}?id=' + encodeURIComponent(id),
+          '{{route}}{{/api/shuffleDict}}?id=' + encodeURIComponent(id),
           (res) => {
             callback(JSON.parse(res));
           }
@@ -466,7 +466,7 @@ const RammerheadEncode = async (baseUrl) => {
     if (id === rhACDict.id && rhACDict.dict)
       return new Promise((resolve) => {
         resolve(
-          `""{{/}}${id}/` +
+          `{{route}}{{/}}${id}/` +
             new StrShuffler(rhACDict.dict).shuffle(baseUrl)
         );
       });
@@ -475,7 +475,7 @@ const RammerheadEncode = async (baseUrl) => {
         if (id === rhACDict.id) rhACDict.dict = shuffleDict;
         // Encode the URL with Rammerhead's encoding table and return the URL.
         resolve(
-          `""{{/}}${id}/` + new StrShuffler(shuffleDict).shuffle(baseUrl)
+          `{{route}}{{/}}${id}/` + new StrShuffler(shuffleDict).shuffle(baseUrl)
         );
       });
     });
@@ -520,7 +520,7 @@ const preparePage = async () => {
   sjObject = self['$scramjetLoadController'];
   if (sjObject)
     sjEncode = new (sjObject().ScramjetController)({
-      prefix: '""{{/scram/network/}}',
+      prefix: '{{route}}{{/scram/network/}}',
     }).encodeUrl;
 
   // Object.freeze prevents goProx from accidentally being edited.
@@ -537,7 +537,7 @@ const preparePage = async () => {
 
     webleste: urlHandler(location.protocol + '//b.' + getDomain()),
 
-    osu: urlHandler(location.origin + '""{{/archive/osu}}'),
+    osu: urlHandler(location.origin + '{{route}}{{/archive/osu}}'),
 
     agar: urlHandler(sjUrl('https://agar.io')),
 
@@ -671,7 +671,7 @@ const preparePage = async () => {
           sjLoaded = false;
         if (sjObject) {
           autocompleteChannel = new MessageChannel();
-          callAfterWorkers(['""{{/scram/scramjet.sw.js}}'], (worker) => {
+          callAfterWorkers(['{{route}}{{/scram/scramjet.sw.js}}'], (worker) => {
             worker.active.postMessage({ type: 'requestAC' }, [
               autocompleteChannel.port2,
             ]);
@@ -798,9 +798,9 @@ const preparePage = async () => {
     if (uvConfig && sjObject)
       (await callAfterWorkers(
         [
-          '""{{/scram/scramjet.sw.js}}',
-          '""{{/uv/sw.js}}',
-          '""{{/uv/sw-blacklist.js}}',
+          '{{route}}{{/scram/scramjet.sw.js}}',
+          '{{route}}{{/uv/sw.js}}',
+          '{{route}}{{/uv/sw-blacklist.js}}',
         ],
         loadFrame,
         2,
@@ -843,7 +843,7 @@ const preparePage = async () => {
       AOS.init();
     });
 
-    fetch('""{{/assets/json/splash.json}}', {
+    fetch('{{route}}{{/assets/json/splash.json}}', {
       mode: 'same-origin',
     }).then((response) => {
       response.json().then((splashList) => {
@@ -855,7 +855,7 @@ const preparePage = async () => {
 
   // Load in relevant JSON files used to organize large sets of data.
   // This first one is for links, whereas the rest are for navigation menus.
-  fetch('""{{/assets/json/links.json}}', {
+  fetch('{{route}}{{/assets/json/links.json}}', {
     mode: 'same-origin',
   }).then((response) => {
     response.json().then((huLinks) => {
@@ -879,7 +879,7 @@ const preparePage = async () => {
 
     if (navList) {
       // List items stored in JSON format will be returned as a JS object.
-      const data = await fetch(`""{{/assets/json/}}${filename}.json`, {
+      const data = await fetch(`{{route}}{{/assets/json/}}${filename}.json`, {
         mode: 'same-origin',
       }).then((response) => response.json());
 
@@ -918,7 +918,7 @@ const preparePage = async () => {
               (credits = document.createElement('p')));
 
             a.href = '#';
-            img.src = `""{{/assets/img/}}${dir}/` + item.img;
+            img.src = `{{route}}{{/assets/img/}}${dir}/` + item.img;
             title.textContent = item.name;
             desc.textContent = item.description;
             credits.textContent = item.credits;
@@ -926,7 +926,7 @@ const preparePage = async () => {
             if (filename === 'par-nav') {
               if (item.credits === 'truf')
                 desc.innerHTML +=
-                  '<br>{{mask}}{{Credits: Check out the full site at }}<a target="_blank" href="""{{/truffled}}">{{mask}}{{truffled.lol}}</a> //{{mask}}{{ discord.gg/vVqY36mzvj}}';
+                  '<br>{{mask}}{{Credits: Check out the full site at }}<a target="_blank" href="{{route}}{{/truffled}}">{{mask}}{{truffled.lol}}</a> //{{mask}}{{ discord.gg/vVqY36mzvj}}';
             }
 
             a.appendChild(img);
@@ -941,7 +941,7 @@ const preparePage = async () => {
               // emulib-nav
               () =>
                 goFrame(
-                  '""{{/webretro}}?core=' +
+                  '{{route}}{{/webretro}}?core=' +
                     item.core +
                     '&rom=' +
                     item.rom
@@ -953,7 +953,7 @@ const preparePage = async () => {
               // h5-nav
               item.custom && goProx[item.custom]
                 ? () => goProx[item.custom]('window')
-                : () => goFrame('""{{/archive/g/}}' + item.path),
+                : () => goFrame('{{route}}{{/archive/g/}}' + item.path),
             ];
 
             a.addEventListener(
@@ -980,7 +980,7 @@ const preparePage = async () => {
 
             a.addEventListener('click', (e) => {
               e.preventDefault();
-              goFrame('""{{/flash}}?swf=' + item);
+              goFrame('{{route}}{{/flash}}?swf=' + item);
             });
 
             navList.appendChild(a);

@@ -188,8 +188,8 @@
                             )
                               elementCopy.addEventListener('click', (event) => {
                                 event.preventDefault();
-                                if (attrValue === '""{{/}}')
-                                  attrValue = '""{{/index}}';
+                                if (attrValue === '{{route}}{{/}}')
+                                  attrValue = '{{route}}{{/index}}';
                                 loadPage(new URL(attrValue, origin))();
                               });
                             else if (nodeName === 'link') {

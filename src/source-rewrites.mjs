@@ -33,7 +33,7 @@ const regExpEscape = /[-[\]{}()*+?.,\\^$#\s]/g,
   getEndPoint = /((?<![^\/])github\/)?[^\/]+$/,
   getPaths = /[^\/]+(?=\/)/g,
   getAbsoluteRoot = /^~?\/+|^~$|^(?!\.\/)/,
-  getRoutePath = /(?<=\s*)[^}\s]+(?=\s*)/,
+  getRoutePath = /(?<={{route}}{{\s*)[^}\s]+(?=\s*}})/,
   getAttrPath = /(?<=(?:src|href)=(["']?))[\w\.~:\/\?#[\]@!$&()*+,;%=-]+(?=\1)/,
   getAttrValues = /=(['"])(?:(?!\1)[^])+\1/g,
   getNodesByLine = /(?<=^\s*)\S.*?(?=\s*$)/gm,
@@ -44,14 +44,14 @@ const regExpEscape = /[-[\]{}()*+?.,\\^$#\s]/g,
     const mode = 'function' === typeof insertFunction,
       keyword = mode ? insertFunction.name : insertFunction,
       replaceParams1 = new RegExp(
-        `[^\\S\\n\\r]*${keyword}\\s*` +
-          '\\s*\\s*\\n\\r?((?:(?!)[^])*\\n\\r?)\\s*}}\\s*?\\n?\\r?'.repeat(
+        `[^\\S\\n\\r]*{{${keyword}}}\\s*` +
+          '\\s*{{\\s*\\n\\r?((?:(?!}})[^])*\\n\\r?)\\s*}}\\s*?\\n?\\r?'.repeat(
             numArgs
           ),
         'g'
       ),
       replaceParams2 = new RegExp(
-        `${keyword}` + '((?:(?!)[^])*?)}}'.repeat(numArgs),
+        `{{${keyword}}}` + '{{((?:(?!}})[^])*?)}}'.repeat(numArgs),
         'g'
       ),
       replaceFunc = mode
@@ -65,7 +65,7 @@ const regExpEscape = /[-[\]{}()*+?.,\\^$#\s]/g,
   },
   applyMassInsert = (str, flatPathObject, shouldIgnore = false) => {
     const replaceParams = new RegExp(
-        `(${Object.keys(flatPathObject).join('|').replace(regExpEscape, '\\$&')})`,
+        `{{(${Object.keys(flatPathObject).join('|').replace(regExpEscape, '\\$&')})}}`,
         'g'
       ),
       replaceFunc = shouldIgnore
@@ -228,7 +228,7 @@ const regExpEscape = /[-[\]{}()*+?.,\\^$#\s]/g,
       .join('')
       .replaceAll('{', '')
       .replaceAll('}', ''),
-  // To be used for insertions that are also encased in string literals.
+  // To be used for {{insertions}} that are also encased in string literals.
   escapeStr = (str) =>
     str
       .replace(basicStrEscape, '\\$&')
@@ -249,7 +249,7 @@ const regExpEscape = /[-[\]{}()*+?.,\\^$#\s]/g,
     ),
     version: versionValue,
     cacheVal: crypto.getRandomValues(new Uint32Array(1))[0],
-    defaultSearch: 'DuckDuckGo',
+    defaultSearch: '{{DuckDuckGo}}',
   }),
   // List of manual censors for unavoidable cases.
   manualCensors = Object.freeze({

@@ -1,8 +1,8 @@
 <!doctype html>
 <html>
   <head>
-    <title>maskInvisiProxy LTS | Emulators Hub</title>
-    ifSEO{{
+    <title>{{mask}}{{InvisiProxy LTS | Emulators Hub}}</title>
+    {{ifSEO}}{{
     <meta
       name="description"
       content="InvisiProxy is a secure web proxy service with support for many sites. Bypass filters and freely enjoy a safer private browsing experience or unblock websites on devices such as Chromebooks and at places like school or work without downloading anything."
@@ -10,9 +10,9 @@
     }}
     <!--HEAD-CONTENT-->
     <script src="https://unpkg.com/tsparticles@3.8.1/tsparticles.bundle.min.js" defer data-module></script>
-    inline{{
-    <script src="routeassets/js/csel.jsinline" defer></script>
-    <script src="routeassets/js/common.jsinline" defer></script>
+    {{inline}}{{
+    <script src="{{route}}{{assets/js/csel.js}}{{inline}}" defer></script>
+    <script src="{{route}}{{assets/js/common.js}}{{inline}}" defer></script>
     }}
   </head>
 
@@ -37,8 +37,8 @@
       <!--FOOTER-->
     </div>
     <!-- IMPORTANT-IVINSERT-DONOTDELETE -->
-    inline{{
-    <script src="routeassets/js/card.jsinline"></script>
+    {{inline}}{{
+    <script src="{{route}}{{assets/js/card.js}}{{inline}}"></script>
     }}
   </body>
 </html>

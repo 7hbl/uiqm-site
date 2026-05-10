@@ -423,7 +423,7 @@ function errorTemplate(trace, fetchedURL) {
     `;
 
   return '{{ultraviolet-error}}'.replace(
-    'self.location.href',
+    '{{src}}',
     'data:application/javascript,' + encodeURIComponent(script)
   );
 }

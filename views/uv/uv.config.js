@@ -1,12 +1,12 @@
 // This file overwrites the stock UV config.js
 
 self['{{__uv$config}}'] = {
-  prefix: '""{{/uv/service/}}',
+  prefix: '{{route}}{{/uv/service/}}',
   encodeUrl: Ultraviolet.codec.xor.encode,
   decodeUrl: Ultraviolet.codec.xor.decode,
-  handler: '""{{/uv/uv.handler.js}}',
-  client: '""{{/uv/uv.client.js}}',
-  bundle: '""{{/uv/uv.bundle.js}}',
-  config: '""{{/uv/uv.config.js}}',
-  sw: '""{{/uv/uv.sw.js}}',
+  handler: '{{route}}{{/uv/uv.handler.js}}',
+  client: '{{route}}{{/uv/uv.client.js}}',
+  bundle: '{{route}}{{/uv/uv.bundle.js}}',
+  config: '{{route}}{{/uv/uv.config.js}}',
+  sw: '{{route}}{{/uv/uv.sw.js}}',
 };

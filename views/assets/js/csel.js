@@ -212,7 +212,7 @@ if (document.getElementById('csel')) {
       //    Allow users to reset the favicon to default if nothing is entered.
       focusElement.focus();
       removeStorage('Icon');
-      pageIcon('""{{assets/ico/favicon.ico}}');
+      pageIcon('{{route}}{{assets/ico/favicon.ico}}');
     }
   });
 
@@ -456,7 +456,7 @@ if (document.getElementById('csel')) {
 
     if (enabled) {
       setStorage('ErudaEnabled', true);
-      const moduleLocation = '""{{eruda/eruda.js}}';
+      const moduleLocation = '{{route}}{{eruda/eruda.js}}';
 
       import(moduleLocation).then((module) => {
         if (!self.eruda || !self.eruda.init) return;
