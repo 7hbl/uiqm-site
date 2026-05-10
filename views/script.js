@@ -1,101 +1,75 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Theme Persistence
-    const savedTheme = localStorage.getItem('uiqm-theme') || 'default';
-    document.body.setAttribute('data-theme', savedTheme);
-    const themeSelector = document.getElementById('theme-selector');
-    if (themeSelector) themeSelector.value = savedTheme;
+    const input = document.getElementById('terminal-input');
+    const output = document.getElementById('output');
+    const terminal = document.getElementById('terminal');
 
-    // Show initial engine selection if not already selected
-    if (!sessionStorage.getItem('engine-selected')) {
-        document.getElementById('initial-proxy-modal')?.classList.add('active');
-    }
+    // Focus input on click anywhere
+    terminal.addEventListener('click', () => input.focus());
 
-    // Proxy Engine Logic
-    window.selectInitialProxy = (engine) => {
-        localStorage.setItem('proxy-engine', engine);
-        sessionStorage.setItem('engine-selected', 'true');
-        document.getElementById('initial-proxy-modal')?.classList.remove('active');
+    const addLine = (text, type = '') => {
+        const div = document.createElement('div');
+        div.className = `line ${type}`;
+        div.innerHTML = text;
+        output.appendChild(div);
+        terminal.scrollTop = terminal.scrollHeight;
     };
 
-    // Modal Handlers
-    window.openModal = (id) => {
-        document.getElementById(id)?.classList.add('active');
-    };
+    const handleCommand = (cmd) => {
+        const parts = cmd.trim().split(' ');
+        const baseCmd = parts[0].toLowerCase();
+        const args = parts.slice(1);
 
-    window.forceCloseModal = (id) => {
-        document.getElementById(id)?.classList.remove('active');
-    };
+        addLine(`<span class="prompt-prefix">root@uiqm:~$</span> ${cmd}`);
 
-    window.closeModal = (e, id) => {
-        if (e.target.classList.contains('modal-overlay')) {
-            forceCloseModal(id);
+        if (baseCmd === 'help') {
+            addLine('available commands:', 'system');
+            addLine('<span class="help-cmd">theme [color]</span> - changes terminal text color');
+            addLine('  options: red (default), green, blue, white', 'system');
+            return;
+        }
+
+        if (baseCmd === 'theme') {
+            const color = args[0]?.toLowerCase();
+            const themes = ['red', 'green', 'blue', 'white'];
+            if (themes.includes(color)) {
+                document.body.setAttribute('data-theme', color === 'red' ? 'default' : color);
+                addLine(`theme changed to ${color}`, 'system');
+            } else {
+                addLine('usage: theme [red|green|blue|white]', 'system');
+            }
+            return;
+        }
+
+        if (baseCmd === 'clear') {
+            output.innerHTML = '';
+            return;
+        }
+
+        // URL Handling
+        if (cmd) {
+            let url = cmd;
+            if (!url.includes('.') || url.includes(' ')) {
+                // If it's a search, use DuckDuckGo
+                url = 'https://duckduckgo.com/?q=' + encodeURIComponent(cmd);
+            } else if (!url.startsWith('http')) {
+                url = 'https://' + url;
+            }
+
+            addLine(`proxying to: ${url}...`, 'system');
+            
+            // Defaulting to Scramjet (/worker/)
+            // Fallback logic could be complex purely client-side, but usually we just route.
+            setTimeout(() => {
+                window.location.href = '/worker/' + encodeURIComponent(url);
+            }, 500);
         }
     };
 
-    // Tab Switching
-    window.switchThemeTab = (tabId, btn) => {
-        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById(tabId)?.classList.add('active');
-        btn.classList.add('active');
-    };
-
-    // Theme Switching
-    window.changeTheme = () => {
-        const theme = document.getElementById('theme-selector').value;
-        document.body.setAttribute('data-theme', theme);
-        localStorage.setItem('uiqm-theme', theme);
-    };
-
-    // Cloaking Logic
-    window.applyPresetCloak = () => {
-        const preset = document.getElementById('preset-cloak').value;
-        const presets = {
-            classroom: { title: 'Google Classroom', icon: 'https://ssl.gstatic.com/classroom/favicon.png' },
-            drive: { title: 'My Drive - Google Drive', icon: 'https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_32dp.png' },
-            canvas: { title: 'Dashboard', icon: 'https://du11bjcvkw4z7.cloudfront.net/canvas/images/favicon.ico' }
-        };
-
-        if (presets[preset]) {
-            document.title = presets[preset].title;
-            const link = document.querySelector("link[rel*='icon']") || document.createElement('link');
-            link.type = 'image/x-icon';
-            link.rel = 'shortcut icon';
-            link.href = presets[preset].icon;
-            document.getElementsByTagName('head')[0].appendChild(link);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const cmd = input.value;
+            handleCommand(cmd);
+            input.value = '';
         }
-    };
-
-    // Search Logic
-    const searchBtn = document.getElementById('search-btn');
-    const searchInput = document.getElementById('search-input');
-
-    const handleSearch = () => {
-        const query = searchInput.value.trim();
-        const engine = localStorage.getItem('proxy-engine') || 'pr-sj';
-        const searchEngine = document.getElementById('search-engine-select').value;
-
-        if (!query) return;
-
-        let url = query;
-        if (!query.includes('.') || query.includes(' ')) {
-            const engines = {
-                Google: 'https://www.google.com/search?q=',
-                DuckDuckGo: 'https://duckduckgo.com/?q=',
-                Brave: 'https://search.brave.com/search?q=',
-                Bing: 'https://www.bing.com/search?q='
-            };
-            url = engines[searchEngine] + encodeURIComponent(query);
-        } else if (!query.startsWith('http')) {
-            url = 'https://' + query;
-        }
-
-        const pathPrefix = engine === 'pr-sj' ? '/worker/' : (engine === 'pr-uv' ? '/network/' : '/physics/');
-        window.location.href = pathPrefix + encodeURIComponent(url);
-    };
-
-    searchBtn?.addEventListener('click', handleSearch);
-    searchInput?.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleSearch();
     });
 });
