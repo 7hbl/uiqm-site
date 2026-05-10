@@ -9,34 +9,24 @@
     <!-- BareMux loads first (sync) -->
     <script src="/gmt/index.js"></script>
 
-    <!--
-        CRITICAL: working.all.js is NOT loaded here as a static tag.
-        We load it dynamically AFTER clearing stale IndexedDB, because:
-        - working.all.js internally calls indexedDB.open() on load
-        - If an old schema exists the browser throws NotFoundError
-        - Static <script> tags can't be awaited, so the IDB clear would race
-        - Dynamic injection lets us properly sequence: clear IDB → then load JS
-    -->
     <script>
-        // Returns a Promise that:
-        // 1. Clears all IDB databases (removes stale Scramjet schema)
-        // 2. Then dynamically loads working.all.js
-        // 3. Resolves when Scramjet is safe to use
+        // Wipe ALL stale IDB data, then dynamically load working.all.js.
+        // We do this because working.all.js opens IndexedDB on load, and
+        // a schema mismatch throws NotFoundError that nothing can catch
+        // if we use a static <script> tag.
         window._proxyReady = (async () => {
-            // Clear stale IDB FIRST and fully AWAIT it
+            // 1. Clear stale IndexedDB (fully awaited, no race)
             try {
                 if (indexedDB.databases) {
                     const dbs = await indexedDB.databases();
                     await Promise.all(dbs.map(db => new Promise(res => {
-                        const req = indexedDB.deleteDatabase(db.name);
-                        req.onsuccess = res;
-                        req.onerror = res;
-                        req.onblocked = res;
+                        const r = indexedDB.deleteDatabase(db.name);
+                        r.onsuccess = r.onerror = r.onblocked = res;
                     })));
                 }
             } catch (_) {}
 
-            // NOW load working.all.js — IDB is clean, no schema conflict
+            // 2. Dynamically load working.all.js only after IDB is clean
             await new Promise((resolve, reject) => {
                 const s = document.createElement('script');
                 s.src = '/worker/working.all.js';
@@ -109,18 +99,18 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
 
     <script>
     document.addEventListener('DOMContentLoaded', async () => {
-        const input    = document.getElementById('term-input');
-        const output   = document.getElementById('term-output-lines');
-        const terminal = document.getElementById('terminal-shell');
-        const frame    = document.getElementById('proxy-frame');
-        const loading  = document.getElementById('proxy-loading');
+        const input      = document.getElementById('term-input');
+        const output     = document.getElementById('term-output-lines');
+        const terminal   = document.getElementById('terminal-shell');
+        const frame      = document.getElementById('proxy-frame');
+        const loading    = document.getElementById('proxy-loading');
         const proxyShell = document.getElementById('proxy-shell');
         const statusLine = document.getElementById('status-line');
 
-        const WISP_URL       = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
+        const WISP_URL        = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
         const BARE_MUX_WORKER = '/gmt/worker.js';
-        const SCRAMJET_SW    = '/worker/working.sw.js';
-        const TRANSPORT_MJS  = '/unix/index.mjs';
+        const SCRAMJET_SW     = '/worker/working.sw.js';
+        const TRANSPORT_MJS   = '/unix/index.mjs';
         const SCRAMJET_PREFIX = '/worker/network/';
 
         let sjEncode = null;
@@ -136,7 +126,45 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
         const setStatus = (msg, color = 'yellow') =>
             statusLine.innerHTML = `<span style="color:${color}">${msg}</span>`;
 
-        // Poll until SW controller is set (avoids event listener race conditions)
+        // Fully reset: unregister all SWs + clear IDB, then reload
+        const hardReset = async () => {
+            try {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(regs.map(r => r.unregister()));
+                if (indexedDB.databases) {
+                    const dbs = await indexedDB.databases();
+                    dbs.forEach(db => indexedDB.deleteDatabase(db.name));
+                }
+            } catch (_) {}
+            location.reload();
+        };
+
+        // Wait for SW to reach 'activated' state, with a timeout.
+        // navigator.serviceWorker.ready can hang forever if the SW errors — this doesn't.
+        const waitForSWActivation = (reg, timeoutMs = 15000) => new Promise((resolve, reject) => {
+            // Already active
+            if (reg.active && reg.active.state === 'activated') return resolve(reg);
+
+            const deadline = setTimeout(() => reject(new Error('SW activation timeout')), timeoutMs);
+            const done = (r) => { clearTimeout(deadline); resolve(r); };
+            const fail = (e) => { clearTimeout(deadline); reject(e); };
+
+            const watchSW = (sw) => {
+                if (!sw) return;
+                if (sw.state === 'activated') return done(reg);
+                if (sw.state === 'redundant') return fail(new Error('SW became redundant'));
+                sw.addEventListener('statechange', function handler() {
+                    if (sw.state === 'activated') { sw.removeEventListener('statechange', handler); done(reg); }
+                    if (sw.state === 'redundant') { sw.removeEventListener('statechange', handler); fail(new Error('SW became redundant')); }
+                });
+            };
+
+            // Watch whichever SW is currently progressing
+            watchSW(reg.installing || reg.waiting || reg.active);
+            reg.addEventListener('updatefound', () => watchSW(reg.installing));
+        });
+
+        // Poll until SW controls this page
         const waitForController = (ms = 12000) => new Promise(resolve => {
             if (navigator.serviceWorker.controller) return resolve(true);
             const t0 = Date.now();
@@ -148,28 +176,29 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
 
         const initProxy = async () => {
             try {
-                // Wait for IDB clear + working.all.js to finish loading
+                // Await IDB clear + dynamic working.all.js load
                 setStatus('Clearing cache...');
                 await window._proxyReady;
 
                 if (!navigator.serviceWorker) {
-                    setStatus('Error: Service Workers not supported.', 'red');
+                    setStatus('Service Workers not supported in this browser.', 'red');
                     return;
                 }
 
-                // 1. Set up Wisp transport via BareMux
+                // 1. BareMux / Wisp transport
                 setStatus('Connecting transport...');
                 if (window.BareMux) {
                     const conn = new BareMux.BareMuxConnection(BARE_MUX_WORKER);
                     await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
                 }
 
-                // 2. Register Scramjet Service Worker
+                // 2. Register SW and wait for activation (NOT navigator.serviceWorker.ready
+                //    which hangs forever if SW fails)
                 setStatus('Registering Service Worker...');
-                await navigator.serviceWorker.register(SCRAMJET_SW, { scope: '/worker/' });
-                await navigator.serviceWorker.ready;
+                const reg = await navigator.serviceWorker.register(SCRAMJET_SW, { scope: '/worker/' });
+                await waitForSWActivation(reg, 15000);
 
-                // 3. Init Scramjet Controller (sends config to SW so it knows what to intercept)
+                // 3. Init Scramjet — sends routing config to SW via postMessage
                 setStatus('Loading proxy engine...');
                 if (window.$scramjetLoadController) {
                     const { ScramjetController } = await window.$scramjetLoadController();
@@ -185,24 +214,23 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                     sjEncode = url => sj.encodeUrl(url);
                 }
 
-                // 4. Wait for SW to actually control this page
+                // 4. Wait for SW to control this page (poll)
                 setStatus('Syncing channel...');
-                const ok = await waitForController(12000);
-                if (!ok) {
-                    setStatus('Syncing... reloading.', 'orange');
-                    setTimeout(() => location.reload(), 500);
+                const controlled = await waitForController(12000);
+                if (!controlled) {
+                    setStatus('Sync failed — resetting...', 'orange');
+                    setTimeout(hardReset, 500);
                     return;
                 }
 
-                // 5. Done
                 setStatus('Secure Channel Active. System ready.', '#00ff00');
                 input.disabled = false;
                 input.focus();
 
             } catch (e) {
                 console.error('Init error:', e);
-                setStatus('Error: ' + e.message + ' — reloading in 3s', 'red');
-                setTimeout(() => location.reload(), 3000);
+                setStatus(`Error: ${e.message} — resetting in 3s`, 'red');
+                setTimeout(hardReset, 3000);
             }
         };
 
