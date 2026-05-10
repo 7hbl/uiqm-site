@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const runCommand = (cmd) => {
         const raw = cmd.trim();
+        if (!raw) return; // FIX: ignores empty input
+
         const parts = raw.split(' ');
         const base = parts[0].toLowerCase();
         const args = parts.slice(1);
@@ -24,20 +26,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (base === 'help') {
             print('Command List:', 'system');
-            print(' <span style="color:white">theme [red|green|blue|white]</span>');
+            print(' <span style="color:white">theme [red|green|blue|white|pink|purple|cyan]</span>');
+            print(' <span style="color:white">creds</span> - view developer credits');
             print(' <span style="color:white">clear</span> - clear console');
             print(' <span style="color:white">[url]</span> - browse site');
             return;
         }
 
+        if (base === 'creds') {
+            print('CREDITS:', 'system');
+            print('Huge thanks to <a href="https://github.com/QuiteAFancyEmerald" target="_blank" style="color:white">QuiteAFancyEmerald</a> for the original InvisiProxy engine.');
+            print('This terminal fork is just skidded with a heart <3 :)', 'system');
+            return;
+        }
+
         if (base === 'theme') {
             const color = args[0]?.toLowerCase();
-            const valid = ['red', 'green', 'blue', 'white'];
+            const valid = ['red', 'green', 'blue', 'white', 'pink', 'purple', 'cyan'];
             if (valid.includes(color)) {
                 document.body.setAttribute('data-theme', color === 'red' ? 'default' : color);
                 print(`Theme updated: ${color}.`, 'system');
             } else {
-                print('Error: theme not found.', 'system');
+                print(`Error: theme "${color}" not found. Type "help" for list.`, 'system');
             }
             return;
         }
@@ -47,22 +57,21 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (raw) {
+        // URL Handling
+        if (raw.includes('.') && !raw.includes(' ')) {
             let url = raw;
-            if (!url.includes('.') || url.includes(' ')) {
-                url = 'https://duckduckgo.com/?q=' + encodeURIComponent(raw);
-            } else if (!url.startsWith('http')) {
-                url = 'https://' + url;
-            }
-
-            print(`Routing via Scramjet...`, 'system');
+            if (!url.startsWith('http')) url = 'https://' + url;
             
+            print(`Routing via Scramjet...`, 'system');
             proxyShell.style.display = 'block';
             loading.style.display = 'flex';
             frame.style.display = 'block';
-            
             frame.src = '/worker/' + encodeURIComponent(url);
+            return;
         }
+
+        // Unknown Command Handling
+        print(`Command not found: ${base}. Type "help" for a list of commands.`, 'system');
     };
 
     input.addEventListener('keydown', (e) => {
