@@ -44,14 +44,14 @@ const regExpEscape = /[-[\]{}()*+?.,\\^$#\s]/g,
     const mode = 'function' === typeof insertFunction,
       keyword = mode ? insertFunction.name : insertFunction,
       replaceParams1 = new RegExp(
-        `[^\\S\\n\\r]*${keyword}\\s*` +
+        `[^\\S\\n\\r]*{{${keyword}\\s*` +
           '\\s*\\s*\\n\\r?((?:(?!)[^])*\\n\\r?)\\s*}}\\s*?\\n?\\r?'.repeat(
             numArgs
           ),
         'g'
       ),
       replaceParams2 = new RegExp(
-        `${keyword}` + '((?:(?!)[^])*?)}}'.repeat(numArgs),
+        `{{${keyword}` + '((?:(?!)[^])*?)}}'.repeat(numArgs),
         'g'
       ),
       replaceFunc = mode
@@ -244,9 +244,7 @@ const regExpEscape = /[-[\]{}()*+?.,\\^$#\s]/g,
     [inline, 1],
   ],
   namedEntries = Object.freeze({
-    __uv$config: escapeStr(
-      config.randomizeIdentifiers ? createRandomID() : '__uv$config'
-    ),
+    __uv$config: config.randomizeIdentifiers ? createRandomID() : '__uv$config',
     version: versionValue,
     cacheVal: crypto.getRandomValues(new Uint32Array(1))[0],
     defaultSearch: 'DuckDuckGo',
