@@ -193,12 +193,27 @@ commands: for (let i = 2; i < process.argv.length; i++)
         scram: scramjetPath,
         chii: 'node_modules/chii',
       };
-      for (const path of Object.entries(compilePaths)) {
-        const prefix = path[0] + '/',
-          prefixUrl = new URL('./views/dist/' + prefix, import.meta.url);
+
+      const rootPath = dirname(fileURLToPath(import.meta.url));
+
+      for (const [name, path] of Object.entries(compilePaths)) {
+        const prefix = name + '/';
+        const prefixUrl = new URL('./views/dist/' + prefix, import.meta.url);
         if (!existsSync(prefixUrl)) mkdirSync(prefixUrl);
 
-        compile(path[1].slice(path[1].indexOf('node_modules')), '', prefix);
+        // Force copy all files from the module dist to the production dist
+        const moduleDist = path.startsWith('node_modules') ? join(rootPath, path) : path;
+        if (existsSync(moduleDist)) {
+          readdirSync(moduleDist).forEach(file => {
+            const srcFile = join(moduleDist, file);
+            if (lstatSync(srcFile).isFile()) {
+              const targetName = (!config.usingSEO && flatAltPaths['files/' + file]) || file;
+              const destFile = join(rootPath, 'views/dist', name, targetName);
+              copyFileSync(srcFile, destFile);
+              console.log(`[Build] Copied ${file} -> ${name}/${targetName}`);
+            }
+          });
+        }
       }
 
       // Minify the scripts and stylesheets upon compiling, if enabled in config.
@@ -212,20 +227,26 @@ commands: for (let i = 2; i < process.argv.length; i++)
           ],
           platform: 'browser',
           sourcemap: true,
-          bundle: false, // Changed to false to prevent bundling into one file at root
+          bundle: false,
           minify: true,
           outdir: dist,
-          outbase: './views/dist', // Explicitly keep directory structure
+          outbase: './views/dist',
           allowOverwrite: true,
         });
 
-      // Copy wasm files separately to ensure they are not mangled
-      const wasmFiles = [
-        ['node_modules/@mercuryworkshop/scramjet/dist/scramjet.wasm.wasm', './views/dist/scram/working.wasm.wasm']
+      // Final verification of critical files
+      const criticalFiles = [
+        'views/dist/scram/working.all.js',
+        'views/dist/scram/working.sw.js',
+        'views/dist/scram/working.wasm.wasm',
+        'views/dist/uv/networking.bundle.js',
+        'views/dist/uv/networking.config.js'
       ];
-      for (const [src, dest] of wasmFiles) {
-        if (existsSync(src)) copyFileSync(src, dest);
-      }
+      console.log('[Build] Verifying critical files...');
+      criticalFiles.forEach(f => {
+        const p = join(rootPath, f);
+        console.log(`[Build] ${f}: ${existsSync(p) ? 'EXISTS ✅' : 'MISSING ❌'}`);
+      });
 
       compile('./views');
 
