@@ -539,4 +539,3 @@ useStorageArgs('UseAC', (s) => {
     classUpdateHandler(document.getElementsByClassName('useac'), 'off')();
 });
 })();
-

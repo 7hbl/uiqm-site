@@ -10,4 +10,3 @@ class WWError extends Error {
     this.name = '[WorkerWare Exception]';
   }
 }
-

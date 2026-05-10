@@ -446,4 +446,3 @@ function renderError(err, fetchedURL) {
     headers: headers,
   });
 }
-

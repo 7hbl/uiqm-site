@@ -45,10 +45,7 @@ wisp.options.port_blacklist = [
   [49152, 65535]
 ];
 
-wisp.options.hostname_blacklist = [
-  /google\.com/,
-  /youtube\.com/,
-];
+wisp.options.hostname_blacklist = [];
 
 // The server will check for the existence of this file when a shutdown is requested.
 // The shutdown script in run-command.js will temporarily produce this file.
@@ -336,3 +333,5 @@ if (config.disguiseFiles)
   console.log(
     'disguiseFiles is enabled. Visit src/routes.mjs to see the entry point, listed within the pages variable.'
   );
+
+

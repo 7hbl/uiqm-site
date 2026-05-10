@@ -996,4 +996,3 @@ if ('loading' === document.readyState)
   addEventListener('DOMContentLoaded', preparePage);
 else preparePage();
 })();
-
