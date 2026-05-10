@@ -3,21 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UIQM Web Proxy</title>
-    <link rel="icon" id="dynamic-favicon" href="/assets/ico/ms-icon-144x144.png" type="image/x-icon">
+    <title>UIQM Web Proxy | Privacy</title>
+    <!-- Custom Smile Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2250%22 cy=%2250%22 r=%2240%22 fill=%22none%22 stroke=%22red%22 stroke-width=%228%22/><circle cx=%2235%22 cy=%2240%22 r=%225%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%225%22 fill=%22red%22/><path d=%22M 30 65 Q 50 80 70 65%22 fill=%22none%22 stroke=%22red%22 stroke-width=%228%22 stroke-linecap=%22round%22/></svg>">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-
-    <script src="/baremux/index.js" defer></script>
-    <script src="/scram/scramjet.all.js" defer></script>
-    <script src="/assets/js/common.js" defer></script>
-
     <script src="script.js" defer></script>
 </head>
 <body data-theme="default">
 
     <nav class="navbar">
-        <div class="nav-brand">UIQM Web Proxy</div>
+        <div class="nav-brand">UIQM</div>
         <div class="nav-links">
             <button class="nav-btn" onclick="openModal('settings-modal')">Settings</button>
         </div>
@@ -26,8 +22,8 @@
     <main class="container">
         
         <div class="hero-text">
-            <h1 class="glow-text">Dynamic <span>Privacy</span></h1>
-            <p>Unrestricted access with a premium custom engine.</p>
+            <h1>Dynamic <span>Privacy</span></h1>
+            <p>Advanced custom proxy engine for unrestricted access.</p>
         </div>
 
         <div class="proxy-container">
@@ -35,28 +31,24 @@
                 
                 <div class="search-wrapper">
                     <select class="search-engine-list" id="search-engine-select">
-                        <option value="DuckDuckGo">DuckDuckGo</option>
-                        <option value="Brave">Brave</option>
+                        <option value="DuckDuckGo" selected>DuckDuckGo</option>
                         <option value="Google">Google</option>
+                        <option value="Brave">Brave</option>
                         <option value="Bing">Bing</option>
                     </select>
 
-                    <div class="search-box input-container">
-                        <input type="text" id="search-input" spellcheck="false" autocomplete="off" placeholder="Type a URL or search query...">
-                    </div>
+                    <input type="text" id="search-input" spellcheck="false" autocomplete="off" placeholder="Enter URL or search query...">
                 </div>
 
-                <button id="search-btn" class="run-search-btn">Enter Stealth Mode</button>
+                <button id="search-btn" class="run-search-btn">Activate Stealth</button>
             </div>
         </div>
         
-        <div class="footer-note">
-            discord - @uiqm for help
-        </div>
+        <div class="footer-note">discord - @uiqm</div>
     </main>
 
     <div class="modal-overlay" id="settings-modal" onclick="closeModal(event, 'settings-modal')">
-        <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal">
             <button class="close-modal" onclick="forceCloseModal('settings-modal')">&times;</button>
             <h2>Settings</h2>
 
@@ -65,60 +57,43 @@
                 <button class="tab-btn" onclick="switchThemeTab('themes-tab', this)">Themes</button>
             </div>
 
-            <!-- Cloaking Tab Content -->
             <div id="cloaking-tab" class="tab-content active">
                 <div class="modal-group">
-                    <label>Quick Presets</label>
+                    <label>Presets</label>
                     <select id="preset-cloak" onchange="applyPresetCloak()">
                         <option value="none">None</option>
                         <option value="classroom">Google Classroom</option>
                         <option value="drive">Google Drive</option>
-                        <option value="docs">Google Docs</option>
                         <option value="canvas">Canvas</option>
-                        <option value="colegia">Colegia</option>
                     </select>
                 </div>
-
-                <div class="modal-group">
-                    <label>Custom Title</label>
-                    <input type="text" id="custom-title" placeholder="Tab Title">
-                </div>
-
-                <div class="modal-group">
-                    <label>Custom Favicon URL</label>
-                    <input type="text" id="custom-icon" placeholder="https://...">
-                </div>
-
-                <button class="btn-secondary" onclick="applyCustomCloak()">Apply Cloak</button>
+                <button class="btn-secondary" onclick="applyPresetCloak()">Save Cloak</button>
             </div>
 
             <div id="themes-tab" class="tab-content">
                 <div class="modal-group">
-                    <label>Select Theme</label>
+                    <label>Theme</label>
                     <select id="theme-selector" onchange="changeTheme()">
-                        <option value="default">Black & Red</option>
-                        <option value="hacker">Hacker</option>
-                        <option value="ocean">Ocean</option>
-                        <option value="sunset">Sunset</option>
-                        <option value="amethyst">Amethyst</option>
+                        <option value="default">Midnight Red</option>
+                        <option value="hacker">Green Terminal</option>
+                        <option value="ocean">Deep Sea</option>
                     </select>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="modal-overlay active" id="initial-proxy-modal">
-        <div class="modal engine-select-modal">
+    <div class="modal-overlay" id="initial-proxy-modal">
+        <div class="modal">
             <h2>Select Engine</h2>
-            <p>Welcome to UIQM. Choose your processing engine.</p>
+            <p>Choose your processing engine for this session.</p>
             
             <div class="engine-buttons">
                 <button class="btn-primary" onclick="selectInitialProxy('pr-sj')">
-                    <span class="engine-title">Scramjet</span>
-                    <span class="engine-sub">Fastest & Suggested</span>
+                    Scramjet (High Performance)
                 </button>
-                <button class="btn-secondary" onclick="selectInitialProxy('pr-uv')">Ultraviolet</button>
-                <button class="btn-secondary" onclick="selectInitialProxy('pr-rh')">Rammerhead</button>
+                <button class="btn-secondary" onclick="selectInitialProxy('pr-uv')">Ultraviolet (Legacy)</button>
+                <button class="btn-secondary" onclick="selectInitialProxy('pr-rh')">Rammerhead (Stealth)</button>
             </div>
         </div>
     </div>
