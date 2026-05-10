@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UIQM Web Proxy | Private Terminal</title>
-    <!-- Favicon: Eyes Only -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>">
     
     <!-- Proxy Essentials -->
@@ -12,11 +11,8 @@
     <script src="/worker/working.all.js"></script>
     
     <style>
-        /* FUSED CSS - CRITICAL FOR STYLING */
         * { margin:0; padding:0; box-sizing:border-box; }
         body { background: #0a0a0a; color: #ff0000; font-family: 'Courier New', Courier, monospace; overflow: hidden; height: 100vh; width: 100vw; }
-
-        /* Themes */
         body[data-theme="green"] { color: #00ff00; }
         body[data-theme="blue"] { color: #0088ff; }
         body[data-theme="white"] { color: #ffffff; }
@@ -25,13 +21,9 @@
         body[data-theme="cyan"] { color: #00ffff; }
 
         #app { width: 100%; height: 100%; position: relative; }
-
-        /* Proxy Shell */
         #proxy-shell { position: absolute; top:0; left:0; width:100%; height:100%; display:none; z-index: 10; background:#000; }
         #proxy-frame { width:100%; height:100%; border:none; display:none; }
         #proxy-loading { position:fixed; top:0; left:0; width:100%; height:100%; background:#000; color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.5rem; text-shadow: 0 0 10px #ff0000; z-index: 15; }
-
-        /* Terminal Shell */
         #terminal-shell { padding: 20px; height: 100%; overflow-y: auto; position: relative; z-index: 5; text-shadow: 0 0 5px currentColor; }
         .ascii-art { white-space: pre; font-size: 8px; line-height: 8px; margin-bottom: 20px; opacity: 0.9; }
         .line { margin-bottom: 5px; min-height: 1.2em; word-break: break-all; line-height: 1.4; }
@@ -39,33 +31,18 @@
         #term-input-row { display: flex; align-items: center; margin-top: 10px; }
         .term-prefix { margin-right: 10px; font-weight: bold; }
         #term-input { background: transparent; border: none; color: inherit; font-size: inherit; font-family: inherit; flex: 1; outline: none; }
-
-        /* CRT Effect / Glowing Effect */
         #terminal-shell::before { content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); z-index: 20; background-size: 100% 2px, 3px 100%; pointer-events: none; }
-        #terminal-shell::after { content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0; background: rgba(18, 16, 16, 0.1); opacity: 0; z-index: 20; pointer-events: none; animation: flicker 0.15s infinite; }
-        
-        @keyframes flicker { 
-            0% { opacity: 0.17861; } 50% { opacity: 0.24387; } 100% { opacity: 0.17861; }
-        }
-
-        /* Responsive */
-        @media (max-width: 600px) {
-            .ascii-art { font-size: 4px; line-height: 4px; }
-        }
+        #terminal-shell::after { content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0; opacity: 0; z-index: 20; pointer-events: none; animation: flicker 0.15s infinite; }
+        @keyframes flicker { 0% { opacity: 0.17861; } 50% { opacity: 0.24387; } 100% { opacity: 0.17861; } }
+        a { color: inherit; }
     </style>
 </head>
 <body data-theme="default">
-
     <div id="app">
-        <!-- Proxy Shell -->
         <div id="proxy-shell">
             <iframe id="proxy-frame" title="UIQM Proxy Frame"></iframe>
-            <div id="proxy-loading">
-                <pre>   CONNECTING TO TUNNEL...</pre>
-            </div>
+            <div id="proxy-loading"><pre>   CONNECTING TO TUNNEL...</pre></div>
         </div>
-
-        <!-- Terminal Shell -->
         <div id="terminal-shell">
             <div class="ascii-art">
           $$\                                                       $$\                                                               
@@ -80,16 +57,13 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                     $$ |                                                            $$ |                                    \$$$$$$  |
                     \__|                                                            \__|                                     \______/ 
             </div>
-
-            <div class="line">uiqm web proxy [v2.0-FUSED]</div>
+            <div class="line">uiqm web proxy</div>
             <div class="line">@uiqm on discord for help</div>
             <div class="line">created by - @uiqm on discord</div>
             <br>
             <div class="line" id="status-line" style="color:yellow">Initializing Secure Channel...</div>
             <div class="line">Type <span style="color:white">help</span> for cmds or enter a URL to start.</div>
-            
             <div id="term-output-lines"></div>
-
             <form id="term-input-row" onsubmit="return false;">
                 <span class="term-prefix">root@uiqm:~$</span>
                 <input type="text" id="term-input" autofocus spellcheck="false" autocomplete="off" disabled>
@@ -98,160 +72,138 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
     </div>
 
     <script>
-        // FUSED LOGIC - CRITICAL FOR PROXYING
-        document.addEventListener('DOMContentLoaded', async () => {
-            const input = document.getElementById('term-input');
-            const output = document.getElementById('term-output-lines');
-            const terminal = document.getElementById('terminal-shell');
-            const frame = document.getElementById('proxy-frame');
-            const loading = document.getElementById('proxy-loading');
-            const proxyShell = document.getElementById('proxy-shell');
-            const statusLine = document.getElementById('status-line');
+    document.addEventListener('DOMContentLoaded', async () => {
+        const input = document.getElementById('term-input');
+        const output = document.getElementById('term-output-lines');
+        const terminal = document.getElementById('terminal-shell');
+        const frame = document.getElementById('proxy-frame');
+        const loading = document.getElementById('proxy-loading');
+        const proxyShell = document.getElementById('proxy-shell');
+        const statusLine = document.getElementById('status-line');
 
-            const WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
-            const BARE_MUX_WORKER = '/gmt/worker.js';
-            const SCRAMJET_SW = '/worker/working.sw.js';
-            const TRANSPORT_MJS = '/unix/index.mjs';
-            const SCRAMJET_PREFIX = '/worker/network/';
+        const WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
+        const BARE_MUX_WORKER = '/gmt/worker.js';
+        const SCRAMJET_SW = '/worker/working.sw.js';
+        const TRANSPORT_MJS = '/unix/index.mjs';
+        const SCRAMJET_PREFIX = '/worker/network/';
 
-            let sjEncode = null;
-            let isReady = false;
+        let sjEncode = null;
+        let isReady = false;
 
-            const print = (text, type = '') => {
-                const div = document.createElement('div');
-                div.className = `line ${type}`;
-                div.innerHTML = text;
-                output.appendChild(div);
-                terminal.scrollTop = terminal.scrollHeight;
-            };
+        const print = (text, type = '') => {
+            const div = document.createElement('div');
+            div.className = `line ${type}`;
+            div.innerHTML = text;
+            output.appendChild(div);
+            terminal.scrollTop = terminal.scrollHeight;
+        };
 
-            const initProxy = async () => {
-                try {
-                    if (!navigator.serviceWorker) {
-                        statusLine.innerHTML = '<span style="color:red">Error: Browser docs do not support SW.</span>';
-                        return;
-                    }
+        const markReady = () => {
+            if (isReady) return;
+            isReady = true;
+            statusLine.innerHTML = '<span style="color:#00ff00">Secure Channel Active. System ready.</span>';
+            input.disabled = false;
+            input.focus();
+        };
 
-                    // 1. Initialize BareMux
-                    const { BareMuxConnection } = window.BareMux || {};
-                    if (BareMuxConnection) {
-                        const conn = new BareMuxConnection(BARE_MUX_WORKER);
-                        await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
-                        console.log('BareMux Active');
-                    }
+        const initProxy = async () => {
+            try {
+                if (!navigator.serviceWorker) {
+                    statusLine.innerHTML = '<span style="color:red">Error: Service Workers not supported.</span>';
+                    return;
+                }
 
-                    // 2. Register Scramjet SW
-                    const registration = await navigator.serviceWorker.register(SCRAMJET_SW, {
-                        scope: '/worker/'
-                    });
+                // 1. BareMux
+                if (window.BareMux) {
+                    const conn = new BareMux.BareMuxConnection(BARE_MUX_WORKER);
+                    await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
+                }
 
-                    // 3. Controller Synchronization
-                    const checkController = () => {
-                        if (navigator.serviceWorker.controller) {
-                            statusLine.innerHTML = '<span style="color:#00ff00">Secure Channel Active. System ready.</span>';
-                            input.disabled = false;
-                            input.focus();
-                            isReady = true;
-                            return true;
+                // 2. Register SW
+                await navigator.serviceWorker.register(SCRAMJET_SW, { scope: '/worker/' });
+
+                // 3. Wait for controller (SW with skipWaiting + clients.claim claims immediately)
+                if (navigator.serviceWorker.controller) {
+                    // Already controlled
+                    markReady();
+                } else {
+                    navigator.serviceWorker.addEventListener('controllerchange', markReady);
+                    setTimeout(() => { if (!isReady) location.reload(); }, 5000);
+                }
+
+                // 4. Scramjet Controller (for encoding)
+                if (window.$scramjetLoadController) {
+                    const { ScramjetController } = await window.$scramjetLoadController();
+                    const sj = new ScramjetController({
+                        prefix: SCRAMJET_PREFIX,
+                        files: {
+                            wasm: '/worker/working.wasm.wasm',
+                            all: '/worker/working.all.js',
+                            sync: '/worker/working.sync.js',
                         }
-                        return false;
-                    };
-
-                    if (!checkController()) {
-                        navigator.serviceWorker.addEventListener('controllerchange', checkController);
-                        // Fallback reload if not claimed in 4s
-                        setTimeout(() => { if (!isReady) location.reload(); }, 4000);
-                    }
-
-                    // 4. Initialize Scramjet Encoder
-                    if (window.$scramjetLoadController) {
-                        const { ScramjetController } = await window.$scramjetLoadController();
-                        const scramjet = new ScramjetController({
-                            prefix: SCRAMJET_PREFIX,
-                            files: {
-                                wasm: '/worker/working.wasm.wasm',
-                                all: '/worker/working.all.js',
-                                sync: '/worker/working.sync.js',
-                            }
-                        });
-                        scramjet.init();
-                        sjEncode = (url) => scramjet.encodeUrl(url);
-                    }
-
-                } catch (e) {
-                    console.error('Init failed', e);
-                    statusLine.innerHTML = '<span style="color:red">Secure Channel Failed. Error in logs.</span>';
-                }
-            };
-
-            const runCommand = (cmd) => {
-                const raw = cmd.trim();
-                if (!raw || !isReady) return;
-
-                print(`<span class="term-prefix">root@uiqm:~$</span> ${raw}`);
-                const parts = raw.split(' ');
-                const base = parts[0].toLowerCase();
-                const args = parts.slice(1);
-
-                if (base === 'help') {
-                    print('Commands: <span style="color:white">theme, creds, clear, [url]</span>', 'system');
-                    return;
+                    });
+                    sj.init();
+                    sjEncode = (url) => sj.encodeUrl(url);
                 }
 
-                if (base === 'creds') {
-                    print('Engine: <a href="https://github.com/QuiteAFancyEmerald" target="_blank" style="color:white">QuiteAFancyEmerald</a>');
-                    print('This terminal fork is just skidded :p <3', 'system');
-                    return;
+            } catch (e) {
+                console.error('Init failed:', e);
+                statusLine.innerHTML = '<span style="color:red">Init Error. See console.</span>';
+            }
+        };
+
+        const runCommand = (cmd) => {
+            const raw = cmd.trim();
+            if (!raw || !isReady) return;
+
+            print(`<span class="term-prefix">root@uiqm:~$</span> ${raw}`);
+            const parts = raw.split(' ');
+            const base = parts[0].toLowerCase();
+
+            if (base === 'help') {
+                print('Commands: <span style="color:white">theme [color]</span>, <span style="color:white">creds</span>, <span style="color:white">clear</span>, <span style="color:white">[url]</span>', 'system');
+                return;
+            }
+            if (base === 'creds') {
+                print('Engine by <a href="https://github.com/QuiteAFancyEmerald" target="_blank" style="color:white">QuiteAFancyEmerald</a>');
+                print('This terminal fork is just skidded :p <3', 'system');
+                return;
+            }
+            if (base === 'theme') {
+                const color = parts[1]?.toLowerCase();
+                const valid = ['red', 'green', 'blue', 'white', 'pink', 'purple', 'cyan'];
+                if (valid.includes(color)) {
+                    document.body.setAttribute('data-theme', color === 'red' ? 'default' : color);
+                    print(`Theme: ${color}`, 'system');
+                } else {
+                    print('valid: red, green, blue, white, pink, purple, cyan', 'system');
                 }
+                return;
+            }
+            if (base === 'clear') { output.innerHTML = ''; return; }
 
-                if (base === 'theme') {
-                    const color = args[0]?.toLowerCase();
-                    const valid = ['red', 'green', 'blue', 'white', 'pink', 'purple', 'cyan'];
-                    if (valid.includes(color)) {
-                        document.body.setAttribute('data-theme', color === 'red' ? 'default' : color);
-                        print(`Theme: ${color}`, 'system');
-                    } else {
-                        print('Invalid theme.', 'system');
-                    }
-                    return;
-                }
+            if (raw.includes('.') && !raw.includes(' ')) {
+                let url = raw;
+                if (!url.startsWith('http')) url = 'https://' + url;
+                print(`Routing to ${url}...`, 'system');
+                proxyShell.style.display = 'block';
+                loading.style.display = 'flex';
+                frame.style.display = 'block';
+                frame.src = sjEncode ? sjEncode(url) : (SCRAMJET_PREFIX + encodeURIComponent(url));
+                return;
+            }
 
-                if (base === 'clear') { output.innerHTML = ''; return; }
+            print(`Command not found: ${base}`, 'system');
+        };
 
-                if (raw.includes('.') && !raw.includes(' ')) {
-                    let url = raw;
-                    if (!url.startsWith('http')) url = 'https://' + url;
-                    
-                    if (!navigator.serviceWorker.controller) {
-                        print('Resync required. Refreshing...', 'system');
-                        location.reload();
-                        return;
-                    }
-
-                    print(`Establishing Tunnel to ${url}...`, 'system');
-                    proxyShell.style.display = 'block';
-                    loading.style.display = 'flex';
-                    frame.style.display = 'block';
-                    frame.src = sjEncode ? sjEncode(url) : (SCRAMJET_PREFIX + encodeURIComponent(url));
-                    return;
-                }
-
-                print(`Command not found: ${base}`, 'system');
-            };
-
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    runCommand(input.value);
-                    input.value = '';
-                }
-            });
-
-            document.addEventListener('click', () => { if(isReady) input.focus(); });
-            frame.onload = () => { loading.style.display = 'none'; print(`Tunnel established.`, 'system'); };
-
-            await initProxy();
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); runCommand(input.value); input.value = ''; }
         });
+        document.addEventListener('click', () => { if (isReady) input.focus(); });
+        frame.onload = () => { loading.style.display = 'none'; print('Tunnel established.', 'system'); };
+
+        await initProxy();
+    });
     </script>
 </body>
 </html>

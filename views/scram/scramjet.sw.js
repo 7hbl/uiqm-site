@@ -11,11 +11,11 @@ async function handleRequest(event) {
 }
 
 self.addEventListener('install', () => {
-    self.skipWaiting();
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-    event.waitUntil(self.clients.claim());
+  event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener('fetch', (event) => {
@@ -31,7 +31,17 @@ self.addEventListener('message', (event) => {
       let responseJSON = {};
       if (responseType && responseType.indexOf('application/json') !== -1)
         responseJSON = await response.json();
-      else try { responseJSON = JSON.parse(await response.text()); } catch (e) {}
+      else
+        try {
+          responseJSON = await response.text();
+          try {
+            responseJSON = JSON.parse(responseJSON);
+          } catch (e) {
+            responseJSON = JSON.parse(
+              responseJSON.replace(/^[^[{]*|[^\]}]*$/g, '')
+            );
+          }
+        } catch (e) {}
       requestPort.postMessage({
         responseJSON: responseJSON,
         searchType: event.data.type,
