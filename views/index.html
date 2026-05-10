@@ -187,6 +187,7 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             else if (base === 'games') {
                 print('Redirecting to Games Hub...', 'system');
                 setTimeout(() => location.href = '/games', 500);
+                return;
             }
             else if (base === 'theme') { const c = args[0]?.toLowerCase(), v = ['red','green','blue','white','pink','purple','cyan']; if (v.includes(c)) { document.body.setAttribute('data-theme', c==='red'?'default':c); print(`Theme: ${c}`, 'system'); } }
             else if (base === 'clear') output.innerHTML = '';
