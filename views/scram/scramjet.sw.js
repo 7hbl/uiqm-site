@@ -14,31 +14,28 @@ self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener('activate', event => {
   event.waitUntil(self.clients.claim());
 });
 
-self.addEventListener('fetch', (event) => {
+self.addEventListener('fetch', event => {
   event.respondWith(handleRequest(event));
 });
 
-self.addEventListener('message', (event) => {
+self.addEventListener('message', event => {
   if (event.data.type === 'requestAC') {
-    const requestPort = event.ports[0];
-    requestPort.addEventListener('message', async (event) => {
-      const response = await scramjet.fetch(event.data);
-      const responseType = response.headers.get('content-type');
-      let responseJSON = {};
-      if (responseType && responseType.indexOf('application/json') !== -1)
-        responseJSON = await response.json();
-      else
-        try {
-          responseJSON = await response.text();
-          try { responseJSON = JSON.parse(responseJSON); }
-          catch (e) { responseJSON = JSON.parse(responseJSON.replace(/^[^[{]*|[^\]}]*$/g, '')); }
-        } catch (e) {}
-      requestPort.postMessage({ responseJSON, searchType: event.data.type, time: event.data.request.headers.get('Date') });
+    const port = event.ports[0];
+    port.addEventListener('message', async ev => {
+      const resp = await scramjet.fetch(ev.data);
+      const ct = resp.headers.get('content-type');
+      let json = {};
+      if (ct && ct.includes('application/json')) json = await resp.json();
+      else try {
+        const t = await resp.text();
+        try { json = JSON.parse(t); } catch { json = JSON.parse(t.replace(/^[^[{]*|[^\]}]*$/g,'')); }
+      } catch {}
+      port.postMessage({ responseJSON: json, searchType: ev.data.type, time: ev.data.request.headers.get('Date') });
     });
-    requestPort.start();
+    port.start();
   }
 });
