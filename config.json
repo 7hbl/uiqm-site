@@ -1,10 +1,10 @@
 {
-  "title": "Invisi LTS",
+  "title": "UIQM Web Proxy",
   "host": "0.0.0.0",
   "pathname": "/",
   "minifyScripts": true,
   "randomizeIdentifiers": true,
-  "production": false,
-  "disguiseFiles": true,
+  "production": true,
+  "disguiseFiles": false,
   "usingSEO": false
 }
