@@ -1,56 +1,46 @@
-importScripts('/scram/scramjet.all.js');
-const { ScramjetServiceWorker } = $scramjetLoadWorker();
-const scramjet = new ScramjetServiceWorker();
+importScripts('/worker/working.all.js');
 
-async function handleRequest(event) {
-  await scramjet.loadConfig();
-  if (scramjet.route(event)) {
-    return scramjet.fetch(event);
-  }
-  return fetch(event.request);
+let scramjet;
+try {
+    const { ScramjetServiceWorker } = $scramjetLoadWorker();
+    scramjet = new ScramjetServiceWorker();
+} catch (e) {
+    console.error('[UIQM SW] Init error:', e);
 }
 
-self.addEventListener('fetch', (event) => {
-  event.respondWith(handleRequest(event));
-});
+async function handleRequest(event) {
+    if (!scramjet) return fetch(event.request);
+    try {
+        await scramjet.loadConfig();
+        if (scramjet.route(event)) return scramjet.fetch(event);
+    } catch (e) {
+        console.warn('[UIQM SW] Fetch error:', e);
+    }
+    return fetch(event.request);
+}
 
-let playgroundData;
-self.addEventListener('message', (event) => {
-  if (event.data.type === 'playgroundData') {
-    playgroundData = event.data;
-  } else if (event.data.type === 'requestAC') {
-    // Set up a message channel from common.js to process autocomplete search results.
-    const requestPort = event.ports[0];
-    requestPort.addEventListener('message', async (event) => {
-      const response = await scramjet.fetch(event.data);
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', event => event.respondWith(handleRequest(event)));
 
-      // This contains some duplicate code from common.js, since Response objects
-      // cannot be passed through service workers and must be preprocessed.
-      const responseType = response.headers.get('content-type');
-      let responseJSON = {};
-      if (responseType && responseType.indexOf('application/json') !== -1)
-        responseJSON = await response.json();
-      else
-        try {
-          responseJSON = await response.text();
-          try {
-            responseJSON = JSON.parse(responseJSON);
-          } catch (e) {
-            responseJSON = JSON.parse(
-              responseJSON.replace(/^[^[{]*|[^\]}]*$/g, '')
-            );
-          }
-        } catch (e) {
-          // responseJSON will be an empty object if everything was invalid.
-        }
-
-      // Return the processed data.
-      requestPort.postMessage({
-        responseJSON: responseJSON,
-        searchType: event.data.type,
-        time: event.data.request.headers.get('Date'),
-      });
-    });
-    requestPort.start();
-  }
+self.addEventListener('message', event => {
+    if (event.data.type === 'requestAC') {
+        const port = event.ports[0];
+        port.addEventListener('message', async ev => {
+            try {
+                const resp = await scramjet.fetch(ev.data);
+                const ct = resp.headers.get('content-type');
+                let json = {};
+                if (ct && ct.includes('application/json')) json = await resp.json();
+                else try {
+                    const t = await resp.text();
+                    try { json = JSON.parse(t); } catch { json = JSON.parse(t.replace(/^[^[{]*|[^\]}]*$/g, '')); }
+                } catch {}
+                port.postMessage({ responseJSON: json, searchType: ev.data.type, time: ev.data.request.headers.get('Date') });
+            } catch (e) {
+                port.postMessage({ responseJSON: {}, searchType: ev.data.type });
+            }
+        });
+        port.start();
+    }
 });

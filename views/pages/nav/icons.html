@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
   <head>
-    <title>InvisiProxy LTS</title>
+    <title>maskInvisiProxy LTS</title>
     ifSEO{{
     <meta
       name="description"
@@ -11,8 +11,8 @@
     <!--HEAD-CONTENT-->
     <script src="https://unpkg.com/tsparticles@3.8.1/tsparticles.bundle.min.js" defer data-module></script>
     inline{{
-    <script src="assets/js/csel.jsinline" defer></script>
-    <script src="assets/js/common.jsinline" defer></script>
+    <script src="routeassets/js/csel.jsinline" defer></script>
+    <script src="routeassets/js/common.jsinline" defer></script>
     }}
   </head>
 
@@ -27,10 +27,10 @@
     <div id="mainbody" class="fullwidth">
       <div class="box-clear text-center textm">
         <!-- IMPORTANT-IVINSERT-DONOTDELETE -->
-        <h1 class="bigtitle">Icon Information</h1>
-        <h3>How to find the Icon URL of a Site</h3>
+        <h1 class="bigtitle">maskIcon Information</h1>
+        <h3>maskHow to find the Icon URL of a Site</h3>
         <p>
-          {{ Go to the website you want an icon from, then use this
+          mask{{ Go to the website you want an icon from, then use this
           bookmarklet (drag it to your bookmarks bar): }}
         </p>
         <div id="bks-parent">
@@ -40,10 +40,10 @@
         </div>
         <script>
           document.getElementById('iconfinder').href =
-            `javascript:alert((Array.from(document.head.querySelectorAll("link[rel*='icon']")).slice(-1)[0]||0).href||location.origin+"/favicon.ico")`;
+            `javascript:alert((Array.from(document.head.querySelectorAll("link[rel*='icon']")).slice(-1)[0]||0).href||location.origin+"route/favicon.ico")`;
         </script>
         <p>
-          {{ Copy the URL that the bookmarklet gives you. Then go back
+          mask{{ Copy the URL that the bookmarklet gives you. Then go back
           to InvisiLTS and enter in the URL for the Icon URL in Settings. Enjoy! }}
         </p>
       </div>

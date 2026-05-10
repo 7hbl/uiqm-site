@@ -1,9 +1,9 @@
 (() => {
   const swRoutes = {
-      uv: ['/uv/sw.js', '/uv/sw-blacklist.js'],
+      uv: ['""{{/uv/sw.js}}', '""{{/uv/sw-blacklist.js}}'],
       sj: [
-        '/scram/scramjet.sw.js',
-        '/scram/scramjet.sw-blacklist.js'
+        '""{{/scram/scramjet.sw.js}}',
+        '""{{/scram/scramjet.sw-blacklist.js}}'
       ],
     },
     swAllowedHostnames = ['localhost', '127.0.0.1'],
@@ -11,20 +11,20 @@
       (location.protocol === 'https:' ? 'wss' : 'ws') +
       '://' +
       location.host +
-      '/wisp/',
+      '""{{/wisp/}}',
     proxyUrl = {
       tor: 'socks5h://localhost:9050',
       eu: 'socks5h://localhost:7000',
       jp: 'socks5h://localhost:7001',
     },
     transports = {
-      'epoxy': '/epoxy/index.mjs',
-      'libcurl': '/libcurl/index.mjs',
+      '{{epoxy}}': '""{{/epoxy/index.mjs}}',
+      '{{libcurl}}': '""{{/libcurl/index.mjs}}',
     },
-    storageId = 'hu-lts-storage',
+    storageId = '{{hu-lts}}-storage',
     storageObject = () => JSON.parse(localStorage.getItem(storageId)) || {},
     readStorage = (name) => storageObject()[name],
-    defaultMode = 'libcurl';
+    defaultMode = '{{libcurl}}';
 
   transports.default = transports[defaultMode];
 
@@ -53,7 +53,7 @@
     console.log('Using proxy:', transportOptions.proxy);
     console.log('Transport mode:', transportMode);
 
-    const connection = new BareMux.BareMuxConnection('/baremux/worker.js');
+    const connection = new BareMux.BareMuxConnection('""{{/baremux/worker.js}}');
     await connection.setTransport(transportMode, [transportOptions]);
 
     const registrations = await navigator.serviceWorker.getRegistrations(),
@@ -78,11 +78,11 @@
       const { ScramjetController } = await $scramjetLoadController();
 
       const scramjet = new ScramjetController({
-        prefix: '/scram/network/',
+        prefix: '""{{/scram/network/}}',
         files: {
-          wasm: '/scram/scramjet.wasm.wasm',
-          all: '/scram/scramjet.all.js',
-          sync: '/scram/scramjet.sync.js',
+          wasm: '""{{/scram/scramjet.wasm.wasm}}',
+          all: '""{{/scram/scramjet.all.js}}',
+          sync: '""{{/scram/scramjet.sync.js}}',
         },
         flags: {
           rewriterLogs: false,

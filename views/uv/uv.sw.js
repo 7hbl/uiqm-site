@@ -35,7 +35,7 @@ const cspHeaders = [
 const emptyMethods = ['GET', 'HEAD'];
 
 class UVServiceWorker extends Ultraviolet.EventEmitter {
-  constructor(config = self['__uv$config']) {
+  constructor(config = self['{{__uv$config}}']) {
     super();
     if (!config.prefix) config.prefix = '/service/';
     this.config = config;
@@ -422,7 +422,7 @@ function errorTemplate(trace, fetchedURL) {
         uvVersion.textContent = ${JSON.stringify('3.2.7')};
     `;
 
-  return 'ultraviolet-error'.replace(
+  return '{{ultraviolet-error}}'.replace(
     'self.location.href',
     'data:application/javascript,' + encodeURIComponent(script)
   );

@@ -35,7 +35,7 @@ ${l}`}}if((0,n.U5)("rewriterLogs",r.base))for(let e of s.errors)console.error("o
                 });
         `;return`<html>
             <head>
-                <title>Scramjet</title>
+                <title>{{mask}}{{Scramjet}}</title>
                 <meta itemprop="http-status" content="404" />
                 <!--HEAD-CONTENT-->
                 <link
@@ -280,12 +280,12 @@ ${l}`}}if((0,n.U5)("rewriterLogs",r.base))for(let e of s.errors)console.error("o
                 <!--ANTI-EXFIL-->
                 <div id="cover"></div>
                 <div id="inner" class="container-fluid text-center">
-                <h1 id="errorTitle">Scramjet Network Error</h1>
+                <h1 id="errorTitle">{{mask}}{{Scramjet Network Error}}</h1>
                 <code>Failed to load: <b id="fetchedURL"></b></code>
-                <h2>Reloading the page will fix your problem.</h2>
+                <h2>{{mask}}{{Reloading the page will fix your problem.}}</h2>
                 <br />
                 <!-- <p id="errorMessage">Internal Server Error</p> -->
-                <button id="reload">Refresh Page</button>
+                <button id="reload">{{mask}}{{Refresh Page}}</button>
                 <br />
                 <div id="info">
                     <div id="errorTrace-wrapper" class="container">
@@ -296,38 +296,38 @@ ${l}`}}if((0,n.U5)("rewriterLogs",r.base))for(let e of s.errors)console.error("o
                     <p>Try:</p>
                     <ul>
                         <li>
-                        {{Reloading the page; this is a known issue with our
+                        {{mask}}{{Reloading the page; this is a known issue with our
                         proxies}}
                         </li>
                         <li>
-                        {{In the case of an IDB Database error please clear your
+                        {{mask}}{{In the case of an IDB Database error please clear your
                         site data by clicking on the lock icon in the address bar and
                         selecting "Site settings" or "Site data" and then clicking "Clear
                         site data"}}
                         </li>
                         <li>
-                        {{Clearing your browser or site cache data via
+                        {{mask}}{{Clearing your browser or site cache data via
                         Ctrl+Shift+R and browser settings}}
                         </li>
-                        <li>Verifying you entered the correct address</li>
+                        <li>{{mask}}{{Verifying you entered the correct address}}</li>
                         <li>
-                        {{In the case of website maintenance or updates, please
+                        {{mask}}{{In the case of website maintenance or updates, please
                         wait for the issue to be resolved.}}
                         </li>
-                        <li>Verifying you entered the correct address</li>
-                        <li>Verify the server isn't censored</li>
+                        <li>{{mask}}{{Verifying you entered the correct address}}</li>
+                        <li>{{mask}}{{Verify the server isn't censored}}</li>
                         <li>
-                        {{View the FAQ page for specific site compatibility
+                        {{mask}}{{View the FAQ page for specific site compatibility
                         issues.}}
                         </li>
                         <li>
-                        Troubleshooting the error on the <a href="/github/scramjet" target="_blank">Scramjet GitHub.</a>
+                        {{mask}}{{Troubleshooting the error on the }}<a href="""{{/github/scramjet}}" target="_blank">{{mask}}{{Scramjet GitHub.}}</a>
                         </li>
                         <li>
-                        Try a different proxy engine via the settings panel.
+                        {{mask}}{{Try a different proxy engine via the settings panel.}}
                         </li>
                         <li>
-                        {{If the issue persists be sure to mention this in the
+                        {{mask}}{{If the issue persists be sure to mention this in the
                         Titanium Network Discord.}}
                         </li>
                     </ul>
@@ -335,12 +335,12 @@ ${l}`}}if((0,n.U5)("rewriterLogs",r.base))for(let e of s.errors)console.error("o
                 </div>
                 <code
                     ><i
-                    >{{Refresh the network service | Scramjet v1.0.2 - build
+                    >{{mask}}{{Refresh the network service | Scramjet v1.0.2 - build
                     8a4a72f.}}</i
                     ></code
                 >
                 <p class="footer-spacing">
-                    <i>InvisiProxy LTS © 2020-2025 | Made With Love </i
+                    <i>{{mask}}{{InvisiProxy LTS © 2020-2025 | Made With Love}} </i
                     ><i class="nf nf-fa-heart"></i>
                 </p>
                 </div>
