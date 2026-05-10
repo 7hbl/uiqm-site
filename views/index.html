@@ -3,125 +3,190 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UIQM Web Proxy</title>
-    <link rel="icon" id="dynamic-favicon" href="/assets/ico/ms-icon-144x144.png" type="image/x-icon">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-
-    <script src="/baremux/index.js" defer></script>
-    <script src="/scram/scramjet.all.js" defer></script>
-    <script src="/assets/js/common.js" defer></script>
-
-    <script src="script.js" defer></script>
+    <title>uiqm web proxy | private terminal</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>">
+    <script src="/gmt/index.js"></script>
+    <script>
+        window._proxyReady = (async () => {
+            const clearDB = (name) => new Promise(res => {
+                const r = indexedDB.deleteDatabase(name);
+                r.onsuccess = r.onerror = r.onblocked = () => res();
+            });
+            try {
+                await clearDB('__sj'); await clearDB('sj');
+                if (indexedDB.databases) {
+                    const dbs = await indexedDB.databases();
+                    await Promise.all(dbs.map(db => clearDB(db.name)));
+                }
+            } catch (_) {}
+            await new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = '/worker/working.all.js';
+                s.onload = resolve;
+                s.onerror = () => reject(new Error('Failed to load proxy engine'));
+                document.head.appendChild(s);
+            });
+        })();
+    </script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background: #0a0a0a; color: #ff0000; font-family: 'Courier New', Courier, monospace; overflow: hidden; height: 100vh; width: 100vw; }
+        body[data-theme="green"] { color: #00ff00; }
+        body[data-theme="blue"] { color: #0088ff; }
+        body[data-theme="white"] { color: #ffffff; }
+        body[data-theme="pink"] { color: #ff00ff; }
+        body[data-theme="purple"] { color: #aa00ff; }
+        body[data-theme="cyan"] { color: #00ffff; }
+        #app { width: 100%; height: 100%; position: relative; }
+        #proxy-shell { position: absolute; top:0; left:0; width:100%; height:100%; display:none; z-index: 10; background:#000; }
+        #proxy-frame { width:100%; height:100%; border:none; }
+        #proxy-loading { position:fixed; top:0; left:0; width:100%; height:100%; background:#000; color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.5rem; text-shadow: 0 0 10px #ff0000; z-index: 15; }
+        #back-btn { position: fixed; top: 20px; right: 20px; padding: 10px 20px; background: rgba(0,0,0,0.8); border: 2px solid currentColor; color: inherit; cursor: pointer; z-index: 100; font-family: inherit; font-weight: bold; text-shadow: 0 0 5px currentColor; box-shadow: 0 0 10px rgba(255,0,0,0.3); transition: all 0.2s; display: none; }
+        #back-btn:hover { background: #ff0000; color: #fff; box-shadow: 0 0 20px #ff0000; }
+        #terminal-shell { padding: 20px; height: 100%; overflow-y: auto; position: relative; z-index: 5; text-shadow: 0 0 5px currentColor; }
+        .live-status { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 10px; font-weight: bold; }
+        .pulse-ball { width: 10px; height: 10px; background: #00ff00; border-radius: 50%; box-shadow: 0 0 10px #00ff00; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.2); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
+        .ascii-art { white-space: pre; font-size: 8px; line-height: 8px; margin-bottom: 20px; opacity: 0.9; }
+        .line { margin-bottom: 5px; min-height: 1.2em; word-break: break-all; line-height: 1.4; }
+        .system { opacity: 0.7; font-style: italic; }
+        #term-input-row { display: flex; align-items: center; margin-top: 10px; }
+        .term-prefix { margin-right: 10px; font-weight: bold; }
+        #term-input { background: transparent; border: none; color: inherit; font-size: inherit; font-family: inherit; flex: 1; outline: none; }
+        #terminal-shell::before { content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0; background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.25) 50%), linear-gradient(90deg, rgba(255,0,0,0.06), rgba(0,255,0,0.02), rgba(0,0,255,0.06)); z-index: 20; background-size: 100% 2px, 3px 100%; pointer-events: none; }
+        #terminal-shell::after { content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0; opacity: 0; z-index: 20; pointer-events: none; animation: flicker 0.15s infinite; }
+        @keyframes flicker { 0% { opacity: 0.17861; } 50% { opacity: 0.24387; } 100% { opacity: 0.17861; } }
+        a { color: inherit; text-decoration: underline; font-weight: bold; }
+        a:hover { filter: brightness(1.5); }
+    </style>
 </head>
 <body data-theme="default">
-
-    <nav class="navbar">
-        <div class="nav-brand">UIQM Web Proxy</div>
-        <div class="nav-links">
-            <button class="nav-btn" onclick="openModal('settings-modal')">Settings</button>
+    <div id="app">
+        <button id="back-btn" onclick="closeProxy()">RETURN TO TERMINAL</button>
+        <div id="proxy-shell">
+            <iframe id="proxy-frame" title="UIQM Proxy Frame"></iframe>
+            <div id="proxy-loading"><pre>   CONNECTING TO TUNNEL...</pre></div>
         </div>
-    </nav>
-
-    <main class="container">
-        
-        <div class="hero-text">
-            <h1 class="glow-text">Dynamic <span>Privacy</span></h1>
-            <p>Unrestricted access with a premium custom engine.</p>
+        <div id="terminal-shell">
+            <div class="live-status">
+                <div class="pulse-ball"></div>
+                <span style="color: #00ff00;">LIVE USERS: <span id="user-count">1</span></span>
+            </div>
+            <div class="ascii-art">
+          $$\                                                       $$\                                                               
+          \__|                                                      $$ |                                                              
+$$\   $$\ $$\  $$$$$$\  $$$$$$\$$$$\        $$\  $$\  $$\  $$$$$$\  $$$$$$$\         $$$$$$\   $$$$$$\   $$$$$$\  $$\   $$\ $$\   $$\ 
+$$ |  $$ |$$ |$$  __$$\ $$  _$$  _$$\       $$ | $$ | $$ |$$  __$$\ $$  __$$\       $$  __$$\ $$  __$$\ $$  __$$\ \$$\ $$  |$$ |  $$ |
+$$ |  $$ |$$ |$$ /  $$ |$$ / $$ / $$ |      $$ | $$ | $$ |$$$$$$$$ |$$ |  $$ |      $$ /  $$ |$$ |  \__|$$ /  $$ | \$$$$  / $$ |  $$ |
+$$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |      $$ |  $$ |$$ |      $$ |  $$ | $$  $$<  $$ |  $$ |
+\$$$$$$  |$$ |\$$$$$$$ |$$ | $$ | $$ |      \$$$$$\$$$$  |\$$$$$$$\ $$$$$$$  |      $$$$$$$  |$$ |      \$$$$$$  |$$  /\$$\ \$$$$$$$ |
+ \______/ \__| \____$$ |\__| \__| \__|       \_____\____/  \_______|\_______/       $$  ____/ \__|       \______/ \__/  \__| \____$$ |
+                    $$ |                                                            $$ |                                    $$\   $$ |
+                    $$ |                                                            $$ |                                    \$$$$$$  |
+                    \__|                                                            \__|                                     \______/ 
+            </div>
+            <div class="line">uiqm web proxy</div>
+            <div class="line">@uiqm on discord for help</div>
+            <div class="line">created by - @uiqm on discord</div>
+            <br>
+            <div class="line" id="status-line" style="color:yellow">Initializing Secure Channel...</div>
+            <div class="line">Type <span style="color:white">help</span> for cmds or enter a URL to start.</div>
+            <div id="term-output-lines"></div>
+            <form id="term-input-row" onsubmit="return false;">
+                <span class="term-prefix">root@uiqm:~$</span>
+                <input type="text" id="term-input" autofocus spellcheck="false" autocomplete="off" disabled>
+            </form>
         </div>
+    </div>
+    <script>
+    function closeProxy() {
+        document.getElementById('proxy-shell').style.display = 'none';
+        document.getElementById('back-btn').style.display = 'none';
+        document.getElementById('proxy-frame').src = 'about:blank';
+        document.getElementById('term-input').focus();
+    }
+    document.addEventListener('DOMContentLoaded', async () => {
+        const input = document.getElementById('term-input'), output = document.getElementById('term-output-lines');
+        const terminal = document.getElementById('terminal-shell'), frame = document.getElementById('proxy-frame');
+        const loading = document.getElementById('proxy-loading'), proxyShell = document.getElementById('proxy-shell');
+        const statusLine = document.getElementById('status-line'), backBtn = document.getElementById('back-btn');
 
-        <div class="proxy-container">
-            <div id="proxy-engine-wrapper" class="pr-form">
+        const WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
+        const BARE_MUX_WORKER = '/gmt/worker.js';
+        const TRANSPORT_MJS = '/unix/index.mjs', SCRAMJET_PREFIX = '/worker/network/';
+
+        let sjEncode = null;
+        const print = (h, c = '') => { const d = document.createElement('div'); d.className = 'line ' + c; d.innerHTML = h; output.appendChild(d); terminal.scrollTop = terminal.scrollHeight; };
+        const setStatus = (m, c = 'yellow') => statusLine.innerHTML = `<span style="color:${c}">${m}</span>`;
+
+        const initProxy = async () => {
+            try {
+                setStatus('Clearing cache...');
+                await window._proxyReady;
+                setStatus('Connecting transport...');
+                if (window.BareMux) {
+                    const conn = new BareMux.BareMuxConnection(BARE_MUX_WORKER);
+                    await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
+                }
+                setStatus('Registering Service Worker...');
+                await navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' });
                 
-                <div class="search-wrapper">
-                    <select class="search-engine-list" id="search-engine-select">
-                        <option value="DuckDuckGo">DuckDuckGo</option>
-                        <option value="Brave">Brave</option>
-                        <option value="Google">Google</option>
-                        <option value="Bing">Bing</option>
-                    </select>
+                setStatus('Loading proxy engine...');
+                if (window.$scramjetLoadController) {
+                    const { ScramjetController } = await window.$scramjetLoadController();
+                    const sj = new ScramjetController({
+                        prefix: SCRAMJET_PREFIX,
+                        files: { wasm: '/worker/working.wasm.wasm', all: '/worker/working.all.js', sync: '/worker/working.sync.js' }
+                    });
+                    await sj.init();
+                    sjEncode = url => sj.encodeUrl(url);
+                }
+                setStatus('Secure Channel Active. System ready.', '#00ff00');
+                input.disabled = false; input.focus();
+            } catch (e) {
+                console.error(e);
+                setStatus('Ready.', '#00ff00');
+                input.disabled = false; input.focus();
+            }
+        };
 
-                    <div class="search-box input-container">
-                        <input type="text" id="search-input" spellcheck="false" autocomplete="off" placeholder="Type a URL or search query...">
-                    </div>
-                </div>
+        const runCommand = raw => {
+            raw = raw.trim(); if (!raw) return;
+            print(`<span class="term-prefix">root@uiqm:~$</span> ${raw}`);
+            const [base, ...args] = raw.split(' ');
+            if (base === 'help') print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
+            else if (base === 'creds') { 
+                print('Proxy Engine: <a href="https://github.com/QuiteAFancyEmerald" target="_blank" style="color:white;">QuiteAFancyEmerald</a>'); 
+                print('Games Hub: <a href="https://github.com/NoahsAmazingTutoringHelp" target="_blank" style="color:white;">NoahsAmazingTutoringHelp</a>', 'system');
+                print('UI & Terminal: <a href="https://github.com/7hbl" target="_blank" style="color:white;">@uiqm</a>', 'system'); 
+            }
+            else if (base === 'games') {
+                print('Opening Games Hub...', 'system');
+                setTimeout(() => location.href = '/games', 500);
+            }
+            else if (base === 'theme') { const c = args[0]?.toLowerCase(), v = ['red','green','blue','white','pink','purple','cyan']; if (v.includes(c)) { document.body.setAttribute('data-theme', c==='red'?'default':c); print(`Theme: ${c}`, 'system'); } }
+            else if (base === 'clear') output.innerHTML = '';
+            else if (raw.includes('.') && !raw.includes(' ')) {
+                let url = raw; if (!url.startsWith('http')) url = 'https://' + url;
+                proxyShell.style.display = 'block'; loading.style.display = 'flex';
+                backBtn.style.display = 'block';
+                frame.src = sjEncode ? sjEncode(url) : (SCRAMJET_PREFIX + encodeURIComponent(url));
+            } else print(`Command not found: ${base}`, 'system');
+        };
 
-                <button id="search-btn" class="run-search-btn">Enter Stealth Mode</button>
-            </div>
-        </div>
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runCommand(input.value); input.value = ''; } });
+        document.addEventListener('click', () => { if (!input.disabled) input.focus(); });
+        frame.onload = () => { loading.style.display = 'none'; print('Tunnel established.', 'system'); };
         
-        <div class="footer-note">
-            discord - @uiqm for help
-        </div>
-    </main>
-
-    <div class="modal-overlay" id="settings-modal" onclick="closeModal(event, 'settings-modal')">
-        <div class="modal" onclick="event.stopPropagation()">
-            <button class="close-modal" onclick="forceCloseModal('settings-modal')">&times;</button>
-            <h2>Settings</h2>
-
-            <div class="modal-tabs">
-                <button class="tab-btn active" onclick="switchThemeTab('cloaking-tab', this)">Cloaking</button>
-                <button class="tab-btn" onclick="switchThemeTab('themes-tab', this)">Themes</button>
-            </div>
-
-            <!-- Cloaking Tab Content -->
-            <div id="cloaking-tab" class="tab-content active">
-                <div class="modal-group">
-                    <label>Quick Presets</label>
-                    <select id="preset-cloak" onchange="applyPresetCloak()">
-                        <option value="none">None</option>
-                        <option value="classroom">Google Classroom</option>
-                        <option value="drive">Google Drive</option>
-                        <option value="docs">Google Docs</option>
-                        <option value="canvas">Canvas</option>
-                        <option value="colegia">Colegia</option>
-                    </select>
-                </div>
-
-                <div class="modal-group">
-                    <label>Custom Title</label>
-                    <input type="text" id="custom-title" placeholder="Tab Title">
-                </div>
-
-                <div class="modal-group">
-                    <label>Custom Favicon URL</label>
-                    <input type="text" id="custom-icon" placeholder="https://...">
-                </div>
-
-                <button class="btn-secondary" onclick="applyCustomCloak()">Apply Cloak</button>
-            </div>
-
-            <div id="themes-tab" class="tab-content">
-                <div class="modal-group">
-                    <label>Select Theme</label>
-                    <select id="theme-selector" onchange="changeTheme()">
-                        <option value="default">Black & Red</option>
-                        <option value="hacker">Hacker</option>
-                        <option value="ocean">Ocean</option>
-                        <option value="sunset">Sunset</option>
-                        <option value="amethyst">Amethyst</option>
-                    </select>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal-overlay active" id="initial-proxy-modal">
-        <div class="modal engine-select-modal">
-            <h2>Select Engine</h2>
-            <p>Welcome to UIQM. Choose your processing engine.</p>
-            
-            <div class="engine-buttons">
-                <button class="btn-primary" onclick="selectInitialProxy('pr-sj')">
-                    <span class="engine-title">Scramjet</span>
-                    <span class="engine-sub">Fastest & Suggested</span>
-                </button>
-                <button class="btn-secondary" onclick="selectInitialProxy('pr-uv')">Ultraviolet</button>
-                <button class="btn-secondary" onclick="selectInitialProxy('pr-rh')">Rammerhead</button>
-            </div>
-        </div>
-    </div>
-
+        const updateUsers = () => {
+            const count = Math.floor(Math.random() * (3 - 1) + 1);
+            const el = document.getElementById('user-count');
+            if (el) el.innerText = count;
+        };
+        updateUsers(); setInterval(updateUsers, 10000);
+        
+        initProxy();
+    });
+    </script>
 </body>
 </html>

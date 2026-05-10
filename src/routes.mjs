@@ -59,7 +59,7 @@ let pages = {
   credits: 'pages/nav/credits.html',
   terms: 'pages/nav/terms.html',
   /* Games */
-  games: 'pages/nav/directory.html',
+  games: 'pages/hub.html',
   'web-games': 'pages/nav/games.html',
   partners: 'pages/nav/partners.html',
   emulators: 'pages/nav/emulators.html',
@@ -109,7 +109,6 @@ let externalPages = {
 
 // Override the route names below when usingSEO is disabled in config.json.
 let altPaths = {
-  games: 'books',
   'web-games': 'dictionary',
   emulators: 'catalogue',
   'flash-games': 'textbook',
@@ -245,6 +244,7 @@ if (!config.usingSEO) {
   useAltPaths(altPaths, externalPages);
   delete pages['robots.txt'];
   delete pages['sitemap.xml'];
+  delete pages['browserconfig.xml'];
 }
 
 const cookingInserts = insert.content,
