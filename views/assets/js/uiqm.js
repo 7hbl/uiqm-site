@@ -43,9 +43,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 scope: '/worker/'
             });
 
-            // 3. Wait for SW to be active
-            while (!registration.active) {
+            // 3. Wait for SW to be active AND controlling the page
+            let tries = 0;
+            while ((!registration.active || !navigator.serviceWorker.controller) && tries < 50) {
                 await new Promise(r => setTimeout(r, 100));
+                tries++;
+            }
+
+            // If still not controlling, try to claim the client
+            if (registration.active && !navigator.serviceWorker.controller) {
+                 // In some cases a refresh is needed if the SW didn't claim immediately
+                 statusLine.innerHTML = '<span style="color:yellow">Finalizing Secure Channel... (Reload recommended if stuck)</span>';
             }
 
             // 4. Initialize Scramjet Controller
@@ -60,7 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 });
                 scramjet.init();
-                sjEncode = scramjet.encodeUrl;
+                sjEncode = (url) => scramjet.encodeUrl(url);
             }
 
             statusLine.innerHTML = '<span style="color:#00ff00">Secure Channel Active. System ready.</span>';
@@ -78,21 +86,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         const raw = cmd.trim();
         if (!raw || !isReady) return;
 
+        print(`<span class="term-prefix">root@uiqm:~$</span> ${raw}`);
         const parts = raw.split(' ');
         const base = parts[0].toLowerCase();
         const args = parts.slice(1);
 
-        print(`<span class="term-prefix">root@uiqm:~$</span> ${raw}`);
-
         if (base === 'help') {
             print('Command List:', 'system');
-            print(' <span style="color:white">theme [color]</span>, <span style="color:white">creds</span>, <span style="color:white">clear</span>, <span style="color:white">[url]</span>');
+            print(' theme [color], <span style="color:white">creds</span>, clear, [url]');
             return;
         }
 
         if (base === 'creds') {
             print('Huge thanks to <a href="https://github.com/QuiteAFancyEmerald" target="_blank" style="color:white">QuiteAFancyEmerald</a> for the original InvisiProxy engine.');
-            print('This terminal fork is just skidded.', 'system');
+            print('This terminal fork is just skidded :p <3', 'system');
             return;
         }
 
@@ -113,15 +120,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (raw.includes('.') && !raw.includes(' ')) {
             let url = raw;
             if (!url.startsWith('http')) url = 'https://' + url;
+            
+            // Check controller one last time
+            if (!navigator.serviceWorker.controller) {
+                print('Error: Secure Channel lost synchronization. Please refresh the page.', 'system');
+                return;
+            }
+
             print(`Routing via Scramjet...`, 'system');
             proxyShell.style.display = 'block';
             loading.style.display = 'flex';
             frame.style.display = 'block';
+            
             frame.src = sjEncode ? sjEncode(url) : (SCRAMJET_PREFIX + encodeURIComponent(url));
             return;
         }
 
-        print(`Command not found: ${base}. Type "help" for a list of commands.`, 'system');
+        print(`Command not found: ${base}.`, 'system');
     };
 
     input.addEventListener('keydown', (e) => {
