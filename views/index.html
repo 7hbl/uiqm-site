@@ -42,7 +42,6 @@
         #proxy-frame { width:100%; height:100%; border:none; }
         #proxy-loading { position:fixed; top:0; left:0; width:100%; height:100%; background:#000; color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.5rem; text-shadow: 0 0 10px #ff0000; z-index: 15; }
         
-        /* Floating Back Button */
         #back-btn { position: fixed; top: 20px; right: 20px; padding: 10px 20px; background: rgba(0,0,0,0.8); border: 2px solid currentColor; color: inherit; cursor: pointer; z-index: 100; font-family: inherit; font-weight: bold; text-shadow: 0 0 5px currentColor; box-shadow: 0 0 10px rgba(255,0,0,0.3); transition: all 0.2s; display: none; }
         #back-btn:hover { background: #ff0000; color: #fff; box-shadow: 0 0 20px #ff0000; }
 
@@ -53,7 +52,6 @@
         #term-input-row { display: flex; align-items: center; margin-top: 10px; }
         .term-prefix { margin-right: 10px; font-weight: bold; }
         #term-input { background: transparent; border: none; color: inherit; font-size: inherit; font-family: inherit; flex: 1; outline: none; }
-        
         #terminal-shell::before { content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0; background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.25) 50%), linear-gradient(90deg, rgba(255,0,0,0.06), rgba(0,255,0,0.02), rgba(0,0,255,0.06)); z-index: 20; background-size: 100% 2px, 3px 100%; pointer-events: none; }
         #terminal-shell::after { content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0; opacity: 0; z-index: 20; pointer-events: none; animation: flicker 0.15s infinite; }
         @keyframes flicker { 0% { opacity: 0.17861; } 50% { opacity: 0.24387; } 100% { opacity: 0.17861; } }
@@ -101,13 +99,11 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
         document.getElementById('proxy-frame').src = 'about:blank';
         document.getElementById('term-input').focus();
     }
-
     document.addEventListener('DOMContentLoaded', async () => {
         const input = document.getElementById('term-input'), output = document.getElementById('term-output-lines');
         const terminal = document.getElementById('terminal-shell'), frame = document.getElementById('proxy-frame');
         const loading = document.getElementById('proxy-loading'), proxyShell = document.getElementById('proxy-shell');
-        const statusLine = document.getElementById('status-line');
-        const backBtn = document.getElementById('back-btn');
+        const statusLine = document.getElementById('status-line'), backBtn = document.getElementById('back-btn');
 
         const WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
         const BARE_MUX_WORKER = '/gmt/worker.js', SCRAMJET_SW = '/worker/working.sw.js';
@@ -141,17 +137,14 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             try {
                 setStatus('Clearing cache...');
                 await window._proxyReady;
-
                 setStatus('Connecting transport...');
                 if (window.BareMux) {
                     const conn = new BareMux.BareMuxConnection(BARE_MUX_WORKER);
                     await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
                 }
-
                 setStatus('Registering Service Worker...');
                 const reg = await navigator.serviceWorker.register(SCRAMJET_SW, { scope: '/worker/' });
                 await waitForSW(reg);
-
                 setStatus('Loading proxy engine...');
                 if (window.$scramjetLoadController) {
                     const { ScramjetController } = await window.$scramjetLoadController();
@@ -167,7 +160,6 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                     }
                     sjEncode = url => sj.encodeUrl(url);
                 }
-
                 setStatus('Secure Channel Active. System ready.', '#00ff00');
                 input.disabled = false; input.focus();
             } catch (e) {
