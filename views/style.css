@@ -51,7 +51,7 @@ body::after {
 
 .ascii-art {
   white-space: pre;
-  font-size: 0.6vw; /* dynamic size to prevent wrapping */
+  font-size: 0.6vw;
   line-height: 1.1;
   margin-bottom: 25px;
   text-shadow: 0 0 10px var(--glow);
@@ -75,7 +75,7 @@ body::after {
 }
 
 .prompt-label {
-  color: #00ff00; /* root@uiqm is green */
+  color: #00ff00;
   margin-right: 10px;
   font-weight: bold;
 }

@@ -57,8 +57,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             print(`Routing via Scramjet...`, 'system');
             
-            // Default to Scramjet as requested. 
-            // The backend routes /worker/ to Scramjet.
             setTimeout(() => {
                 window.location.href = '/worker/' + encodeURIComponent(url);
             }, 600);
