@@ -160,7 +160,7 @@ commands: for (let i = 2; i < process.argv.length; i++)
                 import.meta.url
               )
             );
-          if (fileStats.isFile() && !existsSync(targetPath))
+          if (fileStats.isFile())
             if (/\.(?:html|js|css|json|txt|xml)$/.test(file) && applyRewrites)
               writeFileSync(
                 targetPath,
@@ -179,7 +179,7 @@ commands: for (let i = 2; i < process.argv.length; i++)
 
       const localAssetDirs = ['assets', 'scram', 'uv'];
       for (const path of localAssetDirs) {
-        mkdirSync('./views/dist/' + path);
+        if (!existsSync('./views/dist/' + path)) mkdirSync('./views/dist/' + path);
         compile('./views/' + path, '', path + '/', './views/' + path, true);
       }
 
@@ -207,19 +207,25 @@ commands: for (let i = 2; i < process.argv.length; i++)
           entryPoints: [
             './views/dist/uv/**/*.js',
             './views/dist/scram/**/*.js',
-            './views/dist/scram/**/*.wasm.wasm',
             './views/dist/assets/js/**/*.js',
             './views/dist/assets/css/**/*.css',
           ],
           platform: 'browser',
           sourcemap: true,
-          bundle: true,
+          bundle: false, // Changed to false to prevent bundling into one file at root
           minify: true,
-          loader: { '.wasm.wasm': 'copy' },
-          external: ['*.png', '*.jpg', '*.jpeg', '*.webp', '*.svg'],
           outdir: dist,
+          outbase: './views/dist', // Explicitly keep directory structure
           allowOverwrite: true,
         });
+
+      // Copy wasm files separately to ensure they are not mangled
+      const wasmFiles = [
+        ['node_modules/@mercuryworkshop/scramjet/dist/scramjet.wasm.wasm', './views/dist/scram/working.wasm.wasm']
+      ];
+      for (const [src, dest] of wasmFiles) {
+        if (existsSync(src)) copyFileSync(src, dest);
+      }
 
       compile('./views');
 
