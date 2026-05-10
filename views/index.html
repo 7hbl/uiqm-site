@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UIQM Web Proxy</title>
+    <link rel="icon" id="dynamic-favicon" href="/assets/ico/ms-icon-144x144.png" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+
+    <script src="/baremux/index.js" defer></script>
+    <script src="/scram/scramjet.all.js" defer></script>
+    <script src="/assets/js/common.js" defer></script>
+
+    <script src="script.js" defer></script>
+</head>
+<body data-theme="default">
+
+    <nav class="navbar">
+        <div class="nav-brand">UIQM Web Proxy</div>
+        <div class="nav-links">
+            <button class="nav-btn" onclick="openModal('settings-modal')">Settings</button>
+        </div>
+    </nav>
+
+    <main class="container">
+        
+        <div class="hero-text">
+            <h1 class="glow-text">Dynamic <span>Privacy</span></h1>
+            <p>Unrestricted access with a premium custom engine.</p>
+        </div>
+
+        <div class="proxy-container">
+            <div id="proxy-engine-wrapper" class="pr-form">
+                
+                <div class="search-wrapper">
+                    <select class="search-engine-list" id="search-engine-select">
+                        <option value="DuckDuckGo">DuckDuckGo</option>
+                        <option value="Brave">Brave</option>
+                        <option value="Google">Google</option>
+                        <option value="Bing">Bing</option>
+                    </select>
+
+                    <div class="search-box input-container">
+                        <input type="text" id="search-input" spellcheck="false" autocomplete="off" placeholder="Type a URL or search query...">
+                    </div>
+                </div>
+
+                <button id="search-btn" class="run-search-btn">Enter Stealth Mode</button>
+            </div>
+        </div>
+        
+        <div class="footer-note">
+            discord - @uiqm for help
+        </div>
+    </main>
+
+    <div class="modal-overlay" id="settings-modal" onclick="closeModal(event, 'settings-modal')">
+        <div class="modal" onclick="event.stopPropagation()">
+            <button class="close-modal" onclick="forceCloseModal('settings-modal')">&times;</button>
+            <h2>Settings</h2>
+
+            <div class="modal-tabs">
+                <button class="tab-btn active" onclick="switchThemeTab('cloaking-tab', this)">Cloaking</button>
+                <button class="tab-btn" onclick="switchThemeTab('themes-tab', this)">Themes</button>
+            </div>
+
+            <!-- Cloaking Tab Content -->
+            <div id="cloaking-tab" class="tab-content active">
+                <div class="modal-group">
+                    <label>Quick Presets</label>
+                    <select id="preset-cloak" onchange="applyPresetCloak()">
+                        <option value="none">None</option>
+                        <option value="classroom">Google Classroom</option>
+                        <option value="drive">Google Drive</option>
+                        <option value="docs">Google Docs</option>
+                        <option value="canvas">Canvas</option>
+                        <option value="colegia">Colegia</option>
+                    </select>
+                </div>
+
+                <div class="modal-group">
+                    <label>Custom Title</label>
+                    <input type="text" id="custom-title" placeholder="Tab Title">
+                </div>
+
+                <div class="modal-group">
+                    <label>Custom Favicon URL</label>
+                    <input type="text" id="custom-icon" placeholder="https://...">
+                </div>
+
+                <button class="btn-secondary" onclick="applyCustomCloak()">Apply Cloak</button>
+            </div>
+
+            <div id="themes-tab" class="tab-content">
+                <div class="modal-group">
+                    <label>Select Theme</label>
+                    <select id="theme-selector" onchange="changeTheme()">
+                        <option value="default">Black & Red</option>
+                        <option value="hacker">Hacker</option>
+                        <option value="ocean">Ocean</option>
+                        <option value="sunset">Sunset</option>
+                        <option value="amethyst">Amethyst</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay active" id="initial-proxy-modal">
+        <div class="modal engine-select-modal">
+            <h2>Select Engine</h2>
+            <p>Welcome to UIQM. Choose your processing engine.</p>
+            
+            <div class="engine-buttons">
+                <button class="btn-primary" onclick="selectInitialProxy('pr-sj')">
+                    <span class="engine-title">Scramjet</span>
+                    <span class="engine-sub">Fastest & Suggested</span>
+                </button>
+                <button class="btn-secondary" onclick="selectInitialProxy('pr-uv')">Ultraviolet</button>
+                <button class="btn-secondary" onclick="selectInitialProxy('pr-rh')">Rammerhead</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
