@@ -83,7 +83,6 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
         const SCRAMJET_PREFIX = '/worker/network/';
 
         let sjEncode = null;
-        let isReady = false;
 
         const print = (text, type = '') => {
             const div = document.createElement('div');
@@ -93,7 +92,21 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             terminal.scrollTop = terminal.scrollHeight;
         };
 
-        // Wipe any stale Scramjet IndexedDB databases that cause schema errors
+        const setStatus = (msg, color = 'yellow') => {
+            statusLine.innerHTML = `<span style="color:${color}">${msg}</span>`;
+        };
+
+        // Poll until controller is active (avoids race condition with event listeners)
+        const waitForController = async (timeoutMs = 8000) => {
+            const deadline = Date.now() + timeoutMs;
+            while (!navigator.serviceWorker.controller) {
+                if (Date.now() > deadline) return false;
+                await new Promise(r => setTimeout(r, 100));
+            }
+            return true;
+        };
+
+        // Wipe stale Scramjet IDB on schema version mismatch
         const clearStaleIDB = async () => {
             try {
                 const dbs = await indexedDB.databases();
@@ -101,28 +114,30 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                     const r = indexedDB.deleteDatabase(db.name);
                     r.onsuccess = r.onerror = res;
                 })));
-            } catch (e) { /* browsers without indexedDB.databases() */ }
+            } catch (e) {}
         };
 
         const initProxy = async () => {
             try {
                 if (!navigator.serviceWorker) {
-                    statusLine.innerHTML = '<span style="color:red">Error: Service Workers not supported.</span>';
+                    setStatus('Error: Service Workers not supported.', 'red');
                     return;
                 }
 
                 // 1. BareMux Transport
+                setStatus('Setting up transport...');
                 if (window.BareMux) {
                     const conn = new BareMux.BareMuxConnection(BARE_MUX_WORKER);
                     await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
                 }
 
-                // 2. Register Scramjet SW (skipWaiting + clients.claim is in the SW)
+                // 2. Register SW
+                setStatus('Registering Service Worker...');
                 await navigator.serviceWorker.register(SCRAMJET_SW, { scope: '/worker/' });
                 await navigator.serviceWorker.ready;
 
-                // 3. Init ScramjetController — sends routing config to the SW
-                //    MUST happen before user can type, otherwise SW doesn't know what to intercept
+                // 3. Init Scramjet Controller — sends routing config to SW
+                setStatus('Loading proxy engine...');
                 if (window.$scramjetLoadController) {
                     const { ScramjetController } = await window.$scramjetLoadController();
                     const sj = new ScramjetController({
@@ -136,39 +151,40 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                     try {
                         await sj.init();
                     } catch (e) {
-                        // IndexedDB schema mismatch from stale browser cache — wipe and retry
                         if (e.name === 'NotFoundError' || e.name === 'VersionError') {
+                            setStatus('Clearing cache, retrying...');
                             await clearStaleIDB();
                             await sj.init();
-                        } else {
-                            throw e;
-                        }
+                        } else throw e;
                     }
                     sjEncode = (url) => sj.encodeUrl(url);
                 }
 
-                // 4. Wait for SW to control this page
-                if (!navigator.serviceWorker.controller) {
-                    await new Promise(resolve => {
-                        navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
-                        setTimeout(() => { if (!isReady) location.reload(); }, 5000);
-                    });
+                // 4. Wait for SW to control page via polling (no race condition)
+                setStatus('Waiting for SW control...');
+                const controlled = await waitForController(8000);
+                if (!controlled) {
+                    // SW uses skipWaiting+clients.claim, so a reload fixes it
+                    setStatus('Refreshing to sync...', 'orange');
+                    setTimeout(() => location.reload(), 500);
+                    return;
                 }
 
-                isReady = true;
-                statusLine.innerHTML = '<span style="color:#00ff00">Secure Channel Active. System ready.</span>';
+                // 5. Ready!
+                setStatus('Secure Channel Active. System ready.', '#00ff00');
                 input.disabled = false;
                 input.focus();
 
             } catch (e) {
                 console.error('Init failed:', e);
-                statusLine.innerHTML = '<span style="color:red">Init Error: ' + e.message + '</span>';
+                setStatus('Init Error: ' + e.message, 'red');
             }
         };
 
         const runCommand = (cmd) => {
             const raw = cmd.trim();
-            if (!raw || !isReady) return;
+            if (!raw) return;
+            if (input.disabled) { print('Channel not ready yet.', 'system'); return; }
             print(`<span class="term-prefix">root@uiqm:~$</span> ${raw}`);
             const parts = raw.split(' ');
             const base = parts[0].toLowerCase();
@@ -209,8 +225,9 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); runCommand(input.value); input.value = ''; }
         });
-        document.addEventListener('click', () => { if (isReady) input.focus(); });
+        document.addEventListener('click', () => { if (!input.disabled) input.focus(); });
         frame.onload = () => { loading.style.display = 'none'; print('Tunnel established.', 'system'); };
+
         await initProxy();
     });
     </script>
