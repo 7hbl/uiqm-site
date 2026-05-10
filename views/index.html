@@ -7,9 +7,9 @@
     <!-- Favicon: Eyes Only -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>">
     
-    <!-- Proxy Essentials -->
+    <!-- Proxy Essentials (SEO-Aware Paths) -->
     <script src="/gmt/index.js" defer></script>
-    <script src="/worker/scramjet.all.js" defer></script>
+    <script src="/worker/working.all.js" defer></script>
     
     <link rel="stylesheet" href="/assets/css/uiqm.css">
 </head>
@@ -46,13 +46,14 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             <div class="line">@uiqm on discord for help</div>
             <div class="line">created by - @uiqm on discord</div>
             <br>
-            <div class="line">enter in a url to open thats blocked, type help for cmds.</div>
+            <div class="line" id="status-line">Connecting to Secure Channel...</div>
+            <div class="line">Type help for cmds or enter a URL to start.</div>
             
             <div id="term-output-lines"></div>
 
             <form id="term-input-row" onsubmit="return false;">
                 <span class="term-prefix">root@uiqm:~$</span>
-                <input type="text" id="term-input" autofocus spellcheck="false" autocomplete="off">
+                <input type="text" id="term-input" autofocus spellcheck="false" autocomplete="off" disabled>
             </form>
         </div>
     </div>

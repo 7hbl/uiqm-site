@@ -5,40 +5,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const frame = document.getElementById('proxy-frame');
     const loading = document.getElementById('proxy-loading');
     const proxyShell = document.getElementById('proxy-shell');
+    const statusLine = document.getElementById('status-line');
 
-    // --- Proxy Initialization ---
+    // --- Official InvisiProxy SEO-Aware Config ---
+    const WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
+    const BARE_MUX_WORKER = '/gmt/worker.js';
+    const SCRAMJET_SW = '/worker/working.sw.js';
+    const TRANSPORT_MJS = '/unix/index.mjs';
+    const SCRAMJET_PREFIX = '/worker/network/';
+
     let sjEncode = null;
-    
-    const initProxy = async () => {
-        try {
-            // Register Scramjet Service Worker
-            if ('serviceWorker' in navigator) {
-                await navigator.serviceWorker.register('/worker/sw.js', {
-                    scope: '/worker/'
-                });
-            }
-
-            // Setup BareMux Transport
-            const { BareMuxConnection } = window.BareMux || {};
-            if (BareMuxConnection) {
-                const conn = new BareMuxConnection('/gmt/');
-                // Connect to the internal Wisp/Bare server
-                await conn.setTransport('/cron/', { wisp: (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/wisp/' });
-            }
-
-            // Setup Scramjet Encoder
-            const sjObject = window.$scramjetLoadController;
-            if (sjObject) {
-                sjEncode = new (sjObject().ScramjetController)({
-                    prefix: '/worker/network/',
-                }).encodeUrl;
-            }
-        } catch (e) {
-            console.error('Proxy Init Error:', e);
-        }
-    };
-
-    await initProxy();
+    let isReady = false;
 
     const print = (text, type = '') => {
         const div = document.createElement('div');
@@ -48,9 +25,59 @@ document.addEventListener('DOMContentLoaded', async () => {
         terminal.scrollTop = terminal.scrollHeight;
     };
 
+    const initProxy = async () => {
+        try {
+            if (!navigator.serviceWorker) {
+                statusLine.innerHTML = '<span style="color:red">Error: Browser does not support Service Workers.</span>';
+                return;
+            }
+
+            // 1. Initialize BareMux
+            const { BareMuxConnection } = window.BareMux || {};
+            if (BareMuxConnection) {
+                const conn = new BareMuxConnection(BARE_MUX_WORKER);
+                await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
+            }
+
+            // 2. Register Scramjet SW
+            const registration = await navigator.serviceWorker.register(SCRAMJET_SW, {
+                scope: '/worker/'
+            });
+
+            // 3. Wait for SW to be active
+            while (!registration.active) {
+                await new Promise(r => setTimeout(r, 100));
+            }
+
+            // 4. Initialize Scramjet Controller
+            if (window.$scramjetLoadController) {
+                const { ScramjetController } = await window.$scramjetLoadController();
+                const scramjet = new ScramjetController({
+                    prefix: SCRAMJET_PREFIX,
+                    files: {
+                        wasm: '/worker/working.wasm.wasm',
+                        all: '/worker/working.all.js',
+                        sync: '/worker/working.sync.js',
+                    }
+                });
+                scramjet.init();
+                sjEncode = scramjet.encodeUrl;
+            }
+
+            statusLine.innerHTML = '<span style="color:#00ff00">Secure Channel Active. System ready.</span>';
+            input.disabled = false;
+            input.focus();
+            isReady = true;
+
+        } catch (e) {
+            console.error('Initialization failed:', e);
+            statusLine.innerHTML = '<span style="color:red">Secure Channel Failed. Check console for details.</span>';
+        }
+    };
+
     const runCommand = (cmd) => {
         const raw = cmd.trim();
-        if (!raw) return;
+        if (!raw || !isReady) return;
 
         const parts = raw.split(' ');
         const base = parts[0].toLowerCase();
@@ -70,7 +97,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (base === 'creds') {
             print('CREDITS:', 'system');
             print('Huge thanks to <a href="https://github.com/QuiteAFancyEmerald" target="_blank" style="color:white">QuiteAFancyEmerald</a> for the original InvisiProxy engine.');
-            print('This terminal fork is just skidded :)', 'system');
+            print('This terminal fork is just skidded.', 'system');
             return;
         }
 
@@ -100,16 +127,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             proxyShell.style.display = 'block';
             loading.style.display = 'flex';
             frame.style.display = 'block';
-
-            // Encode URL using Scramjet or fall back to simple prefix
-            let encoded = url;
-            if (sjEncode) {
-                encoded = sjEncode(url);
-            } else {
-                encoded = '/worker/' + encodeURIComponent(url);
-            }
             
-            frame.src = encoded;
+            frame.src = sjEncode ? sjEncode(url) : (SCRAMJET_PREFIX + encodeURIComponent(url));
             return;
         }
 
@@ -124,10 +143,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    document.addEventListener('click', () => input.focus());
+    document.addEventListener('click', () => { if(isReady) input.focus(); });
     
     frame.onload = () => {
         loading.style.display = 'none';
         print(`Loaded.`, 'system');
     };
+
+    await initProxy();
 });
