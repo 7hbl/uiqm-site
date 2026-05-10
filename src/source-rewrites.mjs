@@ -44,14 +44,12 @@ const regExpEscape = /[-[\]{}()*+?.,\\^$#\s]/g,
     const mode = 'function' === typeof insertFunction,
       keyword = mode ? insertFunction.name : insertFunction,
       replaceParams1 = new RegExp(
-        `[^\\S\\n\\r]*{{${keyword}\\s*` +
-          '\\s*\\s*\\n\\r?((?:(?!)[^])*\\n\\r?)\\s*}}\\s*?\\n?\\r?'.repeat(
-            numArgs
-          ),
+        `[^\\S\\n\\r]*\\{\\{${keyword}` +
+          '\\s*([\\s\\S]*?)\\s*\\}\\}'.repeat(numArgs),
         'g'
       ),
       replaceParams2 = new RegExp(
-        `{{${keyword}` + '((?:(?!)[^])*?)}}'.repeat(numArgs),
+        `\\{\\{${keyword}` + '([\\s\\S]*?)\\}\\}'.repeat(numArgs),
         'g'
       ),
       replaceFunc = mode
