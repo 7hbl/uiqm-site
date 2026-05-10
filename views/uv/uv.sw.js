@@ -46,7 +46,7 @@ class UVServiceWorker extends Ultraviolet.EventEmitter {
   }
   /**
    *
-   * @param {Event & {request: Request param0
+   * @param {Event & {request: Request}} param0
    * @returns
    */
   route({ request }) {
@@ -56,7 +56,7 @@ class UVServiceWorker extends Ultraviolet.EventEmitter {
   }
   /**
    *
-   * @param {Event & {request: Request param0
+   * @param {Event & {request: Request}} param0
    * @returns
    */
   async fetch({ request }) {

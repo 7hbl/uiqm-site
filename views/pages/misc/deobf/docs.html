@@ -1,5 +1,5 @@
 <h1>InvisiProxy LTS (v6.x.x)</h1>
-ifSEO
+ifSEO{{
 <p>
   <img
     src="https://github.com/QuiteAFancyEmerald/InvisiProxy/workflows/CI-Production/badge.svg"
@@ -10,17 +10,17 @@ ifSEO
     alt="GitHub Actions Status"
   />
 </p>
-
+}}
 <br />
 <p>
-  Read below for information if the official site is blocked or for
+  {{Read below for information if the official site is blocked or for
   obtaining more links. Can't deploy using any of the free options below? Check
-  out Railway or look into cheap, paid VPS hosting solutions.
+  out Railway or look into cheap, paid VPS hosting solutions.}}
 </p>
 <p>
   <strong
-    >Be sure to join Titanium Network's Discord for more official site
-    links:</strong
+    >{{Be sure to join Titanium Network's Discord for more official site
+    links:}}</strong
   >
   <a href="/titaniumnetwork-discord">https://discord.gg/unblock</a>
 </p>
@@ -45,16 +45,16 @@ ifSEO
 <br />
 <h2>How to Setup</h2>
 <h4>
-  It is highly recommended you switch branches via your IDE to a production
-  released branch. Often the master branch contains unstable or WIP changes.
+  {{It is highly recommended you switch branches via your IDE to a production
+  released branch. Often the master branch contains unstable or WIP changes.}}
 </h4>
 <h4>
   Example: v6.x_production instead of master
 </h4>
 <h3>Terminal</h3>
 <p>
-  Either use the button above to deploy to the deployment options above or type
-  the commands below on a dedicated server:
+  {{Either use the button above to deploy to the deployment options above or type
+  the commands below on a dedicated server:}}
 </p>
 <pre><code>git clone --recurse-submodules https://github.com/QuiteAFancyEmerald/InvisiProxy.git
 
@@ -62,15 +62,15 @@ cd InvisiProxy
 
 git submodule init
 
-<span ># Using the configuration file you can automatically use pm2 if you are hosting on a VPS!</span>
+<span >{{# Using the configuration file you can automatically use pm2 if you are hosting on a VPS!</span>
 
 npm run fresh-install
 
 npm start
-
-<span ># Or on subsequent uses...</span>
+}}
+<span >{{# Or on subsequent uses...</span>
 npm restart
-
+}}
 <span ># If you encounter any build errors...</span>
 npm <span>run</span><span> build
 </span>
@@ -78,8 +78,8 @@ npm <span>run</span><span> build
 npm <span>run</span><span> proxy-validator</span>
 </code></pre>
 <p>
-  This website is hosted locally with Scramjet, Ultraviolet (Wisp, Bare-Mux,
-  EpoxyTransport, CurlTransport) and Rammerhead built-in.
+  {{This website is hosted locally with Scramjet, Ultraviolet (Wisp, Bare-Mux,
+  EpoxyTransport, CurlTransport) and Rammerhead built-in.}}
 </p>
 <h3>Configuration</h3>
 <h4>Server Configuration Setup</h4>
@@ -87,8 +87,8 @@ npm <span>run</span><span> proxy-validator</span>
   The default place for the proxy when its started is
   <code>http://localhost:8080</code>, but you can change it if needed in
   <code>./ecosystem.config.js</code>. You can also modify the other
-  configuration values at <code>./config.json</code>. To clarify you change the
-  PORT and other production metrics via <code>./ecosystem.config.js</code>.
+  configuration values at <code>./config.json</code>. {{To clarify you change the
+  PORT and other production metrics via }}<code>./ecosystem.config.js</code>.
   Localized changes for source randomization, auto-minify, etc. are located in
   <code>./config.json</code>.
 </p>
@@ -101,47 +101,47 @@ npm <span>run</span><span> proxy-validator</span>
   >
 </p>
 <p>
-  If you are hosting InvisiProxy LTS on a VPS utilizing Ubuntu consider
+  {{If you are hosting InvisiProxy LTS on a VPS utilizing Ubuntu consider
   attaching Tor to systemctl for easier production management. Once Tor is up
-  and running on either Linux or Windows it will work automatically with InvisiProxy LTS when enabled by the user via the Settings menu.
+  and running on either Linux or Windows it will work automatically with InvisiProxy LTS when enabled by the user via the Settings menu.}}
 </p>
 <br />
 <h4>Proxy Configuration</h4>
 <p>
-  The primary location for tweaking any web proxy related settings assigned via
-  the Settings menu is <code>./views/assets/js/register-sw.js</code>. Here you
+  {{The primary location for tweaking any web proxy related settings assigned via
+  the Settings menu is }}<code>./views/assets/js/register-sw.js</code>.{{ Here you
   can modify the provided transport options set locally via a cookie, swap out
-  SOCKS5 proxies, change Onion routing ports, specify a blacklist, and more.
+  SOCKS5 proxies, change Onion routing ports, specify a blacklist, and more.}}
 </p>
 <ul>
   <li>
-    <code>stockSW</code>: The default service worker configuration file for
+    <code>stockSW</code>: {{The default service worker configuration file for
     Ultraviolet. For InvisiProxy however adblocking is automatically enabled
-    so this is not used by default.
+    so this is not used by default.}}
   </li>
   <li>
-    <code>blacklistSW</code>: A modified version of Ultraviolet that allows for
-    blacklisting domains and adblocking.
+    <code>blacklistSW</code>: {{A modified version of Ultraviolet that allows for
+    blacklisting domains and adblocking.}}
   </li>
   <li>
-    <code>proxyUrl</code>: Specifies a SOCKS5 protocol URL defaulting to the
+    <code>proxyUrl</code>:{{ Specifies a SOCKS5 protocol URL defaulting to the
     default Tor proxy port. This can be swapped out with any valid port or
-    SOCK5s proxy.
+    SOCK5s proxy.}}
   </li>
   <li>
-    <code>transports</code>: Specifies any provided ports to be swapped via
-    Bare-Mux and utilize Wisp.
+    <code>transports</code>:{{ Specifies any provided ports to be swapped via
+    Bare-Mux and utilize Wisp.}}
   </li>
   <li><code>wispUrl</code>: Modify the pathname or url handling for Wisp</li>
   <li>
-    <code>defaultMode</code>: Specify the default transport used globally (can
-    be swapped by the users still via the Settings menu)
+    <code>defaultMode</code>:{{ Specify the default transport used globally (can
+    be swapped by the users still via the Settings menu)}}
   </li>
   <li>
-    <code>ScramjetController</code>: This constructor allows you to swap out the
+    <code>ScramjetController</code>:{{ This constructor allows you to swap out the
     prefix used for Scramjet dynamically and specify file locations. Note you
-    may need to edit <code>./views/scram/scramjet.sw</code> when changing file
-    names.
+    may need to edit }}<code>./views/scram/scramjet.sw</code>{{ when changing file
+    names.}}
   </li>
 </ul>
 
