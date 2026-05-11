@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.0.2 (URL Parse Fix)
+// Scramjet v2 Service Worker - v2.0.3 (Robust URL Fix)
 importScripts('/worker/working.all.js');
 importScripts('/gmt/index.js'); // Bare-mux (gmt)
 
@@ -23,11 +23,16 @@ async function initHandler() {
             interface: {
                 codecEncode: (str) => encodeURIComponent(str), 
                 codecDecode: (str) => {
+                    if (!str) return "https://uiqm.lol/"; // Fallback for empty target
                     let path = str;
                     // Handle both /worker/ and /worker/network/
                     if (path.startsWith('network/')) path = path.slice(8);
+                    if (!path) return "https://uiqm.lol/";
                     try {
-                        return decodeURIComponent(path);
+                        const decoded = decodeURIComponent(path);
+                        // Ensure it's a valid URL string
+                        if (!decoded.includes('://')) return "https://" + decoded;
+                        return decoded;
                     } catch {
                         return path;
                     }
