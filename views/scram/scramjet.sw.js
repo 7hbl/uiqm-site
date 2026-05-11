@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.0.1 (Forced Update)
+// Scramjet v2 Service Worker - v2.0.2 (URL Parse Fix)
 importScripts('/worker/working.all.js');
 importScripts('/gmt/index.js'); // Bare-mux (gmt)
 
@@ -21,8 +21,17 @@ async function initHandler() {
             config: defaultConfig,
             prefix: new URL(SCRAM_PREFIX, self.location.origin),
             interface: {
-                codecEncode: (str) => str, 
-                codecDecode: (str) => str,
+                codecEncode: (str) => encodeURIComponent(str), 
+                codecDecode: (str) => {
+                    let path = str;
+                    // Handle both /worker/ and /worker/network/
+                    if (path.startsWith('network/')) path = path.slice(8);
+                    try {
+                        return decodeURIComponent(path);
+                    } catch {
+                        return path;
+                    }
+                },
                 getInjectScripts: (meta, handler, script) => {
                     return [
                         script('/worker/working.all.js')
