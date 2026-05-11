@@ -1,68 +1,74 @@
-// Scramjet v2 Service Worker - v2.1.0 (Final Fix)
+// Scramjet v2 Service Worker - v2.2.0 (EpoxyTransport Direct)
 importScripts('/worker/working.all.js');
-importScripts('/epoch/index.js');
+importScripts('/epoch/index.js'); // exposes self.EpxMod.EpoxyTransport
 
 const SCRAM_PREFIX = '/worker/';
 const WISP_URL = (self.location.protocol === 'https:' ? 'wss' : 'ws') + '://' + self.location.host + '/cron/';
 
-let handler, epoxyClient;
-
-function toPlainHeaders(h) {
-    const out = {};
-    try {
-        if (!h) return out;
-        if (typeof h.entries === 'function') { for (const [k,v] of h.entries()) out[k]=v; }
-        else if (typeof h === 'object') Object.assign(out, h);
-    } catch(_) {}
-    return out;
-}
+let handler;
+let epoxy = null;
 
 async function getEpoxy() {
-    if (epoxyClient) return epoxyClient;
+    if (epoxy?.ready) return epoxy;
     try {
-        if (typeof self.EpoxyClient !== 'undefined') {
-            epoxyClient = new self.EpoxyClient(WISP_URL);
-            await epoxyClient.init();
+        const EpoxyTransport = self.EpxMod?.EpoxyTransport;
+        if (EpoxyTransport) {
+            const t = new EpoxyTransport({ wisp: WISP_URL });
+            await t.init();
+            epoxy = t;
+            return epoxy;
         }
-    } catch(e) { console.warn('[SW] Epoxy unavailable:', e.message); }
-    return epoxyClient || null;
+    } catch(e) { console.warn('[SW] EpoxyTransport init failed:', e.message); }
+    return null;
 }
 
-async function doFetch(url, method, headers, body, signal) {
-    const m = (method || 'GET').toUpperCase();
-    const init = {
-        method: m,
-        headers: toPlainHeaders(headers),
-        body: ['GET','HEAD'].includes(m) ? undefined : (body || undefined),
-        signal: signal || undefined
-    };
-    const epoxy = await getEpoxy();
-    if (epoxy) { try { return await epoxy.fetch(url.toString(), init); } catch(_) {} }
-    return fetch(url.toString(), init);
-}
-
-// CRITICAL: handleFetch returns a plain obj {body,headers,status,statusText}, not a native Response
+// toResponse handles both rawHeaders array and ScramjetHeaders objects
 function toResponse(raw) {
     if (raw instanceof Response) return raw;
     const h = new Headers();
     try {
-        if (raw.headers && typeof raw.headers.entries === 'function')
-            for (const [k,v] of raw.headers.entries()) { try { h.set(k,v); } catch(_){} }
-        else if (raw.headers && typeof raw.headers === 'object')
-            for (const [k,v] of Object.entries(raw.headers)) { try { h.set(k,String(v)); } catch(_){} }
+        const hdrs = raw.headers;
+        if (Array.isArray(hdrs)) {
+            for (const [k,v] of hdrs) { try { h.set(k, String(v)); } catch(_){} }
+        } else if (hdrs && typeof hdrs.entries === 'function') {
+            for (const [k,v] of hdrs.entries()) { try { h.set(k,v); } catch(_){} }
+        } else if (hdrs && typeof hdrs === 'object') {
+            for (const [k,v] of Object.entries(hdrs)) { try { h.set(k,String(v)); } catch(_){} }
+        }
     } catch(_) {}
-    return new Response(raw.body ?? null, { status: raw.status||200, statusText: raw.statusText||'OK', headers: h });
+    return new Response(raw.body ?? null, {
+        status: raw.status || 200,
+        statusText: raw.statusText || 'OK',
+        headers: h
+    });
 }
 
 async function initHandler() {
     if (handler) return handler;
     const { ScramjetFetchHandler, ScramjetHeaders, defaultConfig } = self.$scramjet;
-    const transport = {
-        async init() { await getEpoxy(); },
-        async request(remote, method, headers, body, signal) { return doFetch(remote, method, headers, body, signal); },
-        async fetch(url, init) { return doFetch(url, init?.method, init?.headers, init?.body, init?.signal); },
-        async connect() {}
+
+    // Try EpoxyTransport (Wisp-based, bypasses blocks)
+    // Fallback to a safe native-fetch transport
+    const transport = (await getEpoxy()) || {
+        async init() {},
+        async request(remote, method, body, headers, signal) {
+            const plain = {};
+            try {
+                if (headers && typeof headers.entries === 'function')
+                    for (const [k,v] of headers.entries()) plain[k]=v;
+                else if (headers) Object.assign(plain, headers);
+            } catch(_) {}
+            const m = (method||'GET').toUpperCase();
+            return fetch(remote.toString(), {
+                method: m, headers: plain,
+                body: ['GET','HEAD'].includes(m) ? undefined : (body||undefined),
+                signal: signal||undefined
+            });
+        },
+        async fetch(url, init) { return fetch(url.toString(), init||{}); },
+        connect() {}
     };
+
     handler = new ScramjetFetchHandler({
         transport,
         crossOriginIsolated: false,
@@ -84,7 +90,8 @@ async function initHandler() {
             cookieJar: { getCookies: ()=>'', setCookies: ()=>{} }
         },
         sendSetCookie: async (url, cookie) => {
-            for (const c of await self.clients.matchAll()) c.postMessage({type:'scramjet-set-cookie',url:url.href,cookie});
+            for (const c of await self.clients.matchAll())
+                c.postMessage({ type:'scramjet-set-cookie', url:url.href, cookie });
         },
         fetchDataUrl: url => fetch(url.toString()),
         fetchBlobUrl: url => fetch(url.toString())
@@ -120,7 +127,7 @@ self.addEventListener('fetch', event => {
             return toResponse(raw);
         } catch(e) {
             console.error('[Scramjet v2 SW] Fetch error:', e);
-            return new Response('Proxy error: '+e.message, {status:500, headers:{'Content-Type':'text/plain'}});
+            return new Response('Proxy error: '+e.message, { status:500, headers:{'Content-Type':'text/plain'} });
         }
     })());
 });
