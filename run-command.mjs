@@ -219,12 +219,13 @@ commands: for (let i = 2; i < process.argv.length; i++)
                 // 1. Fix "not iterable" errors in for...of loops
                 content = content.replace(/for\s*\(\s*(?:let|var|const)?\s+([a-zA-Z0-9_$]+)\s+of\s+([a-zA-Z0-9_$.]+)\.childNodes\s*\)/g, 'for(let $1 of ($2.childNodes||[]))');
 
-                // 2. Safe Optional Chaining for .length (READ-ONLY)
-                // We use a lookahead to make sure we aren't patching an assignment target.
-                content = content.replace(/\.length\b(?!\s*=)/g, '?.length');
+                // 2. SURGICAL .length safety
+                // We ONLY patch .length when it is followed by a comparison or logic operator.
+                // This prevents breaking internal rewriter strings and regexes.
+                content = content.replace(/\.length\s*(?=[><=!&|?;),])/g, '?.length');
                 
                 writeFileSync(destFile, content);
-                console.log(`[Build] Applied Build-Safe Safety Patches to ${file} ✅`);
+                console.log(`[Build] Applied Surgical Safety Patches to ${file} ✅`);
               }
 
               console.log(`[Build] Copied ${file} -> ${name}/${targetName}`);
