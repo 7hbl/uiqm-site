@@ -1,4 +1,3 @@
-// Proxy Build Script Fix
 import {
   writeFileSync,
   unlinkSync,
@@ -124,8 +123,15 @@ commands: for (let i = 2; i < process.argv.length; i++)
 
     case 'build': {
       const dist = fileURLToPath(new URL('./views/dist', import.meta.url));
-      rmSync(dist, { force: true, recursive: true });
-      mkdirSync(dist);
+      try {
+        if (existsSync(dist)) {
+          rmSync(dist, { force: true, recursive: true });
+          console.log('[Build] Cleaned existing dist directory');
+        }
+      } catch (e) {
+        console.warn('[Build Warning] Could not fully clean dist directory (files might be in use):', e.message);
+      }
+      if (!existsSync(dist)) mkdirSync(dist, { recursive: true });
 
       /* The archive directory is excluded from this process, since source
        * rewrites are not intended to be used by any of those files.
@@ -200,7 +206,7 @@ commands: for (let i = 2; i < process.argv.length; i++)
       for (const [name, path] of Object.entries(compilePaths)) {
         const prefix = name + '/';
         const prefixUrl = new URL('./views/dist/' + prefix, import.meta.url);
-        if (!existsSync(prefixUrl)) mkdirSync(prefixUrl);
+        if (!existsSync(prefixUrl)) mkdirSync(prefixUrl, { recursive: true });
 
         // Force copy all files from the module dist to the production dist
         const moduleDist = path.startsWith('node_modules') ? join(rootPath, path) : path;
@@ -211,23 +217,6 @@ commands: for (let i = 2; i < process.argv.length; i++)
               const targetName = (!config.usingSEO && flatAltPaths['files/' + file]) || file;
               const destFile = join(rootPath, 'views/dist', name, targetName);
               copyFileSync(srcFile, destFile);
-              
-              // PATCH: Fix Scramjet core crashes in minified bundle
-              if (file === 'scramjet_bundled.js' || file === 'working.all.js') {
-                let content = tryReadFile(destFile, import.meta.url, false);
-                
-                // 1. Fix "not iterable" errors in for...of loops
-                content = content.replace(/for\s*\(\s*(?:let|var|const)?\s+([a-zA-Z0-9_$]+)\s+of\s+([a-zA-Z0-9_$.]+)\.childNodes\s*\)/g, 'for(let $1 of ($2.childNodes||[]))');
-
-                // 2. SURGICAL .length safety
-                // We ONLY patch .length when it is followed by a comparison or logic operator.
-                // This prevents breaking internal rewriter strings and regexes.
-                content = content.replace(/\.length\s*(?=[><=!&|?;),])/g, '?.length');
-                
-                writeFileSync(destFile, content);
-                console.log(`[Build] Applied Surgical Safety Patches to ${file} ✅`);
-              }
-
               console.log(`[Build] Copied ${file} -> ${name}/${targetName}`);
             }
           });
@@ -241,6 +230,19 @@ commands: for (let i = 2; i < process.argv.length; i++)
       if (existsSync(customSwSrc)) {
         copyFileSync(customSwSrc, customSwDest);
         console.log('[Build] Custom scramjet.sw.js -> scram/working.sw.js ✅ (overrode npm version)');
+      }
+
+      // FINAL SYNTAX FIX: Ensure no invalid assignment targets exist in the bundled scramjet
+      const scramjetBundle = join(rootPath, 'views/dist/scram/working.all.js');
+      if (existsSync(scramjetBundle)) {
+        let content = tryReadFile(scramjetBundle, import.meta.url, false);
+        if (content.includes('?.length=')) {
+          content = content.replace(/this\.stack\?\.length=0/g, '(this.stack && (this.stack.length = 0))');
+          content = content.replace(/this\.buffers\?\.length=0/g, '(this.buffers && (this.buffers.length = 0))');
+          content = content.replace(/this\.foreignContext\?\.length=0/g, '(this.foreignContext && (this.foreignContext.length = 0))');
+          writeFileSync(scramjetBundle, content);
+          console.log('[Build] Fixed invalid assignment targets in working.all.js ✅');
+        }
       }
 
       // Minify the scripts and stylesheets upon compiling, if enabled in config.
