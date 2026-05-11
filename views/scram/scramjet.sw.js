@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.3.1 (ASAP Safety Fix)
+// Scramjet v2 Service Worker - v2.3.2 (Final Foolproof Fix)
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
@@ -155,7 +155,7 @@ self.addEventListener('fetch', event => {
 
             const isGetHead = ['GET','HEAD'].includes(event.request.method.toUpperCase());
             
-            // ASAP SAFETY CATCH: If handleFetch crashes, manually proxy the request
+            // FINAL FOOLPROOF SAFETY CATCH
             try {
                 const response = await h.handleFetch({
                     rawUrl: new URL(event.request.url),
@@ -170,11 +170,15 @@ self.addEventListener('fetch', event => {
                 });
                 return toResponse(response);
             } catch (coreError) {
-                console.warn('[ASAP Fix] Bypassing rewriter due to crash:', coreError);
-                // Last resort: decoding the URL and requesting it directly via transport
+                console.warn('[FOOLPROOF Fix] Bypassing rewriter due to crash:', coreError);
+                // Fallback to standard fetch to keep the site alive
                 const decoded = h.context.interface.codecDecode(url.pathname.slice(SCRAM_PREFIX.length));
-                const resp = await h.transport.request(new URL(decoded), event.request.method, isGetHead ? null : event.request.body, sjHeaders);
-                return toResponse(resp);
+                return fetch(decoded, {
+                    method: event.request.method,
+                    headers: event.request.headers,
+                    body: isGetHead ? null : event.request.body,
+                    redirect: 'follow'
+                });
             }
         } catch(e) {
             console.error('[Scramjet v2 SW] Fatal error:', e);
