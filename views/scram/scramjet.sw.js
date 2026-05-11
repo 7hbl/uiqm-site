@@ -176,54 +176,64 @@ self.addEventListener('fetch', event => {
             console.error('[Scramjet v2 SW] Fetch error, attempting raw transport bypass:', e);
             
             try {
-                // Manually decode the target URL from the proxy path
-                const proxyPath = new URL(event.request.url).pathname.slice(SCRAM_PREFIX.length);
-                let targetUrl = proxyPath;
+                // Manually decode the target URL
+                const urlObj = new URL(event.request.url);
+                let targetUrl = urlObj.pathname.slice(SCRAM_PREFIX.length) + urlObj.search;
                 if (targetUrl.startsWith('network/')) targetUrl = targetUrl.slice(8);
                 targetUrl = decodeURIComponent(targetUrl);
                 if (!targetUrl.includes('://')) targetUrl = 'https://' + targetUrl;
 
                 const transport = await getEpoxy();
                 if (transport) {
-                    console.log('[Scramjet v2 SW] Bypassing rewriter with basic fallback for:', targetUrl);
+                    console.log('[Scramjet v2 SW] Bypassing rewriter for:', targetUrl);
+                    
+                    // Clean headers to avoid 404/403 from sensitive sites (like Githack)
+                    const cleanHeaders = new Headers(event.request.headers);
+                    cleanHeaders.delete('Host');
+                    cleanHeaders.delete('Origin');
+                    cleanHeaders.delete('Referer');
+                    
                     const res = await transport.request(
                         new URL(targetUrl), 
                         event.request.method, 
                         ['GET','HEAD'].includes(event.request.method.toUpperCase()) ? null : event.request.body, 
-                        event.request.headers
+                        cleanHeaders
                     );
                     
                     const response = toResponse(res);
-                    
-                    // If the response is HTML, we MUST perform basic rewriting to avoid CORS issues
                     const contentType = response.headers.get('content-type') || '';
+                    
+                    // FALLBACK REWRITING FOR BYPASSED CONTENT
                     if (contentType.includes('text/html')) {
                         let text = await response.text();
-                        // Basic regex-based URL rewriter for emergency fallback
                         const baseObj = new URL(targetUrl);
+                        
+                        // Safety script injection (must be at the very top)
+                        const safetyScript = `
+<script>
+window.$scramjet$pushsourcemap = () => {};
+window.$scramjet$prefix = "${SCRAM_PREFIX}";
+console.warn('[Scramjet SW] Emergency Fallback Active for ${targetUrl}');
+</script>`;
+                        text = text.replace('<head>', '<head>' + safetyScript);
+                        if (!text.includes(safetyScript)) text = safetyScript + text;
+
+                        // Basic attribute rewriter
                         text = text.replace(/(src|href|action)\s*=\s*["']([^"']+)["']/gi, (match, attr, val) => {
-                            if (val.startsWith('data:') || val.startsWith('blob:') || val.startsWith('javascript:') || val.startsWith('#')) return match;
-                            if (val.startsWith(SCRAM_PREFIX)) return match;
+                            if (val.startsWith('data:') || val.startsWith('blob:') || val.startsWith('javascript:') || val.startsWith('#') || val.startsWith(SCRAM_PREFIX)) return match;
                             try {
                                 const abs = new URL(val, baseObj.href).href;
                                 return `${attr}="${SCRAM_PREFIX}${encodeURIComponent(abs)}"`;
                             } catch { return match; }
                         });
                         
-                        // Inject our safety scripts as well
-                        const injection = `
-                            <script>
-                            window.$scramjet$pushsourcemap = (...args) => {};
-                            console.warn('[Scramjet SW] Using basic rewriter fallback due to engine crash');
-                            </script>
-                        `;
-                        text = text.replace('<head>', '<head>' + injection);
+                        return new Response(text, { status: response.status, headers: response.headers });
                         
-                        return new Response(text, {
-                            status: response.status,
-                            statusText: response.statusText,
-                            headers: response.headers
-                        });
+                    } else if (contentType.includes('javascript') || contentType.includes('application/x-javascript')) {
+                        let text = await response.text();
+                        // Fix the missing globals in bypassed JS files
+                        text = `if(typeof window !== "undefined") { window.$scramjet$pushsourcemap = () => {}; }\n` + text;
+                        return new Response(text, { status: response.status, headers: response.headers });
                     }
                     
                     return response;
@@ -231,7 +241,7 @@ self.addEventListener('fetch', event => {
                 throw new Error('Transport unavailable');
             } catch (bypassErr) {
                 console.error('[Scramjet v2 SW] Bypass failed:', bypassErr);
-                return new Response('Proxy error: ' + e.message, { status: 500 });
+                return new Response('Proxy Critical Error: ' + e.message, { status: 500 });
             }
         }
     })());
