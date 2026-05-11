@@ -214,11 +214,11 @@ commands: for (let i = 2; i < process.argv.length; i++)
               // PATCH: Fix Scramjet core "childNodes" and "length" crash in minified bundle
               if (file === 'scramjet_bundled.js' || file === 'working.all.js') {
                 let content = tryReadFile(destFile, import.meta.url, false);
-                // Replace .childNodes with ?.childNodes??[] to prevent crash if undefined
-                // We use optional chaining and nullish coalescing for safety.
-                content = content.replace(/\.childNodes/g, '?.childNodes??[]');
+                // Specifically target for...of loops on .childNodes to prevent "not iterable" errors.
+                // We change "for(let p of d.root.childNodes)" to "for(let p of (d.root.childNodes||[]))"
+                content = content.replace(/for\s*\(\s*(?:let|var|const)\s+([a-zA-Z0-9_$]+)\s+of\s+([a-zA-Z0-9_$.]+)\.childNodes\s*\)/g, 'for(let $1 of ($2.childNodes||[]))');
                 writeFileSync(destFile, content);
-                console.log(`[Build] Patched ${file} with childNodes safety check ✅`);
+                console.log(`[Build] Patched ${file} with loop safety check ✅`);
               }
 
               console.log(`[Build] Copied ${file} -> ${name}/${targetName}`);
