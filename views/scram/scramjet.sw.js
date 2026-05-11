@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.2.1 (Epoxy Fix)
+// Scramjet v2 Service Worker - v2.2.2 (MIME Fix)
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
@@ -11,13 +11,11 @@ let epoxy = null;
 async function getEpoxy() {
     if (epoxy?.ready) return epoxy;
     try {
-        console.log('[SW] Initializing EpoxyTransport...');
         const EpoxyTransport = self.EpxMod?.default || self.EpxMod?.EpoxyTransport || self.EpxMod;
         if (typeof EpoxyTransport === 'function' || (EpoxyTransport && typeof EpoxyTransport.prototype?.init === 'function')) {
             const t = new EpoxyTransport({ wisp: WISP_URL });
             await t.init();
             epoxy = t;
-            console.log('[SW] EpoxyTransport ready ✅');
             return epoxy;
         }
     } catch(e) { console.warn('[SW] Epoxy init failed:', e); }
@@ -29,17 +27,26 @@ function toResponse(raw) {
     const h = new Headers();
     try {
         const hdrs = raw.headers;
-        if (hdrs instanceof Headers) {
-            hdrs.forEach((v, k) => h.set(k, v));
-        } else if (Array.isArray(hdrs)) {
-            for (const [k,v] of hdrs) { try { h.set(k, String(v)); } catch(_){} }
-        } else if (hdrs && typeof hdrs.entries === 'function') {
-            for (const [k,v] of hdrs.entries()) { try { h.set(k,v); } catch(_){} }
-        } else if (hdrs && typeof hdrs === 'object') {
-            for (const [k,v] of Object.entries(hdrs)) { try { h.set(k,String(v)); } catch(_){} }
+        if (hdrs) {
+            if (typeof hdrs.forEach === 'function') hdrs.forEach((v, k) => h.set(k, v));
+            else if (typeof hdrs.entries === 'function') {
+                for (const [k, v] of hdrs.entries()) h.set(k, v);
+            } else if (typeof hdrs[Symbol.iterator] === 'function') {
+                for (const [k, v] of hdrs) h.set(k, v);
+            } else {
+                for (const k in hdrs) h.set(k, String(hdrs[k]));
+            }
         }
-    } catch(_) {}
-    return new Response(raw.body ?? null, {
+    } catch(e) { console.error('[SW] Header copy error:', e); }
+
+    // Critical: Ensure Content-Type is set, fallback to text/html for proxied pages
+    if (!h.has('content-type')) {
+        h.set('content-type', 'text/html; charset=UTF-8');
+    }
+
+    console.log(`[SW] Status: ${raw.status}, MIME: ${h.get('content-type')}`);
+
+    return new Response(raw.body, {
         status: raw.status || 200,
         statusText: raw.statusText || 'OK',
         headers: h
@@ -54,14 +61,10 @@ async function initHandler() {
     const transport = rawEpoxy ? {
         ...rawEpoxy,
         async request(remote, method, body, headers, signal) {
-            // Scramjet expects transport.request to return { body, headers, status, statusText }
-            // where headers is ideally a Headers object or something iterable.
             const res = await rawEpoxy.request(remote, method, body, headers, signal);
             if (res && res.headers && !(res.headers instanceof Headers)) {
-                // Convert plain object/array headers to Headers object to fix "k is not iterable"
                 res.headers = new Headers(res.headers);
             }
-            console.log(`[SW] ${method} ${remote.origin} -> ${res.status}`);
             return res;
         }
     } : {
