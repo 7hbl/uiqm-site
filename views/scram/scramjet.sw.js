@@ -11,14 +11,21 @@ let epoxy = null;
 async function getEpoxy() {
     if (epoxy?.ready) return epoxy;
     try {
-        const EpoxyTransport = self.EpxMod?.EpoxyTransport;
-        if (EpoxyTransport) {
+        console.log('[SW] Initializing EpoxyTransport...');
+        const EpoxyTransport = self.EpxMod?.default || self.EpxMod?.EpoxyTransport || self.EpxMod;
+        if (typeof EpoxyTransport === 'function' || (EpoxyTransport && typeof EpoxyTransport.prototype?.init === 'function')) {
             const t = new EpoxyTransport({ wisp: WISP_URL });
             await t.init();
             epoxy = t;
+            console.log('[SW] EpoxyTransport ready ✅');
             return epoxy;
+        } else {
+            console.warn('[SW] EpoxyTransport not found in self.EpxMod:', self.EpxMod);
         }
-    } catch(e) { console.warn('[SW] EpoxyTransport init failed:', e.message); }
+    } catch(e) { 
+        console.warn('[SW] EpoxyTransport init failed:', e); 
+    }
+    console.log('[SW] Falling back to native fetch (CORS warning!)');
     return null;
 }
 
