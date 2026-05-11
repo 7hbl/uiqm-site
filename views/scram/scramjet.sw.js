@@ -34,11 +34,21 @@ async function initHandler() {
             await getEpoxy();
         },
         async request(remote, headers, body, method, signal) {
+            // Convert headers to plain object - Scramjet passes custom Header objects
+            let plainHeaders = {};
+            try {
+                if (headers && typeof headers.entries === 'function') {
+                    for (const [k, v] of headers.entries()) plainHeaders[k] = v;
+                } else if (headers && typeof headers === 'object') {
+                    plainHeaders = { ...headers };
+                }
+            } catch (_) {}
+
             const epoxy = await getEpoxy();
             if (epoxy && typeof epoxy.fetch === 'function') {
                 return await epoxy.fetch(remote.toString(), {
                     method: method || 'GET',
-                    headers: headers || {},
+                    headers: plainHeaders,
                     body: body || undefined,
                     signal: signal || undefined
                 });
@@ -46,19 +56,25 @@ async function initHandler() {
             // Fallback to native fetch
             return await fetch(remote.toString(), {
                 method: method || 'GET',
-                headers: headers || {},
+                headers: plainHeaders,
                 body: body || undefined,
-                signal: signal || undefined,
-                mode: 'cors'
+                signal: signal || undefined
             });
         },
         async fetch(url, init) {
+            const safeInit = { ...init };
+            if (safeInit.headers && typeof safeInit.headers.entries === 'function') {
+                const plain = {};
+                for (const [k, v] of safeInit.headers.entries()) plain[k] = v;
+                safeInit.headers = plain;
+            }
             const epoxy = await getEpoxy();
             if (epoxy && typeof epoxy.fetch === 'function') {
-                return await epoxy.fetch(url, init);
+                return await epoxy.fetch(url, safeInit);
             }
-            return await fetch(url, init);
+            return await fetch(url, safeInit);
         },
+
         async connect(url, protocols, requestHeaders, onopen, onmessage, onclose, onerror) {
             const epoxy = await getEpoxy();
             if (epoxy && typeof epoxy.connect === 'function') {
