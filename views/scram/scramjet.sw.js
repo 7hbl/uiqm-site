@@ -183,56 +183,71 @@ self.addEventListener('fetch', event => {
                 targetUrl = decodeURIComponent(targetUrl);
                 if (!targetUrl.includes('://')) targetUrl = 'https://' + targetUrl;
 
-                const transport = await getEpoxy();
-                if (transport) {
-                    console.log('[Scramjet v2 SW] Bypassing rewriter for:', targetUrl);
-                    
-                    // Clean headers to avoid 404/403 from sensitive sites (like Githack)
-                    const cleanHeaders = new Headers(event.request.headers);
-                    cleanHeaders.delete('Host');
-                    cleanHeaders.delete('Origin');
-                    cleanHeaders.delete('Referer');
-                    
-                    const res = await transport.request(
-                        new URL(targetUrl), 
-                        event.request.method, 
-                        ['GET','HEAD'].includes(event.request.method.toUpperCase()) ? null : event.request.body, 
-                        cleanHeaders
-                    );
-                    
-                    const response = toResponse(res);
-                    const contentType = response.headers.get('content-type') || '';
-                    
-                    // FALLBACK REWRITING FOR BYPASSED CONTENT
-                    if (contentType.includes('text/html')) {
+                console.log('[Scramjet v2 SW] Emergency Bypass using Bare Server for:', targetUrl);
+                
+                // Use Bare server directly for fallback to avoid CORS/404 issues
+                const bareServer = location.origin + '/bare/';
+                const response = await fetch(bareServer, {
+                    headers: {
+                        'x-bare-url': targetUrl,
+                        'x-bare-headers': JSON.stringify({
+                            'User-Agent': navigator.userAgent,
+                            'Accept': '*/*',
+                            'Referer': targetUrl
+                        }),
+                        'x-bare-forward-headers': '[]'
+                    },
+                    credentials: 'omit'
+                });
+
+                if (!response.ok) throw new Error('Bare fallback failed with status ' + response.status);
+
+                const contentType = response.headers.get('content-type') || '';
+                
+                // FALLBACK REWRITING FOR BYPASSED CONTENT
+                if (contentType.includes('text/html')) {
                         let text = await response.text();
                         const baseObj = new URL(targetUrl);
                         
-                        // Safety script injection (Ultra Runtime Polyfill)
+                        // Safety script injection (Indestructible Runtime Polyfill)
                         const safetyScript = `
 <script>
 (function() {
     if (window.__scramjet_emergency_active) return;
     window.__scramjet_emergency_active = true;
-    const noop = () => {};
-    const pass = (o, p) => (o && typeof o === 'object') ? o[p] : undefined;
-    window.$scramjet$pushsourcemap = noop;
-    window.$scramjet$prefix = "${SCRAM_PREFIX}";
-    window.$scramjet$prop = pass;
-    window.$scramjet$get = pass;
-    window.$scramjet$set = (o, p, v) => { if(o && typeof o === 'object') o[p] = v; return v; };
-    window.$scramjet$call = (o, p, a) => {
-        const fn = (o && typeof o === 'object') ? o[p] : null;
-        return typeof fn === 'function' ? fn.apply(o, a) : undefined;
+    
+    // Recursive Safety Proxy: returns a function that returns itself
+    const createSafe = () => {
+        const fn = function() { return fn; };
+        return new Proxy(fn, { get: () => fn });
     };
-    window.$scramjet$apply = (o, p, a) => window.$scramjet$call(o, p, a);
-    window.$scramjet$construct = (o, a) => new o(...a);
-    window.$scramjet$deletenew = noop;
+    const safeObj = createSafe();
+
+    window.$scramjet$prefix = "${SCRAM_PREFIX}";
+    window.$scramjet$pushsourcemap = () => {};
     window.$scramjet$unfurl = (o) => o;
     window.$scramjet$wrap = (o) => o;
     window.$scramjet$getSource = (o) => o;
-    window.$scramerr = (e) => console.error('[Scramjet Captured Error]', e);
-    console.warn('[Scramjet SW] Ultra Runtime Polyfill Active for ${targetUrl}');
+    window.$scramerr = (e) => console.warn('[Scramjet Suppressed]', e);
+    
+    // Smart Property Access
+    window.$scramjet$prop = (o, p) => (o && typeof o === 'object') ? o[p] : undefined;
+    window.$scramjet$get = (o, p) => {
+        if (!o) return safeObj;
+        if (p === 'location' && (o === window || o === document)) return window.location;
+        let v = o[p];
+        return v === undefined ? safeObj : v;
+    };
+    window.$scramjet$set = (o, p, v) => { if(o && typeof o === 'object') o[p] = v; return v; };
+    window.$scramjet$call = (o, p, a) => {
+        const fn = (o && typeof o === 'object') ? o[p] : null;
+        return typeof fn === 'function' ? fn.apply(o, a) : safeObj;
+    };
+    window.$scramjet$apply = (o, p, a) => window.$scramjet$call(o, p, a);
+    window.$scramjet$construct = (o, a) => {
+        try { return new o(...a); } catch(e) { return safeObj; }
+    };
+    console.warn('[Scramjet SW] Indestructible Runtime Active');
 })();
 </script>`;
                         text = text.replace('<head>', '<head>' + safetyScript);
@@ -254,17 +269,17 @@ self.addEventListener('fetch', event => {
                         // Inject the polyfill into bypassed JS files as well
                         const jsPolyfill = `
 (function(){
-    if(typeof window !== "undefined") {
-        const noop = () => {};
-        const pass = (o, p) => (o && typeof o === 'object') ? o[p] : undefined;
-        window.$scramjet$pushsourcemap = window.$scramjet$pushsourcemap || noop;
-        window.$scramjet$prop = window.$scramjet$prop || pass;
-        window.$scramjet$get = window.$scramjet$get || pass;
-        window.$scramjet$call = window.$scramjet$call || ((o, p, a) => {
-            const fn = (o && typeof o === 'object') ? o[p] : null;
-            return typeof fn === 'function' ? fn.apply(o, a) : undefined;
+    if(typeof window !== "undefined" && !window.__scramjet_emergency_active) {
+        const s = function() { return s; };
+        const safe = new Proxy(s, { get: () => s });
+        window.$scramjet$prop = window.$scramjet$prop || ((o, p) => (o && typeof o === 'object') ? o[p] : undefined);
+        window.$scramjet$get = window.$scramjet$get || ((o, p) => {
+            if(!o) return safe;
+            const v = o[p];
+            return v === undefined ? safe : v;
         });
-        window.$scramerr = window.$scramerr || noop;
+        window.$scramjet$call = window.$scramjet$call || ((o, p, a) => (o && typeof o[p] === 'function') ? o[p].apply(o, a) : safe);
+        window.$scramerr = window.$scramerr || (() => {});
         window.$scramjet$wrap = window.$scramjet$wrap || ((o) => o);
     }
 })();\n`;
