@@ -210,6 +210,17 @@ commands: for (let i = 2; i < process.argv.length; i++)
               const targetName = (!config.usingSEO && flatAltPaths['files/' + file]) || file;
               const destFile = join(rootPath, 'views/dist', name, targetName);
               copyFileSync(srcFile, destFile);
+              
+              // PATCH: Fix Scramjet core "childNodes" and "length" crash in minified bundle
+              if (file === 'scramjet_bundled.js' || file === 'working.all.js') {
+                let content = tryReadFile(destFile, import.meta.url, false);
+                // Replace .childNodes with ?.childNodes??[] to prevent crash if undefined
+                // We use optional chaining and nullish coalescing for safety.
+                content = content.replace(/\.childNodes/g, '?.childNodes??[]');
+                writeFileSync(destFile, content);
+                console.log(`[Build] Patched ${file} with childNodes safety check ✅`);
+              }
+
               console.log(`[Build] Copied ${file} -> ${name}/${targetName}`);
             }
           });
