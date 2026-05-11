@@ -46,10 +46,12 @@ async function initHandler() {
             } catch (_) {}
 
             const url = remote.toString ? remote.toString() : String(remote);
+            const safeMethod = method || 'GET';
+            const hasBody = body && !['GET', 'HEAD'].includes(safeMethod.toUpperCase());
             const init = {
-                method: method || 'GET',
+                method: safeMethod,
                 headers: plainHeaders,
-                body: body || undefined,
+                body: hasBody ? body : undefined,
                 signal: signal || undefined
             };
 
@@ -58,6 +60,7 @@ async function initHandler() {
                 return await epoxy.fetch(url, init);
             }
             return await fetch(url, init);
+
 
         },
         async fetch(url, init) {
