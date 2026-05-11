@@ -1,3 +1,4 @@
+// Scramjet v2 Service Worker - v2.0.1 (Forced Update)
 importScripts('/worker/working.all.js');
 importScripts('/gmt/index.js'); // Bare-mux (gmt)
 
@@ -11,7 +12,6 @@ async function initHandler() {
     const { ScramjetFetchHandler, defaultConfig } = self.$scramjet;
     
     // Initialize BareMux client
-    // The worker is at /gmt/worker.js
     const baremux = new self.BareMux.BareClient('/gmt/worker.js');
 
     handler = new ScramjetFetchHandler({
