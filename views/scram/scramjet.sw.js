@@ -185,14 +185,48 @@ self.addEventListener('fetch', event => {
 
                 const transport = await getEpoxy();
                 if (transport) {
-                    console.log('[Scramjet v2 SW] Bypassing rewriter for:', targetUrl);
+                    console.log('[Scramjet v2 SW] Bypassing rewriter with basic fallback for:', targetUrl);
                     const res = await transport.request(
                         new URL(targetUrl), 
                         event.request.method, 
                         ['GET','HEAD'].includes(event.request.method.toUpperCase()) ? null : event.request.body, 
                         event.request.headers
                     );
-                    return toResponse(res);
+                    
+                    const response = toResponse(res);
+                    
+                    // If the response is HTML, we MUST perform basic rewriting to avoid CORS issues
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.includes('text/html')) {
+                        let text = await response.text();
+                        // Basic regex-based URL rewriter for emergency fallback
+                        const baseObj = new URL(targetUrl);
+                        text = text.replace(/(src|href|action)\s*=\s*["']([^"']+)["']/gi, (match, attr, val) => {
+                            if (val.startsWith('data:') || val.startsWith('blob:') || val.startsWith('javascript:') || val.startsWith('#')) return match;
+                            if (val.startsWith(SCRAM_PREFIX)) return match;
+                            try {
+                                const abs = new URL(val, baseObj.href).href;
+                                return `${attr}="${SCRAM_PREFIX}${encodeURIComponent(abs)}"`;
+                            } catch { return match; }
+                        });
+                        
+                        // Inject our safety scripts as well
+                        const injection = `
+                            <script>
+                            window.$scramjet$pushsourcemap = (...args) => {};
+                            console.warn('[Scramjet SW] Using basic rewriter fallback due to engine crash');
+                            </script>
+                        `;
+                        text = text.replace('<head>', '<head>' + injection);
+                        
+                        return new Response(text, {
+                            status: response.status,
+                            statusText: response.statusText,
+                            headers: response.headers
+                        });
+                    }
+                    
+                    return response;
                 }
                 throw new Error('Transport unavailable');
             } catch (bypassErr) {
