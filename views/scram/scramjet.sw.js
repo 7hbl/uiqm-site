@@ -173,20 +173,30 @@ self.addEventListener('fetch', event => {
             });
             return toResponse(response);
         } catch(e) {
-            console.error('[Scramjet v2 SW] Fetch error, attempting bypass:', e);
+            console.error('[Scramjet v2 SW] Fetch error, attempting raw transport bypass:', e);
             
-            // Bypass logic: Try to fetch without the rewriter
             try {
-                const bypassHeaders = new Headers(event.request.headers);
-                bypassHeaders.set('x-scramjet-bypass', 'true');
-                
-                const bypassRequest = new Request(event.request, {
-                    headers: bypassHeaders,
-                    redirect: 'follow'
-                });
-                
-                return await fetch(bypassRequest);
+                // Manually decode the target URL from the proxy path
+                const proxyPath = new URL(event.request.url).pathname.slice(SCRAM_PREFIX.length);
+                let targetUrl = proxyPath;
+                if (targetUrl.startsWith('network/')) targetUrl = targetUrl.slice(8);
+                targetUrl = decodeURIComponent(targetUrl);
+                if (!targetUrl.includes('://')) targetUrl = 'https://' + targetUrl;
+
+                const transport = await getEpoxy();
+                if (transport) {
+                    console.log('[Scramjet v2 SW] Bypassing rewriter for:', targetUrl);
+                    const res = await transport.request(
+                        new URL(targetUrl), 
+                        event.request.method, 
+                        ['GET','HEAD'].includes(event.request.method.toUpperCase()) ? null : event.request.body, 
+                        event.request.headers
+                    );
+                    return toResponse(res);
+                }
+                throw new Error('Transport unavailable');
             } catch (bypassErr) {
+                console.error('[Scramjet v2 SW] Bypass failed:', bypassErr);
                 return new Response('Proxy error: ' + e.message, { status: 500 });
             }
         }
