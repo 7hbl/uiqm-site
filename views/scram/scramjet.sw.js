@@ -208,25 +208,31 @@ self.addEventListener('fetch', event => {
                         let text = await response.text();
                         const baseObj = new URL(targetUrl);
                         
-                        // Safety script injection (Full Runtime Polyfill)
+                        // Safety script injection (Ultra Runtime Polyfill)
                         const safetyScript = `
 <script>
 (function() {
     if (window.__scramjet_emergency_active) return;
     window.__scramjet_emergency_active = true;
     const noop = () => {};
-    const pass = (o, p) => o ? o[p] : undefined;
+    const pass = (o, p) => (o && typeof o === 'object') ? o[p] : undefined;
     window.$scramjet$pushsourcemap = noop;
     window.$scramjet$prefix = "${SCRAM_PREFIX}";
     window.$scramjet$prop = pass;
     window.$scramjet$get = pass;
-    window.$scramjet$set = (o, p, v) => { if(o) o[p] = v; return v; };
-    window.$scramjet$call = (o, p, a) => o[p].apply(o, a);
-    window.$scramjet$apply = (o, p, a) => o[p].apply(o, a);
+    window.$scramjet$set = (o, p, v) => { if(o && typeof o === 'object') o[p] = v; return v; };
+    window.$scramjet$call = (o, p, a) => {
+        const fn = (o && typeof o === 'object') ? o[p] : null;
+        return typeof fn === 'function' ? fn.apply(o, a) : undefined;
+    };
+    window.$scramjet$apply = (o, p, a) => window.$scramjet$call(o, p, a);
     window.$scramjet$construct = (o, a) => new o(...a);
     window.$scramjet$deletenew = noop;
     window.$scramjet$unfurl = (o) => o;
-    console.warn('[Scramjet SW] Emergency Runtime Polyfill Active for ${targetUrl}');
+    window.$scramjet$wrap = (o) => o;
+    window.$scramjet$getSource = (o) => o;
+    window.$scramerr = (e) => console.error('[Scramjet Captured Error]', e);
+    console.warn('[Scramjet SW] Ultra Runtime Polyfill Active for ${targetUrl}');
 })();
 </script>`;
                         text = text.replace('<head>', '<head>' + safetyScript);
@@ -249,10 +255,17 @@ self.addEventListener('fetch', event => {
                         const jsPolyfill = `
 (function(){
     if(typeof window !== "undefined") {
-        window.$scramjet$pushsourcemap = window.$scramjet$pushsourcemap || (() => {});
-        window.$scramjet$prop = window.$scramjet$prop || ((o, p) => o ? o[p] : undefined);
-        window.$scramjet$get = window.$scramjet$get || ((o, p) => o ? o[p] : undefined);
-        window.$scramjet$call = window.$scramjet$call || ((o, p, a) => o[p].apply(o, a));
+        const noop = () => {};
+        const pass = (o, p) => (o && typeof o === 'object') ? o[p] : undefined;
+        window.$scramjet$pushsourcemap = window.$scramjet$pushsourcemap || noop;
+        window.$scramjet$prop = window.$scramjet$prop || pass;
+        window.$scramjet$get = window.$scramjet$get || pass;
+        window.$scramjet$call = window.$scramjet$call || ((o, p, a) => {
+            const fn = (o && typeof o === 'object') ? o[p] : null;
+            return typeof fn === 'function' ? fn.apply(o, a) : undefined;
+        });
+        window.$scramerr = window.$scramerr || noop;
+        window.$scramjet$wrap = window.$scramjet$wrap || ((o) => o);
     }
 })();\n`;
                         return new Response(jsPolyfill + text, { status: response.status, headers: response.headers });
