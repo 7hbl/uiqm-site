@@ -232,21 +232,21 @@ commands: for (let i = 2; i < process.argv.length; i++)
         console.log('[Build] Custom scramjet.sw.js -> scram/working.sw.js ✅ (overrode npm version)');
       }
 
-      // FINAL SYNTAX FIX: Ensure no invalid assignment targets or undefined property access exist
+      // FINAL SYNTAX FIX: Ensure no invalid assignment targets exist
       const scramjetBundle = join(rootPath, 'views/dist/scram/working.all.js');
       if (existsSync(scramjetBundle)) {
         let content = tryReadFile(scramjetBundle, import.meta.url, false);
         console.log('[Build] Applying Global Stability Patches to working.all.js...');
         
-        // Fix optional chaining assignments (the main esbuild crash)
-        content = content.replace(/this\.stack\?\.length=0/g, '(this.stack && (this.stack.length = 0))');
-        content = content.replace(/this\.buffers\?\.length=0/g, '(this.buffers && (this.buffers.length = 0))');
-        content = content.replace(/this\.foreignContext\?\.length=0/g, '(this.foreignContext && (this.foreignContext.length = 0))');
+        // Correctly fix assignments like this.stack.length = 0
+        // We use (obj.stack && (obj.stack.length = 0)) which is a valid expression
+        content = content.replace(/([a-zA-Z0-9_$]+)\.stack\??\.length\s*=\s*0/g, '($1.stack && ($1.stack.length = 0))');
+        content = content.replace(/([a-zA-Z0-9_$]+)\.buffers\??\.length\s*=\s*0/g, '($1.buffers && ($1.buffers.length = 0))');
+        content = content.replace(/([a-zA-Z0-9_$]+)\.foreignContext\??\.length\s*=\s*0/g, '($1.foreignContext && ($1.foreignContext.length = 0))');
         
-        // Fix potential "Cannot read properties of undefined (reading 'length')" crashes
-        // We look for .stack.length, .buffers.length, etc. and wrap them in safety checks
-        content = content.replace(/([a-zA-Z0-9_$]+)\.stack\.length/g, '($1.stack ? $1.stack.length : 0)');
-        content = content.replace(/([a-zA-Z0-9_$]+)\.buffers\.length/g, '($1.buffers ? $1.buffers.length : 0)');
+        // Safety check for reading length (only if not an assignment)
+        // This prevents the "Cannot read properties of undefined" crash
+        content = content.replace(/([a-zA-Z0-9_$]+)\.stack\.length(?!\s*=)/g, '($1.stack ? $1.stack.length : 0)');
         
         writeFileSync(scramjetBundle, content);
         console.log('[Build] Global Stability Patches applied ✅');
