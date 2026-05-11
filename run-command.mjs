@@ -218,16 +218,15 @@ commands: for (let i = 2; i < process.argv.length; i++)
                 
                 // 1. Fix "not iterable" errors in for...of loops
                 content = content.replace(/for\s*\(\s*(?:let|var|const)?\s+([a-zA-Z0-9_$]+)\s+of\s+([a-zA-Z0-9_$.]+)\.childNodes\s*\)/g, 'for(let $1 of ($2.childNodes||[]))');
-                
-                // 2. Aggressive .length null-safety for minified code
-                // Fixes: if(x.length), a=x.length, return x.length, etc.
+
+                // 2. Safe Optional Chaining for minified code
+                // Fixes: x.length -> x?.length, x.childNodes -> x?.childNodes
                 content = content
-                    .replace(/([a-zA-Z0-9_$]+\[[a-zA-Z0-9_$]+\])\.length/g, '($1?.length||0)')
-                    .replace(/([a-zA-Z0-9_$]+)\.childNodes/g, '($1?.childNodes||[])')
-                    .replace(/([a-zA-Z0-9_$]+)\.length(?!\s*=)/g, '($1?.length||0)');
+                    .replace(/\.childNodes\b/g, '?.childNodes')
+                    .replace(/\.length(?!\s*=)/g, '?.length');
                 
                 writeFileSync(destFile, content);
-                console.log(`[Build] Applied SUPER-AGGRESSIVE safety patches to ${file} ✅`);
+                console.log(`[Build] Applied Clean Safety Patches to ${file} ✅`);
               }
 
               console.log(`[Build] Copied ${file} -> ${name}/${targetName}`);
