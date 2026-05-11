@@ -288,7 +288,6 @@ self.addEventListener('fetch', event => {
                     
                     return response;
                 }
-                throw new Error('Transport unavailable');
             } catch (bypassErr) {
                 console.error('[Scramjet v2 SW] Bypass failed:', bypassErr);
                 return new Response('Proxy Critical Error: ' + e.message, { status: 500 });
