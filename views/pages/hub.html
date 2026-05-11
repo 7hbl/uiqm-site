@@ -319,17 +319,58 @@
             <div class="color-swatch" style="background: #ffaa00;" data-color="#ffaa00"></div>
             <div class="color-swatch" style="background: #ffffff;" data-color="#ffffff"></div>
             <div class="color-swatch" style="background: #aa00ff;" data-color="#aa00ff"></div>
+            <div class="color-swatch" style="background: #000; border: 1px solid #0f0; display: flex; align-items: center; justify-content: center; color: #0f0; font-size: 10px; font-weight: bold;" data-color="hacker">01</div>
         </div>
         <button class="btn" style="margin-top: 30px; width: 100%; justify-content: center;" onclick="closeSettings()">CLOSE</button>
     </div>
 
+    <canvas id="matrix-canvas" style="position: fixed; top: 0; left: 0; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 1s;"></canvas>
+
+    <style>
+        body[data-theme="hacker"] { background: #000; color: #0f0; }
+        body[data-theme="hacker"] .logo { color: #0f0; text-shadow: 0 0 10px #0f0; }
+        body[data-theme="hacker"] .btn { border-color: #0f0; color: #0f0; }
+        body[data-theme="hacker"] .btn:hover { background: #0f0; color: #000; }
+        body[data-theme="hacker"] .game-card { border-color: #050; }
+        body[data-theme="hacker"] .game-card:hover { border-color: #0f0; box-shadow: 0 0 20px rgba(0,255,0,0.3); }
+        body[data-theme="hacker"] .card-title { color: #0f0; }
+        body[data-theme="hacker"] .launch-btn { border-color: #0f0; }
+        body[data-theme="hacker"] .game-card:hover .launch-btn { background: #0f0; color: #000; }
+    </style>
+
     <script>
+        function initMatrix() {
+            const canvas = document.getElementById('matrix-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            const letters = "0101010101010101";
+            const fontSize = 16;
+            const columns = canvas.width / fontSize;
+            const drops = [];
+            for (let i = 0; i < columns; i++) drops[i] = 1;
+            function draw() {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#0f0";
+                ctx.font = fontSize + "px arial";
+                for (let i = 0; i < drops.length; i++) {
+                    const text = letters.charAt(Math.floor(Math.random() * letters.length));
+                    ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                    if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+                    drops[i]++;
+                }
+            }
+            setInterval(draw, 33);
+        }
+        initMatrix();
+
         const games = [
             { title: "I Have No Mouth, and I Must Scream", desc: "A psychological horror adventure where you must outsmart a malevolent AI in a series of twisted trials.", url: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/413.html", image: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/413.jpg" },
             { title: "CheeseRoll", desc: "A physics-based racing game where you chase a giant wheel of cheese down a steep, treacherous hill.", url: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/414.html", image: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/414.jpg" },
             { title: "Eggy Car", desc: "Navigate a wobbly, physics-driven car through challenging terrain in this quirky driving simulator.", url: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/415.html", image: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/415.jpg" },
             { title: "Overburden", desc: "A tense atmospheric horror game where you must manage a failing underground drill to survive.", url: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/416.html", image: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/416.jpg" },
-            { title: "Geometry Dash", desc: "Jump, fly, and flip your way through dangerous passages and spiky obstacles in this rhythm platformer.", url: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/440.html", image: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/417.jpg" },
+            { title: "Geometry Dash", desc: "Jump, fly, and flip your way through dangerous passages and spiky obstacles in this rhythm platformer.", url: "https://web-dashers.github.io/", image: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/417.jpg" },
             { title: "Brotato", desc: "A top-down arena shooter roguelite where you play a potato wielding up to 6 weapons at once.", url: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/418.html", image: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/366.jpg" },
             { title: "Serial Experiments Lain", desc: "A surreal, psychological journey into the Wired. Experience the cult classic in an interactive format.", url: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/419.html", image: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/419.jpg" },
             { title: "Stickman Duel", desc: "Engage in fast-paced stickman combat with various weapons and ragdoll physics.", url: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/420.html", image: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/420.jpg" },
@@ -554,7 +595,15 @@
         document.querySelectorAll('.color-swatch').forEach(swatch => {
             swatch.onclick = () => {
                 const color = swatch.dataset.color;
-                document.documentElement.style.setProperty('--glow', color);
+                const canvas = document.getElementById('matrix-canvas');
+                if (color === 'hacker') {
+                    document.body.setAttribute('data-theme', 'hacker');
+                    canvas.style.opacity = '0.3';
+                } else {
+                    document.body.removeAttribute('data-theme');
+                    document.documentElement.style.setProperty('--glow', color);
+                    canvas.style.opacity = '0';
+                }
                 document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
                 swatch.classList.add('active');
                 localStorage.setItem('hub-color', color);

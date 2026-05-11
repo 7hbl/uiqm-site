@@ -85,9 +85,9 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                     $$ |                                                            $$ |                                    \$$$$$$  |
                     \__|                                                            \__|                                     \______/ 
             </div>
-            <div class="line">uiqm web proxy</div>
-            <div class="line">@uiqm on discord for help</div>
-            <div class="line">created by - @uiqm on discord</div>
+            <div class="line">Huge shout out to <a class="fancy-link" href="https://github.com/QuiteAFancyEmerald" target="_blank">QuiteAFancyEmerald</a> for the web proxy this is js skidded <3</div>
+            <div class="line">Aswell as <a class="fancy-link" href="https://github.com/NoahsAmazingTutoringHelp" target="_blank">NoahsAmazingTutoringHelp</a> for the UBG <3</div>
+            <div class="line">Skidded by @uiqm</div>
             <br>
             <div class="line" id="status-line" style="color:yellow">Initializing Secure Channel...</div>
             <div class="line">Type <span style="color:white">help</span> for cmds or enter a URL to start.</div>
@@ -97,8 +97,41 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                 <input type="text" id="term-input" autofocus spellcheck="false" autocomplete="off" disabled>
             </form>
         </div>
+        <canvas id="matrix-canvas" style="position: fixed; top: 0; left: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 1s;"></canvas>
     </div>
+    <style>
+        .fancy-link { color: inherit; text-decoration: none; transition: all 0.3s; position: relative; }
+        .fancy-link:hover { color: #fff; text-shadow: none; }
+        .fancy-link:active, .fancy-link:focus { color: #fff; text-shadow: 0 0 10px #fff, 0 0 20px #fff; animation: glow-pulse 1s infinite alternate; }
+        @keyframes glow-pulse { from { text-shadow: 0 0 5px #fff; } to { text-shadow: 0 0 20px #fff, 0 0 30px #fff; } }
+        body[data-theme="hacker"] { background: #000; color: #00ff00; }
+        body[data-theme="hacker"] #terminal-shell { text-shadow: 0 0 5px #00ff00; }
+    </style>
     <script>
+    function initMatrix() {
+        const canvas = document.getElementById('matrix-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const letters = "0101010101010101";
+        const fontSize = 16;
+        const columns = canvas.width / fontSize;
+        const drops = [];
+        for (let i = 0; i < columns; i++) drops[i] = 1;
+        function draw() {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#0f0";
+            ctx.font = fontSize + "px arial";
+            for (let i = 0; i < drops.length; i++) {
+                const text = letters.charAt(Math.floor(Math.random() * letters.length));
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+                drops[i]++;
+            }
+        }
+        setInterval(draw, 33);
+    }
     function closeProxy() {
         document.getElementById('proxy-shell').style.display = 'none';
         document.getElementById('back-btn').style.display = 'none';
@@ -106,10 +139,12 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
         document.getElementById('term-input').focus();
     }
     document.addEventListener('DOMContentLoaded', async () => {
+        initMatrix();
         const input = document.getElementById('term-input'), output = document.getElementById('term-output-lines');
         const terminal = document.getElementById('terminal-shell'), frame = document.getElementById('proxy-frame');
         const loading = document.getElementById('proxy-loading'), proxyShell = document.getElementById('proxy-shell');
         const statusLine = document.getElementById('status-line'), backBtn = document.getElementById('back-btn');
+        const canvas = document.getElementById('matrix-canvas');
 
         const WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
         const BARE_MUX_WORKER = '/gmt/worker.js';
@@ -156,15 +191,23 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             const [base, ...args] = raw.split(' ');
             if (base === 'help') print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
             else if (base === 'creds') { 
-                print('Proxy Engine: <a href="https://github.com/QuiteAFancyEmerald" target="_blank" style="color:white;">QuiteAFancyEmerald</a>'); 
-                print('Games Hub: <a href="https://github.com/NoahsAmazingTutoringHelp" target="_blank" style="color:white;">NoahsAmazingTutoringHelp</a>', 'system');
-                print('UI & Terminal: <a href="https://github.com/7hbl" target="_blank" style="color:white;">@uiqm</a>', 'system'); 
+                print('Huge shout out to <a class="fancy-link" href="https://github.com/QuiteAFancyEmerald" target="_blank">QuiteAFancyEmerald</a> for the web proxy this is js skidded <3'); 
+                print('Aswell as <a class="fancy-link" href="https://github.com/NoahsAmazingTutoringHelp" target="_blank">NoahsAmazingTutoringHelp</a> for the UBG <3', 'system');
+                print('Skidded by @uiqm', 'system'); 
             }
             else if (base === 'games') {
                 print('Opening Games Hub...', 'system');
                 setTimeout(() => location.href = '/games', 500);
             }
-            else if (base === 'theme') { const c = args[0]?.toLowerCase(), v = ['red','green','blue','white','pink','purple','cyan']; if (v.includes(c)) { document.body.setAttribute('data-theme', c==='red'?'default':c); print(`Theme: ${c}`, 'system'); } }
+            else if (base === 'theme') { 
+                const c = args[0]?.toLowerCase(), v = ['red','green','blue','white','pink','purple','cyan','hacker']; 
+                if (v.includes(c)) { 
+                    document.body.setAttribute('data-theme', c==='red'?'default':c); 
+                    if (c === 'hacker') canvas.style.opacity = '0.3';
+                    else canvas.style.opacity = '0';
+                    print(`Theme: ${c}`, 'system'); 
+                } 
+            }
             else if (base === 'clear') output.innerHTML = '';
             else if (raw.includes('.') && !raw.includes(' ')) {
                 let url = raw; if (!url.startsWith('http')) url = 'https://' + url;
@@ -173,6 +216,7 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                 frame.src = sjEncode ? sjEncode(url) : (SCRAMJET_PREFIX + encodeURIComponent(url));
             } else print(`Command not found: ${base}`, 'system');
         };
+
 
         input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runCommand(input.value); input.value = ''; } });
         document.addEventListener('click', () => { if (!input.disabled) input.focus(); });

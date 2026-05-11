@@ -216,6 +216,15 @@ commands: for (let i = 2; i < process.argv.length; i++)
         }
       }
 
+      // CRITICAL: Re-copy our custom scramjet.sw.js AFTER npm files are copied,
+      // because the npm package overwrites it with its own minified version.
+      const customSwSrc = join(rootPath, 'views/scram/scramjet.sw.js');
+      const customSwDest = join(rootPath, 'views/dist/scram/working.sw.js');
+      if (existsSync(customSwSrc)) {
+        copyFileSync(customSwSrc, customSwDest);
+        console.log('[Build] Custom scramjet.sw.js -> scram/working.sw.js ✅ (overrode npm version)');
+      }
+
       // Minify the scripts and stylesheets upon compiling, if enabled in config.
       if (config.minifyScripts)
         await build({
