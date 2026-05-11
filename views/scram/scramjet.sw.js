@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.0.7 (Direct Fetch Transport)
+// Scramjet v2 Service Worker - v2.0.8 (Full Transport Interface)
 importScripts('/worker/working.all.js');
 
 const SCRAM_PREFIX = '/worker/';
@@ -8,10 +8,27 @@ async function initHandler() {
     if (handler) return handler;
     const { ScramjetFetchHandler, ScramjetHeaders, defaultConfig } = self.$scramjet;
 
-    // CRITICAL FIX: Use a direct fetch transport - BareClient uses SharedWorker
-    // which cannot communicate with Service Workers. This bypasses BareMux entirely.
+    // Scramjet v2 internally calls init(), request(), and fetch() on the transport.
+    // BareClient uses SharedWorker which can't talk to SW context, so we implement
+    // a minimal transport that uses native fetch directly.
     const transport = {
-        fetch: (url, init) => fetch(url, init)
+        async init() {},
+        async request(remote, headers, body, method, signal) {
+            try {
+                return await fetch(remote.toString(), {
+                    method: method || 'GET',
+                    headers: headers || {},
+                    body: body || undefined,
+                    signal: signal || undefined
+                });
+            } catch (e) {
+                throw e;
+            }
+        },
+        async fetch(url, init) {
+            return fetch(url, init);
+        },
+        async connect() {}
     };
 
     handler = new ScramjetFetchHandler({
@@ -32,7 +49,7 @@ async function initHandler() {
                         return decoded.includes('://') ? decoded : 'https://' + decoded;
                     } catch { return path; }
                 },
-                getInjectScripts: (_meta, _handler, script) => [script('/worker/working.all.js')]
+                getInjectScripts: (_m, _h, script) => [script('/worker/working.all.js')]
             },
             cookieJar: { getCookies: () => '', setCookies: () => {} }
         },
@@ -58,7 +75,9 @@ self.addEventListener('fetch', (event) => {
                 const h = await initHandler();
                 const { ScramjetHeaders } = self.$scramjet;
                 const sjHeaders = new ScramjetHeaders();
-                for (const [k, v] of event.request.headers.entries()) sjHeaders.set(k, v);
+                try {
+                    for (const [k, v] of event.request.headers.entries()) sjHeaders.set(k, v);
+                } catch (_) {}
                 return await h.handleFetch({
                     rawUrl: url,
                     method: event.request.method,
@@ -72,7 +91,7 @@ self.addEventListener('fetch', (event) => {
                 });
             } catch (e) {
                 console.error('[Scramjet v2 SW] Fetch error:', e);
-                return new Response('Proxy error: ' + e.message, { status: 500 });
+                return new Response('Proxy error: ' + e.message, { status: 500, headers: { 'Content-Type': 'text/plain' } });
             }
         })());
     }
