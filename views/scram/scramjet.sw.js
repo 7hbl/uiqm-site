@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.2.3 (Runtime Fix)
+// Scramjet v2 Service Worker - v2.2.4 (Rewriter Fix)
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
@@ -39,13 +39,9 @@ function toResponse(raw) {
         }
     } catch(e) {}
 
-    if (!h.has('content-type')) {
-        h.set('content-type', 'text/html; charset=UTF-8');
-    }
-
-    console.log(`[SW] Status: ${raw.status}, MIME: ${h.get('content-type')}`);
-
-    return new Response(raw.body, {
+    if (!h.has('content-type')) h.set('content-type', 'text/html; charset=UTF-8');
+    
+    return new Response(raw.body || null, {
         status: raw.status || 200,
         statusText: raw.statusText || 'OK',
         headers: h
@@ -61,10 +57,12 @@ async function initHandler() {
         ...rawEpoxy,
         async request(remote, method, body, headers, signal) {
             const res = await rawEpoxy.request(remote, method, body, headers, signal);
-            if (res && res.headers && !(res.headers instanceof Headers)) {
-                res.headers = new Headers(res.headers);
-            }
-            return res;
+            return {
+                body: res.body || null,
+                headers: (res.headers instanceof Headers) ? res.headers : new Headers(res.headers),
+                status: res.status || 200,
+                statusText: res.statusText || 'OK'
+            };
         }
     } : {
         async init() {},
@@ -72,11 +70,12 @@ async function initHandler() {
             const plain = {};
             if (headers) headers.forEach((v,k) => plain[k]=v);
             const m = (method||'GET').toUpperCase();
-            return fetch(remote.toString(), {
+            const r = await fetch(remote.toString(), {
                 method: m, headers: plain,
-                body: ['GET','HEAD'].includes(m) ? undefined : (body||undefined),
+                body: ['GET','HEAD'].includes(m) ? null : (body||null),
                 signal: signal||undefined
             });
+            return { body: r.body, headers: r.headers, status: r.status, statusText: r.statusText };
         },
         async fetch(url, init) { return fetch(url.toString(), init||{}); },
         connect() {}
@@ -87,7 +86,7 @@ async function initHandler() {
         crossOriginIsolated: false,
         context: {
             config: defaultConfig,
-            prefix: new URL(SCRAM_PREFIX, self.location.origin),
+            prefix: new URL(SCRAM_PREFIX, self.location.origin).href,
             interface: {
                 codecEncode: s => encodeURIComponent(s),
                 codecDecode: s => {
@@ -98,11 +97,8 @@ async function initHandler() {
                     try { const d = decodeURIComponent(p); return d.includes('://') ? d : 'https://'+d; }
                     catch { return p; }
                 },
-                // In v2, we must ensure the runtime globals are defined.
-                // We inject the bundle and a small bootstrapper.
                 getInjectScripts: (_m, _h, script) => [
                     script('/worker/working.all.js'),
-                    // This bootstrapper extracts the internal rewriter functions and makes them global
                     {
                         type: 'script',
                         content: `
@@ -113,10 +109,8 @@ async function initHandler() {
                                         transport: { request: () => { throw new Error("Client transport not initialized"); } }
                                     });
                                     client.hook();
-                                    // Manually expose common rewriter globals if hook() didn't do it globally enough
-                                    const runtime = client.wrapfn; 
-                                    window.$scramjet$pushsourcemap = (...args) => console.debug('sourcemap', ...args);
-                                } catch(e) { console.warn('Scramjet runtime bootstrapper failed:', e); }
+                                    window.$scramjet$pushsourcemap = (...args) => {};
+                                } catch(e) {}
                             }
                         `
                     }
@@ -148,10 +142,10 @@ self.addEventListener('fetch', event => {
             
             const isGetHead = ['GET','HEAD'].includes(event.request.method.toUpperCase());
             const raw = await h.handleFetch({
-                rawUrl: url,
+                rawUrl: url.href,
                 method: event.request.method,
                 initialHeaders: sjHeaders,
-                body: isGetHead ? undefined : event.request.body,
+                body: isGetHead ? null : event.request.body,
                 destination: event.request.destination,
                 mode: event.request.mode,
                 referrer: event.request.referrer,
