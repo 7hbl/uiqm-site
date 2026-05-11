@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.0.5 (Headers Object Fix)
+// Scramjet v2 Service Worker - v2.0.6 (Full Transport Fix)
 importScripts('/worker/working.all.js');
 importScripts('/gmt/index.js'); // Bare-mux (gmt)
 
@@ -13,6 +13,10 @@ async function initHandler() {
     
     // Initialize BareMux client
     const baremux = new self.BareMux.BareClient('/gmt/worker.js');
+    
+    // CRITICAL FIX: Scramjet v2 expects an .init() method on the transport
+    baremux.init = async () => {};
+    baremux.ready = true;
 
     handler = new ScramjetFetchHandler({
         transport: baremux,
@@ -73,11 +77,20 @@ self.addEventListener('fetch', (event) => {
                 const h = await initHandler();
                 const { ScramjetHeaders } = self.$scramjet;
                 
+                // Build headers carefully to ensure .clone() works
+                const sjHeaders = new ScramjetHeaders();
+                try {
+                    for (const [key, value] of event.request.headers.entries()) {
+                        sjHeaders.set(key, value);
+                    }
+                } catch (e) {
+                    console.warn('[Scramjet v2 SW] Header population warning:', e);
+                }
+
                 const response = await h.handleFetch({
                     rawUrl: url, 
                     method: event.request.method,
-                    // CRITICAL FIX: Use initialHeaders and wrap in ScramjetHeaders
-                    initialHeaders: new ScramjetHeaders(event.request.headers),
+                    initialHeaders: sjHeaders,
                     body: event.request.body,
                     destination: event.request.destination,
                     mode: event.request.mode,
