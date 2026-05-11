@@ -1,5 +1,5 @@
 importScripts('/worker/working.all.js');
-importScripts('/epoch/index.js'); // Epoxy
+importScripts('/gmt/index.js'); // Bare-mux (gmt)
 
 const SCRAM_PREFIX = '/worker/';
 
@@ -10,12 +10,12 @@ async function initHandler() {
 
     const { ScramjetFetchHandler, defaultConfig } = self.$scramjet;
     
-    // Use the global location to determine the Wisp URL
-    const wispUrl = (self.location.protocol === 'https:' ? 'wss' : 'ws') + '://' + self.location.host + '/cron/';
-    const transport = new self.EpoxyClient(wispUrl);
+    // Initialize BareMux client
+    // The worker is at /gmt/worker.js
+    const baremux = new self.BareMux.BareClient('/gmt/worker.js');
 
     handler = new ScramjetFetchHandler({
-        transport,
+        transport: baremux,
         crossOriginIsolated: false,
         context: {
             config: defaultConfig,
