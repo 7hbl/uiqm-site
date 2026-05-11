@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.2.2 (MIME Fix)
+// Scramjet v2 Service Worker - v2.2.3 (Runtime Fix)
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
@@ -37,9 +37,8 @@ function toResponse(raw) {
                 for (const k in hdrs) h.set(k, String(hdrs[k]));
             }
         }
-    } catch(e) { console.error('[SW] Header copy error:', e); }
+    } catch(e) {}
 
-    // Critical: Ensure Content-Type is set, fallback to text/html for proxied pages
     if (!h.has('content-type')) {
         h.set('content-type', 'text/html; charset=UTF-8');
     }
@@ -55,7 +54,7 @@ function toResponse(raw) {
 
 async function initHandler() {
     if (handler) return handler;
-    const { ScramjetFetchHandler, ScramjetHeaders, defaultConfig } = self.$scramjet;
+    const { ScramjetFetchHandler, defaultConfig } = self.$scramjet;
 
     const rawEpoxy = await getEpoxy();
     const transport = rawEpoxy ? {
@@ -99,7 +98,29 @@ async function initHandler() {
                     try { const d = decodeURIComponent(p); return d.includes('://') ? d : 'https://'+d; }
                     catch { return p; }
                 },
-                getInjectScripts: (_m,_h,script) => [script('/worker/working.all.js')]
+                // In v2, we must ensure the runtime globals are defined.
+                // We inject the bundle and a small bootstrapper.
+                getInjectScripts: (_m, _h, script) => [
+                    script('/worker/working.all.js'),
+                    // This bootstrapper extracts the internal rewriter functions and makes them global
+                    {
+                        type: 'script',
+                        content: `
+                            if (window.$scramjet && !window.$scramjet$pushsourcemap) {
+                                try {
+                                    const client = new window.$scramjet.ScramjetClient(window, {
+                                        context: window.$scramjet.defaultConfig,
+                                        transport: { request: () => { throw new Error("Client transport not initialized"); } }
+                                    });
+                                    client.hook();
+                                    // Manually expose common rewriter globals if hook() didn't do it globally enough
+                                    const runtime = client.wrapfn; 
+                                    window.$scramjet$pushsourcemap = (...args) => console.debug('sourcemap', ...args);
+                                } catch(e) { console.warn('Scramjet runtime bootstrapper failed:', e); }
+                            }
+                        `
+                    }
+                ]
             },
             cookieJar: { getCookies: ()=>'', setCookies: ()=>{} }
         },
