@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.3.2 (Final Foolproof Fix)
+// Scramjet v2 Service Worker - v2.3.3 (CORS Bypass Edition)
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
@@ -128,6 +128,8 @@ async function initHandler() {
             } catch(e) {}
         }
     });
+    // Store transport reference for fallback use
+    handler._transport = transport; 
     return handler;
 }
 
@@ -155,7 +157,6 @@ self.addEventListener('fetch', event => {
 
             const isGetHead = ['GET','HEAD'].includes(event.request.method.toUpperCase());
             
-            // FINAL FOOLPROOF SAFETY CATCH
             try {
                 const response = await h.handleFetch({
                     rawUrl: new URL(event.request.url),
@@ -170,15 +171,11 @@ self.addEventListener('fetch', event => {
                 });
                 return toResponse(response);
             } catch (coreError) {
-                console.warn('[FOOLPROOF Fix] Bypassing rewriter due to crash:', coreError);
-                // Fallback to standard fetch to keep the site alive
+                console.warn('[CORS Bypass Fix] Bypassing rewriter due to crash:', coreError);
+                // USE TRANSPORT FOR FALLBACK: This bypasses CORS and keeps the site alive
                 const decoded = h.context.interface.codecDecode(url.pathname.slice(SCRAM_PREFIX.length));
-                return fetch(decoded, {
-                    method: event.request.method,
-                    headers: event.request.headers,
-                    body: isGetHead ? null : event.request.body,
-                    redirect: 'follow'
-                });
+                const resp = await h._transport.request(new URL(decoded), event.request.method, isGetHead ? null : event.request.body, sjHeaders);
+                return toResponse(resp);
             }
         } catch(e) {
             console.error('[Scramjet v2 SW] Fatal error:', e);

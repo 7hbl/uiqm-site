@@ -172,8 +172,8 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ / $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                             }
                         }
                     });
-                    // Final binding fix for v2 encodeUrl
-                    sjEncode = url => client.encodeUrl(url);
+                    // Reliable manual encoding for v2
+                    sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
                 }
                 setStatus('Secure Channel Active. System ready.', '#00ff00');
                 input.disabled = false; input.focus();
