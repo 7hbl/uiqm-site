@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.0.4 (URL Object Fix)
+// Scramjet v2 Service Worker - v2.0.5 (Headers Object Fix)
 importScripts('/worker/working.all.js');
 importScripts('/gmt/index.js'); // Bare-mux (gmt)
 
@@ -9,7 +9,7 @@ let handler;
 async function initHandler() {
     if (handler) return handler;
 
-    const { ScramjetFetchHandler, defaultConfig } = self.$scramjet;
+    const { ScramjetFetchHandler, ScramjetHeaders, defaultConfig } = self.$scramjet;
     
     // Initialize BareMux client
     const baremux = new self.BareMux.BareClient('/gmt/worker.js');
@@ -71,11 +71,13 @@ self.addEventListener('fetch', (event) => {
         event.respondWith((async () => {
             try {
                 const h = await initHandler();
-                // CRITICAL FIX: Pass a URL OBJECT, not just a string
+                const { ScramjetHeaders } = self.$scramjet;
+                
                 const response = await h.handleFetch({
                     rawUrl: url, 
                     method: event.request.method,
-                    headers: event.request.headers,
+                    // CRITICAL FIX: Use initialHeaders and wrap in ScramjetHeaders
+                    initialHeaders: new ScramjetHeaders(event.request.headers),
                     body: event.request.body,
                     destination: event.request.destination,
                     mode: event.request.mode,
