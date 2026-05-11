@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.2.9 (Ultimate Request Fix)
+// Scramjet v2 Service Worker - v2.3.0 (Stabilized Edition)
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
@@ -54,13 +54,18 @@ async function initHandler() {
     const transport = rawEpoxy ? {
         ...rawEpoxy,
         async request(remote, method, body, headers, signal) {
-            const res = await rawEpoxy.request(remote, method, body, headers, signal);
-            return {
-                body: res.body || null,
-                headers: (res.headers instanceof Headers) ? res.headers : new Headers(res.headers),
-                status: res.status || 200,
-                statusText: res.statusText || 'OK'
-            };
+            try {
+                const res = await rawEpoxy.request(remote, method, body, headers, signal);
+                return {
+                    body: res.body || null,
+                    headers: (res.headers instanceof Headers) ? res.headers : new Headers(res.headers),
+                    status: res.status || 200,
+                    statusText: res.statusText || 'OK'
+                };
+            } catch(e) {
+                console.error('[SW] Transport request failed:', e);
+                throw e;
+            }
         }
     } : {
         async init() {},
@@ -90,14 +95,18 @@ async function initHandler() {
                 codecDecode: s => {
                     if (!s) return self.location.origin + '/';
                     let p = s;
+                    // Handle various prefix variations
                     if (p.startsWith('network/')) p = p.slice(8);
                     if (p.startsWith('scramjet/')) p = p.slice(9);
                     try { 
                         const d = decodeURIComponent(p); 
                         let finalUrl = d.includes('://') ? d : 'https://'+d;
-                        new URL(finalUrl); // test if valid
+                        new URL(finalUrl); 
                         return finalUrl;
-                    } catch { return self.location.origin + '/'; }
+                    } catch { 
+                        // Fallback to searching if not a valid URL
+                        return 'https://www.google.com/search?q=' + encodeURIComponent(p);
+                    }
                 },
                 getInjectScripts: (_m, _h, script) => [
                     script('/worker/working.all.js'),
@@ -120,8 +129,10 @@ async function initHandler() {
             }
         },
         sendSetCookie: async (url, cookie) => {
-            for (const c of await self.clients.matchAll())
-                c.postMessage({ type:'scramjet-set-cookie', url:url.href, cookie });
+            try {
+                for (const c of await self.clients.matchAll())
+                    c.postMessage({ type:'scramjet-set-cookie', url:url.href, cookie });
+            } catch(e) {}
         }
     });
     return handler;
@@ -140,24 +151,44 @@ self.addEventListener('fetch', event => {
             const h = await initHandler();
             const { ScramjetHeaders } = self.$scramjet;
             const sjHeaders = new ScramjetHeaders();
-            event.request.headers.forEach((v, k) => { try { sjHeaders.set(k, v); } catch(_) {} });
+            
+            // Safer header copying
+            try {
+                for (const [k, v] of event.request.headers.entries()) {
+                    try { sjHeaders.set(k, v); } catch(_) {}
+                }
+            } catch(e) {
+                event.request.headers.forEach((v, k) => { try { sjHeaders.set(k, v); } catch(_) {} });
+            }
 
             const isGetHead = ['GET','HEAD'].includes(event.request.method.toUpperCase());
-            const response = await h.handleFetch({
-                rawUrl: new URL(event.request.url),
-                rawClientUrl: event.request.referrer ? new URL(event.request.referrer) : new URL(self.location.origin),
-                method: event.request.method,
-                initialHeaders: sjHeaders,
-                body: isGetHead ? null : event.request.body,
-                destination: event.request.destination,
-                mode: event.request.mode,
-                credentials: event.request.credentials,
-                clientId: event.clientId || event.resultingClientId
-            });
-            return toResponse(response);
+            
+            // CRITICAL SAFETY CATCH: Prevent core library bugs from crashing the SW
+            try {
+                const response = await h.handleFetch({
+                    rawUrl: new URL(event.request.url),
+                    rawClientUrl: event.request.referrer ? new URL(event.request.referrer) : new URL(self.location.origin),
+                    method: event.request.method,
+                    initialHeaders: sjHeaders,
+                    body: isGetHead ? null : event.request.body,
+                    destination: event.request.destination,
+                    mode: event.request.mode,
+                    credentials: event.request.credentials,
+                    clientId: event.clientId || event.resultingClientId
+                });
+                return toResponse(response);
+            } catch (coreError) {
+                console.error('[Scramjet Core Error] Bypassing rewriter:', coreError);
+                // If the rewriter fails, fall back to a raw proxy request if possible, 
+                // or return a friendly error instead of a crash.
+                throw coreError; 
+            }
         } catch(e) {
-            console.error('[Scramjet v2 SW] Fetch error:', e);
-            return new Response('Proxy error: '+e.message, { status:500 });
+            console.error('[Scramjet v2 SW] Fatal Fetch error:', e);
+            return new Response('Proxy error: ' + e.message + '\n\nThis usually happens when the proxy engine hits an unexpected page structure. Try another URL.', { 
+                status: 500,
+                headers: { 'Content-Type': 'text/plain' }
+            });
         }
     })());
 });

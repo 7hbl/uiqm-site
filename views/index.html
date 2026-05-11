@@ -149,7 +149,7 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
 
         const WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
         const BARE_MUX_WORKER = '/gmt/worker.js';
-        const TRANSPORT_MJS = '/unix/index.mjs', SCRAMJET_PREFIX = '/worker/network/';
+        const TRANSPORT_MJS = '/unix/index.mjs', SCRAMJET_PREFIX = '/worker/';
 
         let sjEncode = null;
         const print = (h, c = '') => { const d = document.createElement('div'); d.className = 'line ' + c; d.innerHTML = h; output.appendChild(d); terminal.scrollTop = terminal.scrollHeight; };
@@ -168,19 +168,25 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                 await navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' });
                 
                 setStatus('Loading proxy engine...');
-                if (window.$scramjetLoadController) {
-                    const { ScramjetController } = await window.$scramjetLoadController();
-                    const sj = new ScramjetController({
-                        prefix: SCRAMJET_PREFIX,
-                        files: { wasm: '/worker/working.wasm.wasm', all: '/worker/working.all.js', sync: '/worker/working.sync.js' }
+                // Initialize Scramjet v2 Client
+                if (window.$scramjet) {
+                    const { ScramjetClient, defaultConfig } = window.$scramjet;
+                    const client = new ScramjetClient(window, {
+                        prefix: new URL(SCRAMJET_PREFIX, window.location.origin),
+                        context: defaultConfig,
+                        transport: {
+                            request: (url, method, body, headers, signal) => {
+                                // This is just a dummy for encoding, the SW handles the real work
+                                return fetch(url, { method, body, headers, signal });
+                            }
+                        }
                     });
-                    await sj.init();
-                    sjEncode = url => sj.encodeUrl(url);
+                    sjEncode = url => client.encodeUrl(url);
                 }
                 setStatus('Secure Channel Active. System ready.', '#00ff00');
                 input.disabled = false; input.focus();
             } catch (e) {
-                console.error(e);
+                console.error('[Proxy Init Error]', e);
                 setStatus('Ready.', '#00ff00');
                 input.disabled = false; input.focus();
             }

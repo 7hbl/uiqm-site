@@ -212,14 +212,19 @@ commands: for (let i = 2; i < process.argv.length; i++)
               const destFile = join(rootPath, 'views/dist', name, targetName);
               copyFileSync(srcFile, destFile);
               
-              // PATCH: Fix Scramjet core "childNodes" and "length" crash in minified bundle
+              // PATCH: Fix Scramjet core crashes in minified bundle
               if (file === 'scramjet_bundled.js' || file === 'working.all.js') {
                 let content = tryReadFile(destFile, import.meta.url, false);
-                // Specifically target for...of loops on .childNodes to prevent "not iterable" errors.
-                // We change "for(let p of d.root.childNodes)" to "for(let p of (d.root.childNodes||[]))"
+                
+                // 1. Fix "not iterable" errors in for...of loops
                 content = content.replace(/for\s*\(\s*(?:let|var|const)\s+([a-zA-Z0-9_$]+)\s+of\s+([a-zA-Z0-9_$.]+)\.childNodes\s*\)/g, 'for(let $1 of ($2.childNodes||[]))');
+                
+                // 2. Fix the specific "reading length" crash in the rewriter
+                // We find the pattern "if(variable.length > otherVariable)" and add a null check
+                content = content.replace(/if\s*\(([a-zA-Z0-9_$]+)\.length\s*>\s*([a-zA-Z0-9_$]+)\)/g, 'if(($1?.length||0)>$2)');
+                
                 writeFileSync(destFile, content);
-                console.log(`[Build] Patched ${file} with loop safety check ✅`);
+                console.log(`[Build] Applied safety patches to ${file} ✅`);
               }
 
               console.log(`[Build] Copied ${file} -> ${name}/${targetName}`);
