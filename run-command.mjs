@@ -310,7 +310,6 @@ commands: for (let i = 2; i < process.argv.length; i++)
                   ).arrayBuffer()
                 )
               );
-            }
             else if (
               recursive &&
               lstatSync(fileLocation).isDirectory() &&
