@@ -1,34 +1,70 @@
-// Scramjet v2 Service Worker - v2.0.8 (Full Transport Interface)
+// Scramjet v2 Service Worker - v2.0.9 (Epoxy Wisp Transport)
 importScripts('/worker/working.all.js');
+importScripts('/epoch/index.js'); // EpoxyClient - WebSocket-based, works in SW
 
 const SCRAM_PREFIX = '/worker/';
+const WISP_URL = (self.location.protocol === 'https:' ? 'wss' : 'ws') + '://' + self.location.host + '/cron/';
+
 let handler;
+let epoxyReady = false;
+let epoxyClient = null;
+
+async function getEpoxy() {
+    if (epoxyReady && epoxyClient) return epoxyClient;
+    try {
+        // EpoxyClient is the global exposed by /epoch/index.js
+        if (typeof self.EpoxyClient !== 'undefined') {
+            epoxyClient = new self.EpoxyClient(WISP_URL);
+            await epoxyClient.init();
+            epoxyReady = true;
+            return epoxyClient;
+        }
+    } catch (e) {
+        console.warn('[SW] EpoxyClient failed, falling back to direct fetch:', e.message);
+    }
+    return null;
+}
 
 async function initHandler() {
     if (handler) return handler;
     const { ScramjetFetchHandler, ScramjetHeaders, defaultConfig } = self.$scramjet;
 
-    // Scramjet v2 internally calls init(), request(), and fetch() on the transport.
-    // BareClient uses SharedWorker which can't talk to SW context, so we implement
-    // a minimal transport that uses native fetch directly.
     const transport = {
-        async init() {},
+        async init() {
+            await getEpoxy();
+        },
         async request(remote, headers, body, method, signal) {
-            try {
-                return await fetch(remote.toString(), {
+            const epoxy = await getEpoxy();
+            if (epoxy && typeof epoxy.fetch === 'function') {
+                return await epoxy.fetch(remote.toString(), {
                     method: method || 'GET',
                     headers: headers || {},
                     body: body || undefined,
                     signal: signal || undefined
                 });
-            } catch (e) {
-                throw e;
             }
+            // Fallback to native fetch
+            return await fetch(remote.toString(), {
+                method: method || 'GET',
+                headers: headers || {},
+                body: body || undefined,
+                signal: signal || undefined,
+                mode: 'cors'
+            });
         },
         async fetch(url, init) {
-            return fetch(url, init);
+            const epoxy = await getEpoxy();
+            if (epoxy && typeof epoxy.fetch === 'function') {
+                return await epoxy.fetch(url, init);
+            }
+            return await fetch(url, init);
         },
-        async connect() {}
+        async connect(url, protocols, requestHeaders, onopen, onmessage, onclose, onerror) {
+            const epoxy = await getEpoxy();
+            if (epoxy && typeof epoxy.connect === 'function') {
+                return epoxy.connect(url, protocols, requestHeaders, onopen, onmessage, onclose, onerror);
+            }
+        }
     };
 
     handler = new ScramjetFetchHandler({
@@ -91,7 +127,10 @@ self.addEventListener('fetch', (event) => {
                 });
             } catch (e) {
                 console.error('[Scramjet v2 SW] Fetch error:', e);
-                return new Response('Proxy error: ' + e.message, { status: 500, headers: { 'Content-Type': 'text/plain' } });
+                return new Response('Proxy error: ' + e.message, {
+                    status: 500,
+                    headers: { 'Content-Type': 'text/plain' }
+                });
             }
         })());
     }
