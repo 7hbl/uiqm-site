@@ -1,64 +1,44 @@
-// Scramjet v2 Service Worker - v2.0.6 (Full Transport Fix)
+// Scramjet v2 Service Worker - v2.0.7 (Direct Fetch Transport)
 importScripts('/worker/working.all.js');
-importScripts('/gmt/index.js'); // Bare-mux (gmt)
 
 const SCRAM_PREFIX = '/worker/';
-
 let handler;
 
 async function initHandler() {
     if (handler) return handler;
-
     const { ScramjetFetchHandler, ScramjetHeaders, defaultConfig } = self.$scramjet;
-    
-    // Initialize BareMux client
-    const baremux = new self.BareMux.BareClient('/gmt/worker.js');
-    
-    // CRITICAL FIX: Scramjet v2 expects an .init() method on the transport
-    baremux.init = async () => {};
-    baremux.ready = true;
+
+    // CRITICAL FIX: Use a direct fetch transport - BareClient uses SharedWorker
+    // which cannot communicate with Service Workers. This bypasses BareMux entirely.
+    const transport = {
+        fetch: (url, init) => fetch(url, init)
+    };
 
     handler = new ScramjetFetchHandler({
-        transport: baremux,
+        transport,
         crossOriginIsolated: false,
         context: {
             config: defaultConfig,
             prefix: new URL(SCRAM_PREFIX, self.location.origin),
             interface: {
-                codecEncode: (str) => encodeURIComponent(str), 
+                codecEncode: (str) => encodeURIComponent(str),
                 codecDecode: (str) => {
-                    if (!str) return "https://uiqm.lol/";
+                    if (!str) return 'https://uiqm.lol/';
                     let path = str;
                     if (path.startsWith('network/')) path = path.slice(8);
-                    if (!path) return "https://uiqm.lol/";
+                    if (!path) return 'https://uiqm.lol/';
                     try {
                         const decoded = decodeURIComponent(path);
-                        if (!decoded.includes('://')) return "https://" + decoded;
-                        return decoded;
-                    } catch {
-                        return path;
-                    }
+                        return decoded.includes('://') ? decoded : 'https://' + decoded;
+                    } catch { return path; }
                 },
-                getInjectScripts: (meta, handler, script) => {
-                    return [
-                        script('/worker/working.all.js')
-                    ];
-                }
+                getInjectScripts: (_meta, _handler, script) => [script('/worker/working.all.js')]
             },
-            cookieJar: {
-                getCookies: () => "",
-                setCookies: () => {}
-            }
+            cookieJar: { getCookies: () => '', setCookies: () => {} }
         },
         sendSetCookie: async (url, cookie) => {
             const clients = await self.clients.matchAll();
-            for (const client of clients) {
-                client.postMessage({
-                    type: 'scramjet-set-cookie',
-                    url: url.href,
-                    cookie: cookie
-                });
-            }
+            for (const c of clients) c.postMessage({ type: 'scramjet-set-cookie', url: url.href, cookie });
         },
         fetchDataUrl: async (url) => fetch(url),
         fetchBlobUrl: async (url) => fetch(url)
@@ -67,28 +47,20 @@ async function initHandler() {
 }
 
 self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
-    if (url.pathname.startsWith(SCRAM_PREFIX) && !url.pathname.endsWith('working.all.js') && !url.pathname.endsWith('working.sw.js') && !url.pathname.endsWith('working.wasm.wasm')) {
+    const skip = ['working.all.js', 'working.sw.js', 'working.wasm.wasm'];
+    if (url.pathname.startsWith(SCRAM_PREFIX) && !skip.some(s => url.pathname.endsWith(s))) {
         event.respondWith((async () => {
             try {
                 const h = await initHandler();
                 const { ScramjetHeaders } = self.$scramjet;
-                
-                // Build headers carefully to ensure .clone() works
                 const sjHeaders = new ScramjetHeaders();
-                try {
-                    for (const [key, value] of event.request.headers.entries()) {
-                        sjHeaders.set(key, value);
-                    }
-                } catch (e) {
-                    console.warn('[Scramjet v2 SW] Header population warning:', e);
-                }
-
-                const response = await h.handleFetch({
-                    rawUrl: url, 
+                for (const [k, v] of event.request.headers.entries()) sjHeaders.set(k, v);
+                return await h.handleFetch({
+                    rawUrl: url,
                     method: event.request.method,
                     initialHeaders: sjHeaders,
                     body: event.request.body,
@@ -98,10 +70,9 @@ self.addEventListener('fetch', (event) => {
                     credentials: event.request.credentials,
                     clientId: event.clientId || event.resultingClientId
                 });
-                return response;
             } catch (e) {
                 console.error('[Scramjet v2 SW] Fetch error:', e);
-                return fetch(event.request);
+                return new Response('Proxy error: ' + e.message, { status: 500 });
             }
         })());
     }

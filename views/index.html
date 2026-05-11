@@ -58,6 +58,9 @@
         @keyframes flicker { 0% { opacity: 0.17861; } 50% { opacity: 0.24387; } 100% { opacity: 0.17861; } }
         a { color: inherit; text-decoration: underline; font-weight: bold; }
         a:hover { filter: brightness(1.5); }
+        .fancy-link { color: #ffffff !important; text-decoration: none; font-weight: bold; transition: text-shadow 0.3s; }
+        .fancy-link:hover { text-shadow: 0 0 8px #fff, 0 0 18px #fff; animation: glow-pulse 0.8s infinite alternate; }
+        @keyframes glow-pulse { from { text-shadow: 0 0 5px #fff; } to { text-shadow: 0 0 20px #fff, 0 0 35px #fff; } }
     </style>
 </head>
 <body data-theme="default">
@@ -85,9 +88,6 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                     $$ |                                                            $$ |                                    \$$$$$$  |
                     \__|                                                            \__|                                     \______/ 
             </div>
-            <div class="line">Huge shout out to <a class="fancy-link" href="https://github.com/QuiteAFancyEmerald" target="_blank">QuiteAFancyEmerald</a> for the web proxy this is js skidded <3</div>
-            <div class="line">Aswell as <a class="fancy-link" href="https://github.com/NoahsAmazingTutoringHelp" target="_blank">NoahsAmazingTutoringHelp</a> for the UBG <3</div>
-            <div class="line">Skidded by @uiqm</div>
             <br>
             <div class="line" id="status-line" style="color:yellow">Initializing Secure Channel...</div>
             <div class="line">Type <span style="color:white">help</span> for cmds or enter a URL to start.</div>
@@ -192,7 +192,7 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             if (base === 'help') print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
             else if (base === 'creds') { 
                 print('Huge shout out to <a class="fancy-link" href="https://github.com/QuiteAFancyEmerald" target="_blank">QuiteAFancyEmerald</a> for the web proxy this is js skidded <3'); 
-                print('Aswell as <a class="fancy-link" href="https://github.com/NoahsAmazingTutoringHelp" target="_blank">NoahsAmazingTutoringHelp</a> for the UBG <3', 'system');
+                print('Aswell as <a class="fancy-link" href="https://github.com/NoahsAmazingTutoringHelp" target="_blank">NoahsAmazingTutoringHelp</a> for the UBG <3'); 
                 print('Skidded by @uiqm', 'system'); 
             }
             else if (base === 'games') {
