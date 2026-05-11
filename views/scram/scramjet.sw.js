@@ -33,8 +33,9 @@ async function initHandler() {
         async init() {
             await getEpoxy();
         },
-        async request(remote, headers, body, method, signal) {
-            // Convert headers to plain object - Scramjet passes custom Header objects
+        // BareClient transport interface: (remote, method, headers, body, signal)
+        async request(remote, method, headers, body, signal) {
+            // Convert headers to plain object
             let plainHeaders = {};
             try {
                 if (headers && typeof headers.entries === 'function') {
@@ -44,22 +45,20 @@ async function initHandler() {
                 }
             } catch (_) {}
 
-            const epoxy = await getEpoxy();
-            if (epoxy && typeof epoxy.fetch === 'function') {
-                return await epoxy.fetch(remote.toString(), {
-                    method: method || 'GET',
-                    headers: plainHeaders,
-                    body: body || undefined,
-                    signal: signal || undefined
-                });
-            }
-            // Fallback to native fetch
-            return await fetch(remote.toString(), {
+            const url = remote.toString ? remote.toString() : String(remote);
+            const init = {
                 method: method || 'GET',
                 headers: plainHeaders,
                 body: body || undefined,
                 signal: signal || undefined
-            });
+            };
+
+            const epoxy = await getEpoxy();
+            if (epoxy && typeof epoxy.fetch === 'function') {
+                return await epoxy.fetch(url, init);
+            }
+            return await fetch(url, init);
+
         },
         async fetch(url, init) {
             const safeInit = { ...init };
