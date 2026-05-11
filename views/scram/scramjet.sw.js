@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.2.8 (Standard API Fix)
+// Scramjet v2 Service Worker - v2.2.9 (Ultimate Request Fix)
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
@@ -87,9 +87,10 @@ async function initHandler() {
             interface: {
                 codecEncode: s => encodeURIComponent(s),
                 codecDecode: s => {
-                    if (!s) return 'https://uiqm.lol/';
+                    if (!s) return self.location.origin + '/';
                     let p = s;
                     if (p.startsWith('network/')) p = p.slice(8);
+                    if (p.startsWith('scramjet/')) p = p.slice(9);
                     try { 
                         const d = decodeURIComponent(p); 
                         return d.includes('://') ? d : 'https://'+d; 
@@ -134,8 +135,22 @@ self.addEventListener('fetch', event => {
     event.respondWith((async () => {
         try {
             const h = await initHandler();
-            // Passing the event directly is the intended way for Scramjet v2
-            const response = await h.handleFetch(event);
+            const { ScramjetHeaders } = self.$scramjet;
+            const sjHeaders = new ScramjetHeaders();
+            event.request.headers.forEach((v, k) => { try { sjHeaders.set(k, v); } catch(_) {} });
+
+            const isGetHead = ['GET','HEAD'].includes(event.request.method.toUpperCase());
+            const response = await h.handleFetch({
+                rawUrl: new URL(event.request.url),
+                rawClientUrl: event.request.referrer ? new URL(event.request.referrer) : new URL(self.location.origin),
+                method: event.request.method,
+                initialHeaders: sjHeaders,
+                body: isGetHead ? null : event.request.body,
+                destination: event.request.destination,
+                mode: event.request.mode,
+                credentials: event.request.credentials,
+                clientId: event.clientId || event.resultingClientId
+            });
             return toResponse(response);
         } catch(e) {
             console.error('[Scramjet v2 SW] Fetch error:', e);
