@@ -208,12 +208,26 @@ self.addEventListener('fetch', event => {
                         let text = await response.text();
                         const baseObj = new URL(targetUrl);
                         
-                        // Safety script injection (must be at the very top)
+                        // Safety script injection (Full Runtime Polyfill)
                         const safetyScript = `
 <script>
-window.$scramjet$pushsourcemap = () => {};
-window.$scramjet$prefix = "${SCRAM_PREFIX}";
-console.warn('[Scramjet SW] Emergency Fallback Active for ${targetUrl}');
+(function() {
+    if (window.__scramjet_emergency_active) return;
+    window.__scramjet_emergency_active = true;
+    const noop = () => {};
+    const pass = (o, p) => o ? o[p] : undefined;
+    window.$scramjet$pushsourcemap = noop;
+    window.$scramjet$prefix = "${SCRAM_PREFIX}";
+    window.$scramjet$prop = pass;
+    window.$scramjet$get = pass;
+    window.$scramjet$set = (o, p, v) => { if(o) o[p] = v; return v; };
+    window.$scramjet$call = (o, p, a) => o[p].apply(o, a);
+    window.$scramjet$apply = (o, p, a) => o[p].apply(o, a);
+    window.$scramjet$construct = (o, a) => new o(...a);
+    window.$scramjet$deletenew = noop;
+    window.$scramjet$unfurl = (o) => o;
+    console.warn('[Scramjet SW] Emergency Runtime Polyfill Active for ${targetUrl}');
+})();
 </script>`;
                         text = text.replace('<head>', '<head>' + safetyScript);
                         if (!text.includes(safetyScript)) text = safetyScript + text;
@@ -231,9 +245,17 @@ console.warn('[Scramjet SW] Emergency Fallback Active for ${targetUrl}');
                         
                     } else if (contentType.includes('javascript') || contentType.includes('application/x-javascript')) {
                         let text = await response.text();
-                        // Fix the missing globals in bypassed JS files
-                        text = `if(typeof window !== "undefined") { window.$scramjet$pushsourcemap = () => {}; }\n` + text;
-                        return new Response(text, { status: response.status, headers: response.headers });
+                        // Inject the polyfill into bypassed JS files as well
+                        const jsPolyfill = `
+(function(){
+    if(typeof window !== "undefined") {
+        window.$scramjet$pushsourcemap = window.$scramjet$pushsourcemap || (() => {});
+        window.$scramjet$prop = window.$scramjet$prop || ((o, p) => o ? o[p] : undefined);
+        window.$scramjet$get = window.$scramjet$get || ((o, p) => o ? o[p] : undefined);
+        window.$scramjet$call = window.$scramjet$call || ((o, p, a) => o[p].apply(o, a));
+    }
+})();\n`;
+                        return new Response(jsPolyfill + text, { status: response.status, headers: response.headers });
                     }
                     
                     return response;
