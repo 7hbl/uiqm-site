@@ -75,24 +75,15 @@
 
   const initializeScramjet = async () => {
     try {
-      const { ScramjetController } = await $scramjetLoadController();
+      // In Scramjet v2, we load the script on the main thread to hook APIs
+      const script = document.createElement('script');
+      script.src = '{{route}}{{/scram/scramjet.all.js}}';
+      document.head.appendChild(script);
+      
+      script.onload = () => {
+          console.log('Scramjet v2 Engine Loaded');
+      };
 
-      const scramjet = new ScramjetController({
-        prefix: '{{route}}{{/scram/network/}}',
-        files: {
-          wasm: '{{route}}{{/scram/scramjet.wasm.wasm}}',
-          all: '{{route}}{{/scram/scramjet.all.js}}',
-          sync: '{{route}}{{/scram/scramjet.sync.js}}',
-        },
-        flags: {
-          rewriterLogs: false,
-          naiiveRewriter: false,
-          scramitize: false,
-        },
-      });
-
-      console.log('Initializing ScramjetController');
-      scramjet.init();
       navigator.serviceWorker.register(
         swRoutes.sj[readStorage('HideAds') !== false ? 1 : 0]
       );

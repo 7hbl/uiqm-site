@@ -491,19 +491,19 @@
 
         const initProxy = async () => {
             try {
-                await window._proxyReady;
-                if (window.BareMux) {
-                    const conn = new BareMux.BareMuxConnection(BARE_MUX_WORKER);
-                    await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
-                }
-                if (window.$scramjetLoadController) {
-                    const { ScramjetController } = await window.$scramjetLoadController();
-                    const sj = new ScramjetController({
-                        prefix: SCRAMJET_PREFIX,
-                        files: { wasm: '/worker/working.wasm.wasm', all: '/worker/working.all.js', sync: '/worker/working.sync.js' }
+                if ('serviceWorker' in navigator) {
+                    await navigator.serviceWorker.register('/worker/working.sw.js', {
+                        scope: '/worker/'
                     });
-                    await sj.init();
-                    sjEncode = url => sj.encodeUrl(url);
+                    
+                    const script = document.createElement('script');
+                    script.src = '/worker/working.all.js';
+                    document.head.appendChild(script);
+                    script.onload = () => {
+                        console.log('Scramjet v2 Engine Loaded');
+                        // In v2, the rewriter is hooked automatically on script load
+                        sjEncode = url => '/worker/' + encodeURIComponent(url);
+                    };
                 }
                 document.getElementById('loading-screen').style.display = 'none';
             } catch (e) {

@@ -141,11 +141,11 @@ let altPaths = {
   'rammerhead-discord': 'rdis',
   /* Raw File Names */
   files: {
-    'scramjet.all.js': 'working.all.js',
+    'scramjet_bundled.js': 'working.all.js',
     'scramjet.sw.js': 'working.sw.js',
     'scramjet.sw-blacklist.js': 'working.sw-blacklist.js',
     'scramjet.sync.js': 'working.sync.js',
-    'scramjet.wasm.wasm': 'working.wasm.wasm',
+    'scramjet.wasm': 'working.wasm.wasm',
     'uv.handler.js': 'networking.handler.js',
     'uv.client.js': 'networking.client.js',
     'uv.bundle.js': 'networking.bundle.js',
