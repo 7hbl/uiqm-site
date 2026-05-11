@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.2.7 (Pathing Fix)
+// Scramjet v2 Service Worker - v2.2.8 (Standard API Fix)
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
@@ -65,11 +65,10 @@ async function initHandler() {
     } : {
         async init() {},
         async request(remote, method, body, headers, signal) {
-            const plain = {};
-            if (headers) headers.forEach((v,k) => plain[k]=v);
             const m = (method||'GET').toUpperCase();
             const r = await fetch(remote.toString(), {
-                method: m, headers: plain,
+                method: m, 
+                headers: headers || {},
                 body: ['GET','HEAD'].includes(m) ? null : (body||null),
                 signal: signal||undefined
             });
@@ -77,17 +76,6 @@ async function initHandler() {
         },
         async fetch(url, init) { return fetch(url.toString(), init||{}); },
         connect() {}
-    };
-
-    const codecDecode = s => {
-        if (!s) return 'https://uiqm.lol/';
-        let p = s;
-        if (p.startsWith('network/')) p = p.slice(8);
-        if (p.startsWith('scramjet/')) p = p.slice(9);
-        try { 
-            const d = decodeURIComponent(p); 
-            return d.includes('://') ? d : 'https://'+d; 
-        } catch { return p; }
     };
 
     handler = new ScramjetFetchHandler({
@@ -98,7 +86,15 @@ async function initHandler() {
             prefix: new URL(SCRAM_PREFIX, self.location.origin),
             interface: {
                 codecEncode: s => encodeURIComponent(s),
-                codecDecode,
+                codecDecode: s => {
+                    if (!s) return 'https://uiqm.lol/';
+                    let p = s;
+                    if (p.startsWith('network/')) p = p.slice(8);
+                    try { 
+                        const d = decodeURIComponent(p); 
+                        return d.includes('://') ? d : 'https://'+d; 
+                    } catch { return p; }
+                },
                 getInjectScripts: (_m, _h, script) => [
                     script('/worker/working.all.js'),
                     {
@@ -117,8 +113,7 @@ async function initHandler() {
                         `
                     }
                 ]
-            },
-            cookieJar: { getCookies: ()=>'', setCookies: ()=>{} }
+            }
         },
         sendSetCookie: async (url, cookie) => {
             for (const c of await self.clients.matchAll())
@@ -135,27 +130,13 @@ self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
     const skip = ['working.all.js','working.sw.js','working.wasm.wasm'];
     if (!url.pathname.startsWith(SCRAM_PREFIX) || skip.some(s => url.pathname.endsWith(s))) return;
+    
     event.respondWith((async () => {
         try {
             const h = await initHandler();
-            const { ScramjetHeaders } = self.$scramjet;
-            const sjHeaders = new ScramjetHeaders();
-            event.request.headers.forEach((v, k) => { try { sjHeaders.set(k, v); } catch(_) {} });
-            
-            const isGetHead = ['GET','HEAD'].includes(event.request.method.toUpperCase());
-            const raw = await h.handleFetch({
-                rawUrl: new URL(event.request.url), // Scramjet v2 needs the full intercepted URL here
-                rawClientUrl: event.request.referrer ? new URL(event.request.referrer) : new URL(self.location.origin),
-                method: event.request.method,
-                initialHeaders: sjHeaders,
-                body: isGetHead ? null : event.request.body,
-                destination: event.request.destination,
-                mode: event.request.mode,
-                referrer: event.request.referrer,
-                credentials: event.request.credentials,
-                clientId: event.clientId || event.resultingClientId
-            });
-            return toResponse(raw);
+            // Passing the event directly is the intended way for Scramjet v2
+            const response = await h.handleFetch(event);
+            return toResponse(response);
         } catch(e) {
             console.error('[Scramjet v2 SW] Fetch error:', e);
             return new Response('Proxy error: '+e.message, { status:500 });
