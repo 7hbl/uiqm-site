@@ -82,6 +82,7 @@ async function initHandler() {
         transport,
         crossOriginIsolated: false,
         context: {
+            cookieJar: new self.$scramjet.CookieJar(),
             config: defaultConfig,
             prefix: new URL(SCRAM_PREFIX, self.location.origin),
             interface: {
