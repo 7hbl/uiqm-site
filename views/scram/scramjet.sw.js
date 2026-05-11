@@ -150,6 +150,8 @@ self.addEventListener('fetch', event => {
     const skip = ['working.all.js','working.sw.js','working.wasm.wasm'];
     if (!url.pathname.startsWith(SCRAM_PREFIX) || skip.some(s => url.pathname.endsWith(s))) return;
     
+    if (event.request.headers.has('x-scramjet-bypass')) return;
+
     event.respondWith((async () => {
         try {
             const h = await initHandler();
@@ -171,8 +173,22 @@ self.addEventListener('fetch', event => {
             });
             return toResponse(response);
         } catch(e) {
-            console.error('[Scramjet v2 SW] Fetch error:', e);
-            return new Response('Proxy error: '+e.message, { status:500 });
+            console.error('[Scramjet v2 SW] Fetch error, attempting bypass:', e);
+            
+            // Bypass logic: Try to fetch without the rewriter
+            try {
+                const bypassHeaders = new Headers(event.request.headers);
+                bypassHeaders.set('x-scramjet-bypass', 'true');
+                
+                const bypassRequest = new Request(event.request, {
+                    headers: bypassHeaders,
+                    redirect: 'follow'
+                });
+                
+                return await fetch(bypassRequest);
+            } catch (bypassErr) {
+                return new Response('Proxy error: ' + e.message, { status: 500 });
+            }
         }
     })());
 });
