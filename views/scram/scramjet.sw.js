@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.2.4 (Rewriter Fix)
+// Scramjet v2 Service Worker - v2.2.5 (URL Fix)
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
@@ -81,22 +81,26 @@ async function initHandler() {
         connect() {}
     };
 
+    const codecDecode = s => {
+        if (!s) return 'https://uiqm.lol/';
+        let p = s;
+        if (p.startsWith('network/')) p = p.slice(8);
+        if (!p) return 'https://uiqm.lol/';
+        try { 
+            const d = decodeURIComponent(p); 
+            return d.includes('://') ? d : 'https://'+d; 
+        } catch { return p; }
+    };
+
     handler = new ScramjetFetchHandler({
         transport,
         crossOriginIsolated: false,
         context: {
             config: defaultConfig,
-            prefix: new URL(SCRAM_PREFIX, self.location.origin).href,
+            prefix: new URL(SCRAM_PREFIX, self.location.origin),
             interface: {
                 codecEncode: s => encodeURIComponent(s),
-                codecDecode: s => {
-                    if (!s) return 'https://uiqm.lol/';
-                    let p = s;
-                    if (p.startsWith('network/')) p = p.slice(8);
-                    if (!p) return 'https://uiqm.lol/';
-                    try { const d = decodeURIComponent(p); return d.includes('://') ? d : 'https://'+d; }
-                    catch { return p; }
-                },
+                codecDecode,
                 getInjectScripts: (_m, _h, script) => [
                     script('/worker/working.all.js'),
                     {
@@ -123,6 +127,7 @@ async function initHandler() {
                 c.postMessage({ type:'scramjet-set-cookie', url:url.href, cookie });
         }
     });
+    handler._codecDecode = codecDecode; // Store for easy access
     return handler;
 }
 
@@ -140,9 +145,13 @@ self.addEventListener('fetch', event => {
             const sjHeaders = new ScramjetHeaders();
             event.request.headers.forEach((v, k) => { try { sjHeaders.set(k, v); } catch(_) {} });
             
+            // Decode the destination URL from the path
+            const path = url.pathname.slice(SCRAM_PREFIX.length);
+            const decodedUrl = h._codecDecode(path);
+            
             const isGetHead = ['GET','HEAD'].includes(event.request.method.toUpperCase());
             const raw = await h.handleFetch({
-                rawUrl: url.href,
+                rawUrl: decodedUrl,
                 method: event.request.method,
                 initialHeaders: sjHeaders,
                 body: isGetHead ? null : event.request.body,
