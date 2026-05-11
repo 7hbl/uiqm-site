@@ -93,8 +93,10 @@ async function initHandler() {
                     if (p.startsWith('scramjet/')) p = p.slice(9);
                     try { 
                         const d = decodeURIComponent(p); 
-                        return d.includes('://') ? d : 'https://'+d; 
-                    } catch { return p; }
+                        let finalUrl = d.includes('://') ? d : 'https://'+d;
+                        new URL(finalUrl); // test if valid
+                        return finalUrl;
+                    } catch { return self.location.origin + '/'; }
                 },
                 getInjectScripts: (_m, _h, script) => [
                     script('/worker/working.all.js'),
