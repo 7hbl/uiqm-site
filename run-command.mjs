@@ -217,14 +217,17 @@ commands: for (let i = 2; i < process.argv.length; i++)
                 let content = tryReadFile(destFile, import.meta.url, false);
                 
                 // 1. Fix "not iterable" errors in for...of loops
-                content = content.replace(/for\s*\(\s*(?:let|var|const)\s+([a-zA-Z0-9_$]+)\s+of\s+([a-zA-Z0-9_$.]+)\.childNodes\s*\)/g, 'for(let $1 of ($2.childNodes||[]))');
+                content = content.replace(/for\s*\(\s*(?:let|var|const)?\s+([a-zA-Z0-9_$]+)\s+of\s+([a-zA-Z0-9_$.]+)\.childNodes\s*\)/g, 'for(let $1 of ($2.childNodes||[]))');
                 
-                // 2. Fix the specific "reading length" crash in the rewriter
-                // We find the pattern "if(variable.length > otherVariable)" and add a null check
-                content = content.replace(/if\s*\(([a-zA-Z0-9_$]+)\.length\s*>\s*([a-zA-Z0-9_$]+)\)/g, 'if(($1?.length||0)>$2)');
+                // 2. Aggressive .length null-safety for minified code
+                // Fixes: if(x.length), a=x.length, return x.length, etc.
+                content = content
+                    .replace(/([a-zA-Z0-9_$]+\[[a-zA-Z0-9_$]+\])\.length/g, '($1?.length||0)')
+                    .replace(/([a-zA-Z0-9_$]+)\.childNodes/g, '($1?.childNodes||[])')
+                    .replace(/([a-zA-Z0-9_$]+)\.length(?!\s*=)/g, '($1?.length||0)');
                 
                 writeFileSync(destFile, content);
-                console.log(`[Build] Applied safety patches to ${file} ✅`);
+                console.log(`[Build] Applied SUPER-AGGRESSIVE safety patches to ${file} ✅`);
               }
 
               console.log(`[Build] Copied ${file} -> ${name}/${targetName}`);
@@ -307,6 +310,7 @@ commands: for (let i = 2; i < process.argv.length; i++)
                   ).arrayBuffer()
                 )
               );
+            }
             else if (
               recursive &&
               lstatSync(fileLocation).isDirectory() &&
