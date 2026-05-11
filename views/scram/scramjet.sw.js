@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.0.3 (Robust URL Fix)
+// Scramjet v2 Service Worker - v2.0.4 (URL Object Fix)
 importScripts('/worker/working.all.js');
 importScripts('/gmt/index.js'); // Bare-mux (gmt)
 
@@ -23,14 +23,12 @@ async function initHandler() {
             interface: {
                 codecEncode: (str) => encodeURIComponent(str), 
                 codecDecode: (str) => {
-                    if (!str) return "https://uiqm.lol/"; // Fallback for empty target
+                    if (!str) return "https://uiqm.lol/";
                     let path = str;
-                    // Handle both /worker/ and /worker/network/
                     if (path.startsWith('network/')) path = path.slice(8);
                     if (!path) return "https://uiqm.lol/";
                     try {
                         const decoded = decodeURIComponent(path);
-                        // Ensure it's a valid URL string
                         if (!decoded.includes('://')) return "https://" + decoded;
                         return decoded;
                     } catch {
@@ -73,8 +71,9 @@ self.addEventListener('fetch', (event) => {
         event.respondWith((async () => {
             try {
                 const h = await initHandler();
+                // CRITICAL FIX: Pass a URL OBJECT, not just a string
                 const response = await h.handleFetch({
-                    rawUrl: event.request.url,
+                    rawUrl: url, 
                     method: event.request.method,
                     headers: event.request.headers,
                     body: event.request.body,
