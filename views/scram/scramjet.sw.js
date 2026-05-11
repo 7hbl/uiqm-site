@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.2.5 (URL Fix)
+// Scramjet v2 Service Worker - v2.2.6 (URL Object Fix)
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
@@ -85,6 +85,7 @@ async function initHandler() {
         if (!s) return 'https://uiqm.lol/';
         let p = s;
         if (p.startsWith('network/')) p = p.slice(8);
+        if (p.startsWith('scramjet/')) p = p.slice(9);
         if (!p) return 'https://uiqm.lol/';
         try { 
             const d = decodeURIComponent(p); 
@@ -127,7 +128,7 @@ async function initHandler() {
                 c.postMessage({ type:'scramjet-set-cookie', url:url.href, cookie });
         }
     });
-    handler._codecDecode = codecDecode; // Store for easy access
+    handler._codecDecode = codecDecode;
     return handler;
 }
 
@@ -145,13 +146,13 @@ self.addEventListener('fetch', event => {
             const sjHeaders = new ScramjetHeaders();
             event.request.headers.forEach((v, k) => { try { sjHeaders.set(k, v); } catch(_) {} });
             
-            // Decode the destination URL from the path
             const path = url.pathname.slice(SCRAM_PREFIX.length);
             const decodedUrl = h._codecDecode(path);
             
             const isGetHead = ['GET','HEAD'].includes(event.request.method.toUpperCase());
             const raw = await h.handleFetch({
-                rawUrl: decodedUrl,
+                rawUrl: new URL(decodedUrl),
+                rawClientUrl: event.request.referrer ? new URL(event.request.referrer) : new URL(self.location.origin),
                 method: event.request.method,
                 initialHeaders: sjHeaders,
                 body: isGetHead ? null : event.request.body,
