@@ -81,7 +81,7 @@
 $$\   $$\ $$\  $$$$$$\  $$$$$$\$$$$\        $$\  $$\  $$\  $$$$$$\  $$$$$$$\         $$$$$$\   $$$$$$\   $$$$$$\  $$\   $$\ $$\   $$\ 
 $$ |  $$ |$$ |$$  __$$\ $$  _$$  _$$\       $$ | $$ | $$ |$$  __$$\ $$  __$$\       $$  __$$\ $$  __$$\ $$  __$$\ \$$\ $$  |$$ |  $$ |
 $$ |  $$ |$$ |$$ /  $$ |$$ / $$ / $$ |      $$ | $$ | $$ |$$$$$$$$ |$$ |  $$ |      $$ /  $$ |$$ |  \__|$$ /  $$ | \$$$$  / $$ |  $$ |
-$$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |      $$ |  $$ |$$ |      $$ |  $$ | $$  $$<  $$ |  $$ |
+$$ |  $$ |$$ |$$ |  $$ |$$ | $$ / $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |      $$ |  $$ |$$ |      $$ |  $$ | $$  $$<  $$ |  $$ |
 \$$$$$$  |$$ |\$$$$$$$ |$$ | $$ | $$ |      \$$$$$\$$$$  |\$$$$$$$\ $$$$$$$  |      $$$$$$$  |$$ |      \$$$$$$  |$$  /\$$\ \$$$$$$$ |
  \______/ \__| \____$$ |\__| \__| \__|       \_____\____/  \_______|\_______/       $$  ____/ \__|       \______/ \__/  \__| \____$$ |
                     $$ |                                                            $$ |                                    $$\   $$ |
@@ -100,14 +100,6 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
         </div>
         <canvas id="matrix-canvas" style="position: fixed; top: 0; left: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 1s;"></canvas>
     </div>
-    <style>
-        .fancy-link { color: inherit; text-decoration: none; transition: all 0.3s; position: relative; }
-        .fancy-link:hover { color: #fff; text-shadow: none; }
-        .fancy-link:active, .fancy-link:focus { color: #fff; text-shadow: 0 0 10px #fff, 0 0 20px #fff; animation: glow-pulse 1s infinite alternate; }
-        @keyframes glow-pulse { from { text-shadow: 0 0 5px #fff; } to { text-shadow: 0 0 20px #fff, 0 0 30px #fff; } }
-        body[data-theme="hacker"] { background: #000; color: #00ff00; }
-        body[data-theme="hacker"] #terminal-shell { text-shadow: 0 0 5px #00ff00; }
-    </style>
     <script>
     function initMatrix() {
         const canvas = document.getElementById('matrix-canvas');
@@ -168,7 +160,7 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                 await navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' });
                 
                 setStatus('Loading proxy engine...');
-                // Initialize Scramjet v2 Client
+                // Initialize Scramjet v2 Client correctly
                 if (window.$scramjet) {
                     const { ScramjetClient, defaultConfig } = window.$scramjet;
                     const client = new ScramjetClient(window, {
@@ -176,7 +168,6 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                         context: defaultConfig,
                         transport: {
                             request: (url, method, body, headers, signal) => {
-                                // This is just a dummy for encoding, the SW handles the real work
                                 return fetch(url, { method, body, headers, signal });
                             }
                         }
@@ -223,7 +214,6 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                 frame.src = sjEncode ? sjEncode(url) : (SCRAMJET_PREFIX + encodeURIComponent(url));
             } else print(`Command not found: ${base}`, 'system');
         };
-
 
         input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runCommand(input.value); input.value = ''; } });
         document.addEventListener('click', () => { if (!input.disabled) input.focus(); });

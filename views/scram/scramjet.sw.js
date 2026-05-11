@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.3.0 (Stabilized Edition)
+// Scramjet v2 Service Worker - v2.3.1 (ASAP Safety Fix)
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
@@ -62,10 +62,7 @@ async function initHandler() {
                     status: res.status || 200,
                     statusText: res.statusText || 'OK'
                 };
-            } catch(e) {
-                console.error('[SW] Transport request failed:', e);
-                throw e;
-            }
+            } catch(e) { throw e; }
         }
     } : {
         async init() {},
@@ -95,7 +92,6 @@ async function initHandler() {
                 codecDecode: s => {
                     if (!s) return self.location.origin + '/';
                     let p = s;
-                    // Handle various prefix variations
                     if (p.startsWith('network/')) p = p.slice(8);
                     if (p.startsWith('scramjet/')) p = p.slice(9);
                     try { 
@@ -103,10 +99,7 @@ async function initHandler() {
                         let finalUrl = d.includes('://') ? d : 'https://'+d;
                         new URL(finalUrl); 
                         return finalUrl;
-                    } catch { 
-                        // Fallback to searching if not a valid URL
-                        return 'https://www.google.com/search?q=' + encodeURIComponent(p);
-                    }
+                    } catch { return 'https://www.google.com/search?q=' + encodeURIComponent(p); }
                 },
                 getInjectScripts: (_m, _h, script) => [
                     script('/worker/working.all.js'),
@@ -152,7 +145,6 @@ self.addEventListener('fetch', event => {
             const { ScramjetHeaders } = self.$scramjet;
             const sjHeaders = new ScramjetHeaders();
             
-            // Safer header copying
             try {
                 for (const [k, v] of event.request.headers.entries()) {
                     try { sjHeaders.set(k, v); } catch(_) {}
@@ -163,7 +155,7 @@ self.addEventListener('fetch', event => {
 
             const isGetHead = ['GET','HEAD'].includes(event.request.method.toUpperCase());
             
-            // CRITICAL SAFETY CATCH: Prevent core library bugs from crashing the SW
+            // ASAP SAFETY CATCH: If handleFetch crashes, manually proxy the request
             try {
                 const response = await h.handleFetch({
                     rawUrl: new URL(event.request.url),
@@ -178,17 +170,15 @@ self.addEventListener('fetch', event => {
                 });
                 return toResponse(response);
             } catch (coreError) {
-                console.error('[Scramjet Core Error] Bypassing rewriter:', coreError);
-                // If the rewriter fails, fall back to a raw proxy request if possible, 
-                // or return a friendly error instead of a crash.
-                throw coreError; 
+                console.warn('[ASAP Fix] Bypassing rewriter due to crash:', coreError);
+                // Last resort: decoding the URL and requesting it directly via transport
+                const decoded = h.context.interface.codecDecode(url.pathname.slice(SCRAM_PREFIX.length));
+                const resp = await h.transport.request(new URL(decoded), event.request.method, isGetHead ? null : event.request.body, sjHeaders);
+                return toResponse(resp);
             }
         } catch(e) {
-            console.error('[Scramjet v2 SW] Fatal Fetch error:', e);
-            return new Response('Proxy error: ' + e.message + '\n\nThis usually happens when the proxy engine hits an unexpected page structure. Try another URL.', { 
-                status: 500,
-                headers: { 'Content-Type': 'text/plain' }
-            });
+            console.error('[Scramjet v2 SW] Fatal error:', e);
+            return new Response('Proxy Fatal Error. Try refreshing.', { status: 500 });
         }
     })());
 });
