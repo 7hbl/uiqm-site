@@ -287,11 +287,10 @@ self.addEventListener('fetch', event => {
                     }
                     
                     return response;
+                } catch (bypassErr) {
+                    console.error('[Scramjet v2 SW] Bypass failed:', bypassErr);
+                    return new Response('Proxy Critical Error: ' + bypassErr.message, { status: 500 });
                 }
-            } catch (bypassErr) {
-                console.error('[Scramjet v2 SW] Bypass failed:', bypassErr);
-                return new Response('Proxy Critical Error: ' + e.message, { status: 500 });
             }
-        }
-    })());
-});
+        })());
+    });
