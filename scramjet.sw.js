@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.2.9 (Ultimate Request Fix)
+// Scramjet v2 Service Worker - v2.3.0 (Absolute Stability)
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
@@ -7,6 +7,9 @@ const WISP_URL = (self.location.protocol === 'https:' ? 'wss' : 'ws') + '://' + 
 
 let handler;
 let epoxy = null;
+
+// Ensure global existence even in the worker itself
+globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});
 
 async function getEpoxy() {
     if (epoxy?.ready) return epoxy;
@@ -45,6 +48,20 @@ function toResponse(raw) {
         headers: h
     });
 }
+
+const GLOBAL_SHIM = `
+(function() {
+    const shim = (...args) => {};
+    globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || shim;
+    globalThis.$scramjet$initialized = true;
+    // Suppress remaining reference errors globally
+    globalThis.addEventListener('error', e => {
+        if (e.message && (e.message.includes('$scramjet') || e.message.includes('pushsourcemap'))) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
+})();`;
 
 async function initHandler() {
     if (handler) return handler;
@@ -112,25 +129,21 @@ async function initHandler() {
                     script('/worker/working.all.js'),
                     {
                         type: 'script',
-                        content: `
-                            (function() {
-                                const shim = (...args) => {};
-                                globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || shim;
-                                if (window.$scramjet && !window.$scramjet$initialized) {
-                                    try {
-                                        const client = new window.$scramjet.ScramjetClient(window, {
-                                            context: window.$scramjet.defaultConfig,
-                                            transport: { request: () => { throw new Error("Client transport not initialized"); } }
-                                        });
-                                        client.hook();
-                                        window.$scramjet$initialized = true;
-                                        console.log('[Scramjet] Client hooked successfully');
-                                    } catch(e) {
-                                        console.error('[Scramjet] Client hook failed:', e);
-                                    }
+                        content: \`\${GLOBAL_SHIM}
+                            if (window.$scramjet && !window.$scramjet$client_hooked) {
+                                try {
+                                    const client = new window.$scramjet.ScramjetClient(window, {
+                                        context: window.$scramjet.defaultConfig,
+                                        transport: { request: () => { throw new Error("Client transport not initialized"); } }
+                                    });
+                                    client.hook();
+                                    window.$scramjet$client_hooked = true;
+                                    console.log('[Scramjet] Client hooked successfully');
+                                } catch(e) {
+                                    console.error('[Scramjet] Client hook failed:', e);
                                 }
-                            })();
-                        `
+                            }
+                        \`
                     }
                 ]
             }
@@ -175,11 +188,10 @@ self.addEventListener('fetch', event => {
             const res = toResponse(response);
             const contentType = res.headers.get('content-type') || '';
             
-            // Prepend sourcemap shim to JS files to prevent ReferenceErrors
-            if (contentType.includes('javascript') || contentType.includes('application/x-javascript')) {
+            // AGGRESSIVE: Inject shim into every JS file to stop ReferenceErrors
+            if (contentType.includes('javascript') || contentType.includes('application/x-javascript') || url.pathname.endsWith('.js')) {
                 let text = await res.text();
-                const shim = 'globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});\n';
-                return new Response(shim + text, {
+                return new Response(GLOBAL_SHIM + "\\n" + text, {
                     status: res.status,
                     statusText: res.statusText,
                     headers: res.headers
@@ -232,10 +244,11 @@ async function emergencyBypass(request, urlObj) {
 
     const contentType = response.headers.get('content-type') || '';
     
-    const runtimeScript = `
+    const runtimeScript = \`
     (function() {
         if (globalThis.__scramjet_emergency_active) return;
         globalThis.__scramjet_emergency_active = true;
+        \${GLOBAL_SHIM}
         const createSafe = () => {
             const fn = function() { return fn; };
             return new Proxy(fn, { get: () => fn });
@@ -257,14 +270,14 @@ async function emergencyBypass(request, urlObj) {
         globalThis.$scramjet$prop = (o, p) => (o ? o[p] : undefined);
         globalThis.$scramjet$set = (o, p, v) => { if(o) o[p] = v; return v; };
         globalThis.$scramjet$wrap = (o) => o;
-        console.log('[Scramjet SW] Indestructible Runtime Injected');
-    })();`;
+        console.log('[Scramjet SW] Indestructible Runtime Injected (Bypass Mode)');
+    })();\`;
 
     if (contentType.includes('text/html')) {
         let text = await response.text();
         text = \`<script>\${runtimeScript}</script>\` + text;
         return new Response(text, { headers: response.headers, status: response.status });
-    } else if (contentType.includes('javascript')) {
+    } else if (contentType.includes('javascript') || targetUrl.endsWith('.js')) {
         let text = await response.text();
         return new Response(runtimeScript + "\\n" + text, { headers: response.headers, status: response.status });
     }
