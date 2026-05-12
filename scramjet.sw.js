@@ -129,7 +129,7 @@ async function initHandler() {
                     script('/worker/working.all.js'),
                     {
                         type: 'script',
-                        content: \`\${GLOBAL_SHIM}
+                        content: `${GLOBAL_SHIM}
                             if (window.$scramjet && !window.$scramjet$client_hooked) {
                                 try {
                                     const client = new window.$scramjet.ScramjetClient(window, {
@@ -143,7 +143,7 @@ async function initHandler() {
                                     console.error('[Scramjet] Client hook failed:', e);
                                 }
                             }
-                        \`
+                        `
                     }
                 ]
             }
@@ -191,7 +191,7 @@ self.addEventListener('fetch', event => {
             // AGGRESSIVE: Inject shim into every JS file to stop ReferenceErrors
             if (contentType.includes('javascript') || contentType.includes('application/x-javascript') || url.pathname.endsWith('.js')) {
                 let text = await res.text();
-                return new Response(GLOBAL_SHIM + "\\n" + text, {
+                return new Response(GLOBAL_SHIM + "\n" + text, {
                     status: res.status,
                     statusText: res.statusText,
                     headers: res.headers
@@ -244,11 +244,11 @@ async function emergencyBypass(request, urlObj) {
 
     const contentType = response.headers.get('content-type') || '';
     
-    const runtimeScript = \`
+    const runtimeScript = `
     (function() {
         if (globalThis.__scramjet_emergency_active) return;
         globalThis.__scramjet_emergency_active = true;
-        \${GLOBAL_SHIM}
+        ${GLOBAL_SHIM}
         const createSafe = () => {
             const fn = function() { return fn; };
             return new Proxy(fn, { get: () => fn });
@@ -271,15 +271,15 @@ async function emergencyBypass(request, urlObj) {
         globalThis.$scramjet$set = (o, p, v) => { if(o) o[p] = v; return v; };
         globalThis.$scramjet$wrap = (o) => o;
         console.log('[Scramjet SW] Indestructible Runtime Injected (Bypass Mode)');
-    })();\`;
+    })();`;
 
     if (contentType.includes('text/html')) {
         let text = await response.text();
-        text = \`<script>\${runtimeScript}</script>\` + text;
+        text = `<script>${runtimeScript}</script>` + text;
         return new Response(text, { headers: response.headers, status: response.status });
     } else if (contentType.includes('javascript') || targetUrl.endsWith('.js')) {
         let text = await response.text();
-        return new Response(runtimeScript + "\\n" + text, { headers: response.headers, status: response.status });
+        return new Response(runtimeScript + "\n" + text, { headers: response.headers, status: response.status });
     }
     
     return response;
