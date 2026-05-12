@@ -225,7 +225,10 @@ commands: for (let i = 2; i < process.argv.length; i++)
 
       // CRITICAL: Re-copy our custom scramjet.sw.js AFTER npm files are copied,
       // because the npm package overwrites it with its own minified version.
-      const customSwSrc = join(rootPath, 'views/scram/scramjet.sw.js');
+      // Note: In the Git repo, the source might be at the root or in views/scram/
+      let customSwSrc = join(rootPath, 'views/scram/scramjet.sw.js');
+      if (!existsSync(customSwSrc)) customSwSrc = join(rootPath, 'scramjet.sw.js');
+      
       const customSwDest = join(rootPath, 'views/dist/scram/working.sw.js');
       if (existsSync(customSwSrc)) {
         copyFileSync(customSwSrc, customSwDest);
@@ -239,16 +242,19 @@ commands: for (let i = 2; i < process.argv.length; i++)
         console.log('[Build] Applying Global Stability Patches to working.all.js...');
         
         // Correctly fix assignments like this.stack.length = 0
-        // We use (obj.stack && (obj.stack.length = 0)) which is a valid expression
         content = content.replace(/([\w$]+)\.stack\??\.length\s*=\s*0/g, '($1.stack && ($1.stack.length = 0))');
         content = content.replace(/([\w$]+)\.buffers\??\.length\s*=\s*0/g, '($1.buffers && ($1.buffers.length = 0))');
         content = content.replace(/([\w$]+)\.foreignContext\??\.length\s*=\s*0/g, '($1.foreignContext && ($1.foreignContext.length = 0))');
         
-        // Safety check for reading length (only if not an assignment)
-        // This prevents the "Cannot read properties of undefined" crash
-        content = content.replace(/([\w$]+)\.stack\.length(?!\s*=)/g, '($1.stack ? $1.stack.length : 0)');
-        content = content.replace(/([\w$]+)\.buffers\.length(?!\s*=)/g, '($1.buffers ? $1.buffers.length : 0)');
-        content = content.replace(/([\w$]+)\.foreignContext\.length(?!\s*=)/g, '($1.foreignContext ? $1.foreignContext.length : 0)');
+        // Safety check for reading length (using optional chaining for modern browser compatibility)
+        content = content.replace(/([\w$]+)\.stack\.length(?!\s*=)/g, '($1.stack?.length||0)');
+        content = content.replace(/([\w$]+)\.buffers\.length(?!\s*=)/g, '($1.buffers?.length||0)');
+        content = content.replace(/([\w$]+)\.foreignContext\.length(?!\s*=)/g, '($1.foreignContext?.length||0)');
+        content = content.replace(/([\w$]+)\.children\.length(?!\s*=)/g, '($1.children?.length||0)');
+        content = content.replace(/([\w$]+)\.keys\.length(?!\s*=)/g, '($1.keys?.length||0)');
+        
+        // Final catch-all for .length in loops if the variable is a single letter (common minified crash)
+        content = content.replace(/([^\w$])([a-zA-Z])\.length(?!\s*=)/g, '$1($2?.length||0)');
         
         writeFileSync(scramjetBundle, content);
         console.log('[Build] Global Stability Patches applied ✅');
@@ -370,10 +376,6 @@ commands: for (let i = 2; i < process.argv.length; i++)
       break;
     }
 
-    /* Kill all node processes and fully reset PM2. To be used for debugging.
-     * Using npx pm2 monit, or npx pm2 list in the terminal will also bring up
-     * more PM2 debugging tools.
-     */
     case 'kill':
       if (process.platform === 'win32')
         exec(
@@ -391,11 +393,6 @@ commands: for (let i = 2; i < process.argv.length; i++)
         );
       break;
 
-    /* Make a temporary server solely to test startup errors. The server will
-     * stop the command if there is an error, and restart itself otherwise.
-     * This uses the same command for both Windows and other platforms, but
-     * consequently forces the server to stay completely silent after startup.
-     */
     case 'workflow': {
       const tempServer = fork(
         fileURLToPath(new URL('./backend.js', import.meta.url)),
@@ -406,8 +403,6 @@ commands: for (let i = 2; i < process.argv.length; i++)
         }
       );
       tempServer.stderr.on('data', (stderr) => {
-        // The temporary server will print startup errors that aren't deprecation
-        // warnings; stop the process and return an error exit code upon doing so.
         if (stderr.toString().indexOf('DeprecationWarning') >= 0)
           return console.log(stderr.toString());
         console.error(stderr.toString());
@@ -415,13 +410,9 @@ commands: for (let i = 2; i < process.argv.length; i++)
         process.exitCode = 1;
       });
       tempServer.stdout.on('data', () => {
-        // There are no startup errors by this point, so kill the server and start
-        // over. The restart alters stdio to prevent the workflow check from hanging.
         tempServer.kill();
         const server = fork(
           fileURLToPath(new URL('./backend.js', import.meta.url)),
-          // The stdio: 'ignore' makes the server completely silent, yet it is also
-          // why this works for Windows when the start command's version does not.
           { cwd: process.cwd(), stdio: 'ignore', detached: true }
         );
         server.unref();
@@ -431,8 +422,6 @@ commands: for (let i = 2; i < process.argv.length; i++)
       tempServer.disconnect();
       break;
     }
-
-    // No default case.
   }
 
 process.exitCode = process.exitCode || 0;

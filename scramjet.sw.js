@@ -11,7 +11,7 @@ let epoxy = null;
 async function getEpoxy() {
     if (epoxy?.ready) return epoxy;
     try {
-        const EpoxyTransport = self.EpxMod?.default || self.EpxMod?.EpoxyTransport || self.EpxMod;
+        const EpoxyTransport = self.EpoxyTransport || self.EpxMod?.default || self.EpxMod?.EpoxyTransport || self.EpxMod;
         if (typeof EpoxyTransport === 'function' || (EpoxyTransport && typeof EpoxyTransport.prototype?.init === 'function')) {
             const t = new EpoxyTransport({ wisp: WISP_URL });
             await t.init();
@@ -90,7 +90,6 @@ async function initHandler() {
                 codecDecode: s => {
                     if (!s) return self.location.origin + '/';
                     let p = s;
-                    // Standard prefixes used by this site
                     if (p.startsWith('network/')) p = p.slice(8);
                     else if (p.startsWith('scramjet/')) p = p.slice(9);
                     else if (p.startsWith('worker/')) p = p.slice(7);
@@ -101,7 +100,6 @@ async function initHandler() {
                         new URL(finalUrl); 
                         return finalUrl;
                     } catch { 
-                        // Fallback: try to see if p itself is a URL
                         try {
                             new URL(p);
                             return p;
@@ -150,6 +148,8 @@ self.addEventListener('fetch', event => {
     const skip = ['working.all.js','working.sw.js','working.wasm.wasm'];
     if (!url.pathname.startsWith(SCRAM_PREFIX) || skip.some(s => url.pathname.endsWith(s))) return;
     
+    if (event.request.headers.has('x-scramjet-bypass')) return;
+
     event.respondWith((async () => {
         try {
             const h = await initHandler();
@@ -157,13 +157,12 @@ self.addEventListener('fetch', event => {
             const sjHeaders = new ScramjetHeaders();
             event.request.headers.forEach((v, k) => { try { sjHeaders.set(k, v); } catch(_) {} });
 
-            const isGetHead = ['GET','HEAD'].includes(event.request.method.toUpperCase());
             const response = await h.handleFetch({
-                rawUrl: new URL(event.request.url),
-                rawClientUrl: event.request.referrer ? new URL(event.request.referrer) : new URL(self.location.origin),
+                rawUrl: url,
+                rawClientUrl: event.request.referrer ? new URL(event.request.referrer) : null,
+                body: event.request.body,
                 method: event.request.method,
-                initialHeaders: sjHeaders,
-                body: isGetHead ? null : event.request.body,
+                headers: sjHeaders,
                 destination: event.request.destination,
                 mode: event.request.mode,
                 credentials: event.request.credentials,
@@ -171,8 +170,86 @@ self.addEventListener('fetch', event => {
             });
             return toResponse(response);
         } catch(e) {
-            console.error('[Scramjet v2 SW] Fetch error:', e);
-            return new Response('Proxy error: '+e.message, { status:500 });
+            console.error('[Scramjet v2 SW] Rewriter crashed, using Epoxy bypass:', e);
+            return await emergencyBypass(event.request, url);
         }
     })());
 });
+
+async function emergencyBypass(request, urlObj) {
+    let targetUrl = urlObj.pathname.slice(SCRAM_PREFIX.length) + urlObj.search;
+    if (targetUrl.startsWith('network/')) targetUrl = targetUrl.slice(8);
+    targetUrl = decodeURIComponent(targetUrl);
+    if (!targetUrl.includes('://')) targetUrl = 'https://' + targetUrl;
+
+    console.log('[Scramjet v2 SW] Emergency Bypass (Epoxy) for:', targetUrl);
+    
+    let response;
+    try {
+        const ep = await getEpoxy();
+        if (ep) {
+            const res = await ep.request(new URL(targetUrl), request.method, request.body, request.headers);
+            response = toResponse(res);
+        }
+    } catch (e) { console.log('[SW] Epoxy bypass failed'); }
+
+    if (!response) {
+        try {
+            const direct = await fetch(targetUrl, { mode: 'cors', credentials: 'omit' });
+            if (direct.ok) response = direct;
+        } catch (e) {}
+    }
+
+    if (!response) {
+        const bareServers = ['https://tomp.app/bare/', 'https://bare.benroberts.dev/'];
+        for (const server of bareServers) {
+            try {
+                const res = await fetch(server, { headers: { 'x-bare-url': targetUrl } });
+                if (res.ok) { response = res; break; }
+            } catch (e) {}
+        }
+    }
+
+    if (!response) return new Response('Proxy Critical Error: All bypass tiers failed for ' + targetUrl, { status: 500 });
+
+    const contentType = response.headers.get('content-type') || '';
+    
+    const runtimeScript = `
+    (function() {
+        if (window.__scramjet_emergency_active) return;
+        window.__scramjet_emergency_active = true;
+        const createSafe = () => {
+            const fn = function() { return fn; };
+            return new Proxy(fn, { get: () => fn });
+        };
+        const safe = createSafe();
+        window.$scramjet$pushsourcemap = () => {};
+        window.$scramjet$initialized = true;
+        window.$scramerr = (e) => console.warn('[Scramjet Suppressed]', e);
+        window.$scramjet$get = (o, p) => {
+            if (!o) return safe;
+            if (p === 'location' && (o === window || o === document)) return window.location;
+            return o[p] === undefined ? safe : o[p];
+        };
+        window.$scramjet$call = (o, p, a) => {
+            const fn = (o && o[p]);
+            return typeof fn === 'function' ? fn.apply(o, a) : safe;
+        };
+        window.$scramjet$apply = (o, p, a) => window.$scramjet$call(o, p, a);
+        window.$scramjet$prop = (o, p) => (o ? o[p] : undefined);
+        window.$scramjet$set = (o, p, v) => { if(o) o[p] = v; return v; };
+        window.$scramjet$wrap = (o) => o;
+        console.log('[Scramjet SW] Indestructible Runtime Injected');
+    })();`;
+
+    if (contentType.includes('text/html')) {
+        let text = await response.text();
+        text = \`<script>\${runtimeScript}</script>\` + text;
+        return new Response(text, { headers: response.headers, status: response.status });
+    } else if (contentType.includes('javascript')) {
+        let text = await response.text();
+        return new Response(runtimeScript + "\\n" + text, { headers: response.headers, status: response.status });
+    }
+    
+    return response;
+}
