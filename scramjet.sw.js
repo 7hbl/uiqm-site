@@ -113,20 +113,23 @@ async function initHandler() {
                     {
                         type: 'script',
                         content: `
-                            window.$scramjet$pushsourcemap = (...args) => {};
-                            if (window.$scramjet && !window.$scramjet$initialized) {
-                                try {
-                                    const client = new window.$scramjet.ScramjetClient(window, {
-                                        context: window.$scramjet.defaultConfig,
-                                        transport: { request: () => { throw new Error("Client transport not initialized"); } }
-                                    });
-                                    client.hook();
-                                    window.$scramjet$initialized = true;
-                                    console.log('[Scramjet] Client hooked successfully');
-                                } catch(e) {
-                                    console.error('[Scramjet] Client hook failed:', e);
+                            (function() {
+                                const shim = (...args) => {};
+                                globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || shim;
+                                if (window.$scramjet && !window.$scramjet$initialized) {
+                                    try {
+                                        const client = new window.$scramjet.ScramjetClient(window, {
+                                            context: window.$scramjet.defaultConfig,
+                                            transport: { request: () => { throw new Error("Client transport not initialized"); } }
+                                        });
+                                        client.hook();
+                                        window.$scramjet$initialized = true;
+                                        console.log('[Scramjet] Client hooked successfully');
+                                    } catch(e) {
+                                        console.error('[Scramjet] Client hook failed:', e);
+                                    }
                                 }
-                            }
+                            })();
                         `
                     }
                 ]
@@ -168,7 +171,22 @@ self.addEventListener('fetch', event => {
                 credentials: event.request.credentials,
                 clientId: event.clientId || event.resultingClientId
             });
-            return toResponse(response);
+            
+            const res = toResponse(response);
+            const contentType = res.headers.get('content-type') || '';
+            
+            // Prepend sourcemap shim to JS files to prevent ReferenceErrors
+            if (contentType.includes('javascript') || contentType.includes('application/x-javascript')) {
+                let text = await res.text();
+                const shim = 'globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});\n';
+                return new Response(shim + text, {
+                    status: res.status,
+                    statusText: res.statusText,
+                    headers: res.headers
+                });
+            }
+            
+            return res;
         } catch(e) {
             console.error('[Scramjet v2 SW] Rewriter crashed, using Epoxy bypass:', e);
             return await emergencyBypass(event.request, url);
@@ -216,29 +234,29 @@ async function emergencyBypass(request, urlObj) {
     
     const runtimeScript = `
     (function() {
-        if (window.__scramjet_emergency_active) return;
-        window.__scramjet_emergency_active = true;
+        if (globalThis.__scramjet_emergency_active) return;
+        globalThis.__scramjet_emergency_active = true;
         const createSafe = () => {
             const fn = function() { return fn; };
             return new Proxy(fn, { get: () => fn });
         };
         const safe = createSafe();
-        window.$scramjet$pushsourcemap = () => {};
-        window.$scramjet$initialized = true;
-        window.$scramerr = (e) => console.warn('[Scramjet Suppressed]', e);
-        window.$scramjet$get = (o, p) => {
+        globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});
+        globalThis.$scramjet$initialized = true;
+        globalThis.$scramerr = (e) => console.warn('[Scramjet Suppressed]', e);
+        globalThis.$scramjet$get = (o, p) => {
             if (!o) return safe;
             if (p === 'location' && (o === window || o === document)) return window.location;
             return o[p] === undefined ? safe : o[p];
         };
-        window.$scramjet$call = (o, p, a) => {
+        globalThis.$scramjet$call = (o, p, a) => {
             const fn = (o && o[p]);
             return typeof fn === 'function' ? fn.apply(o, a) : safe;
         };
-        window.$scramjet$apply = (o, p, a) => window.$scramjet$call(o, p, a);
-        window.$scramjet$prop = (o, p) => (o ? o[p] : undefined);
-        window.$scramjet$set = (o, p, v) => { if(o) o[p] = v; return v; };
-        window.$scramjet$wrap = (o) => o;
+        globalThis.$scramjet$apply = (o, p, a) => globalThis.$scramjet$call(o, p, a);
+        globalThis.$scramjet$prop = (o, p) => (o ? o[p] : undefined);
+        globalThis.$scramjet$set = (o, p, v) => { if(o) o[p] = v; return v; };
+        globalThis.$scramjet$wrap = (o) => o;
         console.log('[Scramjet SW] Indestructible Runtime Injected');
     })();`;
 
