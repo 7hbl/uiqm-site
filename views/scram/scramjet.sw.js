@@ -183,24 +183,54 @@ self.addEventListener('fetch', event => {
                 targetUrl = decodeURIComponent(targetUrl);
                 if (!targetUrl.includes('://')) targetUrl = 'https://' + targetUrl;
 
-                console.log('[Scramjet v2 SW] Emergency Bypass using Bare Server for:', targetUrl);
+                console.log('[Scramjet v2 SW] Emergency Bypass for:', targetUrl);
                 
-                // Use Bare server directly for fallback to avoid CORS/404 issues
-                const bareServer = location.origin + '/bare/';
-                const response = await fetch(bareServer, {
-                    headers: {
-                        'x-bare-url': targetUrl,
-                        'x-bare-headers': JSON.stringify({
-                            'User-Agent': navigator.userAgent,
-                            'Accept': '*/*',
-                            'Referer': targetUrl
-                        }),
-                        'x-bare-forward-headers': '[]'
-                    },
-                    credentials: 'omit'
-                });
+                let response;
+                // Tier 1: Direct Fetch (Works for CORS-enabled sites like Githack)
+                try {
+                    const direct = await fetch(targetUrl, {
+                        mode: 'cors',
+                        credentials: 'omit',
+                        headers: { 'Accept': '*/*' }
+                    });
+                    if (direct.ok) response = direct;
+                } catch (e) {
+                    console.log('[Scramjet v2 SW] Direct fetch failed, trying Bare...');
+                }
 
-                if (!response.ok) throw new Error('Bare fallback failed with status ' + response.status);
+                // Tier 2: Bare Server Fallbacks
+                if (!response) {
+                    const bareServers = [
+                        location.origin + '/bare/',
+                        location.origin + '/network/bare/',
+                        location.origin + '/worker/bare/',
+                        'https://tomp.app/bare/' // Public fallback
+                    ];
+
+                    for (const server of bareServers) {
+                        try {
+                            const res = await fetch(server, {
+                                headers: {
+                                    'x-bare-url': targetUrl,
+                                    'x-bare-headers': JSON.stringify({
+                                        'User-Agent': navigator.userAgent,
+                                        'Accept': '*/*',
+                                        'Referer': targetUrl
+                                    }),
+                                    'x-bare-forward-headers': '[]'
+                                },
+                                credentials: 'omit'
+                            });
+                            if (res.ok) {
+                                response = res;
+                                console.log('[Scramjet v2 SW] Bare bypass successful using:', server);
+                                break;
+                            }
+                        } catch (e) {}
+                    }
+                }
+
+                if (!response) throw new Error('All bypass tiers failed for ' + targetUrl);
 
                 const contentType = response.headers.get('content-type') || '';
                 

@@ -240,13 +240,15 @@ commands: for (let i = 2; i < process.argv.length; i++)
         
         // Correctly fix assignments like this.stack.length = 0
         // We use (obj.stack && (obj.stack.length = 0)) which is a valid expression
-        content = content.replace(/([a-zA-Z0-9_$]+)\.stack\??\.length\s*=\s*0/g, '($1.stack && ($1.stack.length = 0))');
-        content = content.replace(/([a-zA-Z0-9_$]+)\.buffers\??\.length\s*=\s*0/g, '($1.buffers && ($1.buffers.length = 0))');
-        content = content.replace(/([a-zA-Z0-9_$]+)\.foreignContext\??\.length\s*=\s*0/g, '($1.foreignContext && ($1.foreignContext.length = 0))');
+        content = content.replace(/([\w$]+)\.stack\??\.length\s*=\s*0/g, '($1.stack && ($1.stack.length = 0))');
+        content = content.replace(/([\w$]+)\.buffers\??\.length\s*=\s*0/g, '($1.buffers && ($1.buffers.length = 0))');
+        content = content.replace(/([\w$]+)\.foreignContext\??\.length\s*=\s*0/g, '($1.foreignContext && ($1.foreignContext.length = 0))');
         
         // Safety check for reading length (only if not an assignment)
         // This prevents the "Cannot read properties of undefined" crash
-        content = content.replace(/([a-zA-Z0-9_$]+)\.stack\.length(?!\s*=)/g, '($1.stack ? $1.stack.length : 0)');
+        content = content.replace(/([\w$]+)\.stack\.length(?!\s*=)/g, '($1.stack ? $1.stack.length : 0)');
+        content = content.replace(/([\w$]+)\.buffers\.length(?!\s*=)/g, '($1.buffers ? $1.buffers.length : 0)');
+        content = content.replace(/([\w$]+)\.foreignContext\.length(?!\s*=)/g, '($1.foreignContext ? $1.foreignContext.length : 0)');
         
         writeFileSync(scramjetBundle, content);
         console.log('[Build] Global Stability Patches applied ✅');
