@@ -194,9 +194,7 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             const [base, ...args] = raw.split(' ');
             if (base === 'help') print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">cloak</span> &nbsp; <span style="color:white">aboutblank</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
             else if (base === 'maykol') {
-                print('Maykol detected. System override engaged...', 'system');
-                document.body.style.filter = 'invert(1)';
-                setTimeout(() => document.body.style.filter = 'none', 1000);
+                print('this message is for maykol that dosent believe luis made this', 'system');
             }
             else if (base === 'aboutblank') {
                 print('Deploying about:blank cloak...', 'system');
@@ -207,10 +205,9 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                 location.replace('https://google.com');
             }
             else if (base === 'creds') { 
-                print('System Architecture: InvisiProxy 6.9.6', 'system');
-                print('Core Engine: Scramjet v2 (Atomic)', 'system');
-                print('Security Layer: UIQM Sentinel active', 'system');
-                print('Developed by @uiqm', 'system');
+                print('shout out to <a class="fancy-link" href="https://above.gay" target="_blank">above.gay</a> for the web proxy.');
+                print('Aswell as <a class="fancy-link" href="https://github.com/NoahsAmazingTutoringHelp/NoahsAmazingTutoringHelp" target="_blank">NoahsAmazingTutoringHelp</a> for the UBG');
+                print('skidded by @uiqm <3');
             }
             else if (base === 'cloak') {
                 print('Select a cloak to disguise this tab:', 'system');
@@ -219,6 +216,9 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                     { name: 'Drive', title: 'My Drive - Google Drive', icon: 'https://ssl.gstatic.com/docs/doclist/images/drive_2022q3_32dp.png' },
                     { name: 'Classroom', title: 'Classes', icon: 'https://www.gstatic.com/classroom/favicon.png' },
                     { name: 'Gmail', title: 'Gmail', icon: 'https://ssl.gstatic.com/ui/v1/icons/mail/images/2023q1/favicon_gmail_general_32dp.png' },
+                    { name: 'Canvas', title: 'Canvas', icon: 'https://www.instructure.com/favicon.ico' },
+                    { name: 'Schoology', title: 'Home | Schoology', icon: 'https://www.schoology.com/favicon.ico' },
+                    { name: 'PowerSchool', title: 'PowerSchool', icon: 'https://www.powerschool.com/favicon.ico' },
                     { name: 'Wikipedia', title: 'Wikipedia', icon: 'https://en.wikipedia.org/favicon.ico' },
                     { name: 'Youtube', title: 'YouTube', icon: 'https://www.youtube.com/favicon.ico' },
                     { name: 'Outlook', title: 'Outlook', icon: 'https://outlook.live.com/favicon.ico' },
@@ -233,7 +233,7 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                 ];
                 let h = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:10px;">';
                 cloaks.forEach(c => {
-                    h += `<a href="#" onclick="window.setCloak('${c.title}','${c.icon}');return false;" style="color:#00ff00;text-decoration:none;font-size:12px;background:#111;padding:5px;text-align:center;border-radius:4px;">${c.name}</a>`;
+                    h += `<a href="#" onclick="window.setCloak('${c.title}','${c.icon}');return false;" style="color:#ff0000;text-decoration:none;font-size:12px;background:#111;padding:5px;text-align:center;border-radius:4px;border:1px solid #333;">${c.name}</a>`;
                 });
                 h += '</div>';
                 print(h);
@@ -272,6 +272,14 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             if (el) el.innerText = count;
         };
         updateUsers(); setInterval(updateUsers, 10000);
+
+        const updateClock = () => {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', { hour12: true, hour: 'numeric', minute: '2-digit', second: '2-digit' });
+            const clockEl = document.getElementById('live-clock');
+            if (clockEl) clockEl.innerText = timeStr;
+        };
+        updateClock(); setInterval(updateClock, 1000);
         
         window.setCloak = (t, i) => {
             document.title = t;

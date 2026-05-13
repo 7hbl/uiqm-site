@@ -111,6 +111,10 @@
         }
     };
 
-    uiqm.init();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => uiqm.init());
+    } else {
+        uiqm.init();
+    }
     console.log('%c uiqm sentinel active', 'color: cyan; font-weight: bold;');
 })();
