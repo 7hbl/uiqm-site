@@ -54,9 +54,39 @@ const GLOBAL_SHIM = `
     const shim = (...args) => {};
     globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || shim;
     globalThis.$scramjet$initialized = true;
-    // Suppress remaining reference errors globally
+    
+    // Intercept direct requests that missed the rewriter
+    const PROXY_ROOT = '/worker/network/';
+    const originalFetch = window.fetch;
+    window.fetch = function(url, init) {
+        if (typeof url === 'string' && !url.startsWith(location.origin) && !url.startsWith('/') && !url.startsWith('data:')) {
+            url = PROXY_ROOT + encodeURIComponent(url);
+        }
+        return originalFetch.apply(this, arguments);
+    };
+
+    const originalOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url) {
+        if (typeof url === 'string' && !url.startsWith(location.origin) && !url.startsWith('/') && !url.startsWith('data:')) {
+            arguments[1] = PROXY_ROOT + encodeURIComponent(url);
+        }
+        return originalOpen.apply(this, arguments);
+    };
+
+    // Suppress ReferenceErrors for common libs
+    const createSafe = () => {
+        const fn = function() { return fn; };
+        return new Proxy(fn, { get: () => fn });
+    };
+    const safe = createSafe();
+    ['jQuery', '$', 'React', 'ReactDOM', 'CoreUtilities', 'CoreRobloxUtilities', 'angular'].forEach(lib => {
+        if (globalThis[lib] === undefined) {
+            try { Object.defineProperty(globalThis, lib, { get: () => safe, set: () => {} }); } catch(e) {}
+        }
+    });
+
     globalThis.addEventListener('error', e => {
-        if (e.message && (e.message.includes('$scramjet') || e.message.includes('pushsourcemap'))) {
+        if (e.message && (e.message.includes('$scramjet') || e.message.includes('pushsourcemap') || e.message.includes('is not defined'))) {
             e.preventDefault();
             e.stopPropagation();
         }
@@ -198,14 +228,8 @@ self.addEventListener('fetch', event => {
                 });
             } else if (contentType.includes('text/html')) {
                 let text = await res.text();
-                // Inject the shim directly before the first script tag, or just after head/body
-                if (text.includes('<head>')) {
-                    text = text.replace('<head>', '<head>\\n<script>' + GLOBAL_SHIM + '</script>\\n');
-                } else if (text.includes('<script')) {
-                    text = text.replace('<script', '<script>' + GLOBAL_SHIM + '</script>\\n<script');
-                } else {
-                    text = '<script>' + GLOBAL_SHIM + '</script>\\n' + text;
-                }
+                // Inject at the very top for maximum priority
+                text = '<script>' + GLOBAL_SHIM + '</script>\n' + text;
                 return new Response(text, {
                     status: res.status,
                     statusText: res.statusText,
