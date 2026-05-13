@@ -96,13 +96,13 @@
       });
 
       backArrow.addEventListener('click', () => {
-        history.back();
+        try { windowFrame.contentWindow.history.back(); } catch(e) { history.back(); }
       });
       forwardArrow.addEventListener('click', () => {
-        history.forward();
+        try { windowFrame.contentWindow.history.forward(); } catch(e) { history.forward(); }
       });
       reloadArrow.addEventListener('click', () => {
-        windowFrame.contentWindow.location.reload();
+        try { windowFrame.contentWindow.location.reload(); } catch(e) { windowFrame.src = windowFrame.src; }
       });
 
       let statusObject = { isLoading: true, timesErrored: 0 };
