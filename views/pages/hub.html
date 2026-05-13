@@ -47,154 +47,101 @@
         body::-webkit-scrollbar-track { background: #000; }
         body::-webkit-scrollbar-thumb { background: var(--glow); border-radius: 10px; }
 
-        header {
-            padding: 40px 5%;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            background: linear-gradient(to bottom, #000, transparent);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            backdrop-filter: blur(10px);
-        }
-        .top-row {
+        .header-bar {
+            padding: 30px 5%;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            background: #000;
+            border-bottom: 1px solid #111;
         }
         .logo {
-            font-size: 32px;
+            font-size: 28px;
             font-weight: 900;
             text-transform: uppercase;
-            letter-spacing: 4px;
+            letter-spacing: 2px;
             color: var(--glow);
-            text-shadow: 0 0 15px var(--glow);
         }
-        .live-tag {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: rgba(0, 255, 0, 0.1);
-            padding: 5px 15px;
-            border-radius: 20px;
-            border: 1px solid #00ff00;
-            font-size: 12px;
-            font-weight: bold;
-            color: #00ff00;
-        }
-        .pulse {
-            width: 8px;
-            height: 8px;
-            background: #00ff00;
-            border-radius: 50%;
-            animation: pulse-kf 1.5s infinite;
-        }
-        @keyframes pulse-kf { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.4); opacity: 0.5; } 100% { transform: scale(1); opacity: 1; } }
-
-        .search-container {
-            width: 100%;
-            max-width: 600px;
-            position: relative;
+        .search-box {
+            flex: 1;
+            max-width: 500px;
+            margin: 0 30px;
         }
         #search-input {
             width: 100%;
-            padding: 15px 25px;
-            background: var(--card-bg);
-            border: 2px solid #222;
-            border-radius: 12px;
+            padding: 12px 20px;
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 6px;
             color: #fff;
-            font-family: inherit;
-            font-size: 16px;
             outline: none;
-            transition: all 0.3s;
         }
-        #search-input:focus { border-color: var(--glow); box-shadow: 0 0 20px rgba(255,0,0,0.2); }
-
-        .actions { display: flex; gap: 15px; }
-        .btn {
-            padding: 10px 20px;
+        .nav-actions { display: flex; gap: 10px; }
+        .nav-btn {
+            padding: 8px 16px;
             background: transparent;
-            border: 2px solid var(--glow);
+            border: 1px solid var(--glow);
             color: var(--glow);
-            border-radius: 8px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.2s;
+            border-radius: 4px;
             text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
         }
-        .btn:hover { background: var(--glow); color: #fff; box-shadow: 0 0 15px var(--glow); }
+        .nav-btn:hover { background: var(--glow); color: #fff; }
 
-        .container { padding: 0 5% 50px; }
+        .container { padding: 40px 5%; }
         .games-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 30px;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 25px;
         }
         .game-card {
             background: var(--card-bg);
-            border-radius: 15px;
+            border-radius: 12px;
             overflow: hidden;
             border: 1px solid #222;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            position: relative;
+            transition: transform 0.2s;
             cursor: pointer;
         }
-        .game-card:hover { transform: translateY(-10px); border-color: var(--glow); box-shadow: 0 0 20px rgba(255,0,0,0.2); }
-        .card-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-bottom: 2px solid #222; transition: border-color 0.4s; }
-        .game-card:hover .card-img { border-color: var(--glow); }
-        .card-content { padding: 20px; }
-        .card-title { font-size: 18px; font-weight: 900; margin-bottom: 10px; color: var(--glow); text-transform: uppercase; }
-        .card-desc { font-size: 14px; color: var(--sub-text); line-height: 1.5; height: 4.5em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-        .launch-btn { margin-top: 20px; width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--glow); color: #fff; border-radius: 8px; font-weight: 700; text-transform: uppercase; cursor: pointer; transition: all 0.2s; }
-        .game-card:hover .launch-btn { background: var(--glow); }
-
+        .game-card:hover { transform: translateY(-5px); border-color: var(--glow); }
+        .card-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; }
+        .card-content { padding: 15px; }
+        .card-title { font-size: 16px; font-weight: bold; margin-bottom: 5px; color: var(--glow); }
+        .card-desc { font-size: 13px; color: var(--sub-text); line-height: 1.4; height: 3.8em; overflow: hidden; }
+        
         #proxy-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 1000; display: none; }
         #proxy-frame { width: 100%; height: 100%; border: none; }
-        .overlay-tools { position: fixed; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 1001; }
-        .tool-btn { background: rgba(0,0,0,0.8); border: 1px solid #fff; color: #fff; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-family: inherit; font-weight: bold; }
+        .overlay-tools { position: fixed; top: 15px; right: 15px; display: flex; gap: 10px; z-index: 1001; }
+        .tool-btn { background: rgba(0,0,0,0.8); border: 1px solid #fff; color: #fff; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
         
-        #settings-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card-bg); padding: 30px; border-radius: 20px; border: 2px solid var(--glow); z-index: 2000; display: none; width: 95%; max-width: 500px; max-height: 90vh; overflow-y: auto; box-shadow: 0 0 50px rgba(0,0,0,1); }
-        .settings-title { font-size: 20px; font-weight: 900; margin-bottom: 20px; text-transform: uppercase; color: var(--glow); }
+        #settings-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #0a0a0a; padding: 25px; border-radius: 15px; border: 1px solid var(--glow); z-index: 2000; display: none; width: 90%; max-width: 450px; max-height: 80vh; overflow-y: auto; }
+        .settings-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: var(--glow); text-transform: uppercase; }
         .color-options { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-        .color-swatch { aspect-ratio: 1; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform 0.2s; }
-        .color-swatch.active { border-color: #fff; transform: scale(1.1); }
+        .color-swatch { aspect-ratio: 1; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+        .color-swatch.active { border-color: #fff; }
         
-        .cloak-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 15px; }
-        .cloak-box { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px; background: #111; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s; }
-        .cloak-box:hover { background: #1a1a1a; border-color: var(--glow); transform: translateY(-2px); }
-        .cloak-box img { width: 32px; height: 32px; object-fit: contain; }
-        .cloak-box span { font-size: 10px; color: #888; text-align: center; }
+        .cloak-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 15px; }
+        .cloak-box { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; background: #111; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+        .cloak-box:hover { background: #1a1a1a; border-color: var(--glow); }
+        .cloak-box img { width: 24px; height: 24px; }
+        .cloak-box span { font-size: 9px; color: #888; text-align: center; }
 
         #matrix-canvas { position: fixed; top: 0; left: 0; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 1s; }
-        body[data-theme="hacker"] #matrix-canvas { opacity: 0.3; }
-        body[data-theme="hacker"] { background: #000; }
+        body[data-theme="hacker"] #matrix-canvas { opacity: 0.2; }
     </style>
 </head>
 <body>
-    <header>
-        <div class="top-row">
-            <div class="logo">UIQM HUB</div>
-            <div class="actions">
-                <div class="live-tag">
-                    <div class="pulse"></div>
-                    <span><span id="user-count">1</span> LIVE USERS</span>
-                </div>
-                <div class="live-tag" style="border-color: var(--glow); color: var(--glow); background: rgba(255,0,0,0.05);">
-                    <div class="pulse" style="background: var(--glow);"></div>
-                    <span><span id="live-clock">--:--:-- --</span></span>
-                </div>
-                <button class="btn" onclick="openSettings()">SETTINGS</button>
-                <a href="/" class="btn">TERMINAL</a>
-            </div>
+    <div class="header-bar">
+        <div class="logo">UIQM HUB</div>
+        <div class="search-box">
+            <input type="text" id="search-input" placeholder="Search for games..." autocomplete="off">
         </div>
-        <div class="search-container">
-            <input type="text" id="search-input" placeholder="Search games..." autocomplete="off">
+        <div class="nav-actions">
+            <button class="nav-btn" onclick="openSettings()">SETTINGS</button>
+            <a href="/" class="nav-btn">TERMINAL</a>
         </div>
-    </header>
+    </div>
 
     <div class="container">
         <div class="games-grid" id="games-grid"></div>

