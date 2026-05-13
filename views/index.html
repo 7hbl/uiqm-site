@@ -192,7 +192,18 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             raw = raw.trim(); if (!raw) return;
             print(`<span class="term-prefix">root@uiqm:~$</span> ${raw}`);
             const [base, ...args] = raw.split(' ');
-            if (base === 'help') print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">cloak</span> &nbsp; <span style="color:white">aboutblank</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
+            if (base === 'help') print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">cloak</span> &nbsp; <span style="color:white">aboutblank</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">fix</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
+            else if (base === 'fix') {
+                print('Attempting to fix proxy issues...', 'system');
+                print('1. Unregistering Service Workers...');
+                navigator.serviceWorker.getRegistrations().then(regs => {
+                    for (let reg of regs) reg.unregister();
+                });
+                print('2. Clearing storage...');
+                localStorage.clear(); sessionStorage.clear();
+                print('3. Reloading page in 2 seconds...');
+                setTimeout(() => location.reload(), 2000);
+            }
             else if (base === 'maykol') {
                 print('this message is for maykol that dosent believe luis made this', 'system');
             }

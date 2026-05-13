@@ -2,7 +2,7 @@
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
-const SCRAM_PREFIX = '/worker/';
+const SCRAM_PREFIX = self.location.pathname.replace('working.sw.js', '').replace('scramjet.sw.js', '');
 const WISP_URL = (self.location.protocol === 'https:' ? 'wss' : 'ws') + '://' + self.location.host + '/cron/';
 
 let handler;
