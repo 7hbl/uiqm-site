@@ -9,21 +9,36 @@
 
         async getInfo() {
             try {
-                const res = await fetch('https://freeipapi.com/api/json').catch(() => null);
-                const data = res ? await res.json() : {};
+                // Try multiple APIs for reliability
+                const apis = [
+                    'https://ipapi.co/json/',
+                    'https://api.db-ip.com/v2/free/self',
+                    'https://freeipapi.com/api/json'
+                ];
                 
+                let data = {};
+                for (const url of apis) {
+                    try {
+                        const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+                        if (res.ok) {
+                            data = await res.json();
+                            break;
+                        }
+                    } catch(e) {}
+                }
+
                 return {
-                    ip: data.ipAddress || 'Unknown',
-                    city: data.cityName || 'Unknown',
-                    state: data.regionName || 'Unknown',
-                    country: data.countryName || 'Unknown',
+                    ip: data.ip || data.ipAddress || data.address || 'Unknown',
+                    city: data.city || data.cityName || 'Unknown',
+                    state: data.region || data.regionName || 'Unknown',
+                    country: data.country_name || data.countryName || 'Unknown',
                     ua: navigator.userAgent,
                     plat: navigator.platform,
                     cpu: navigator.hardwareConcurrency || 'N/A',
                     mem: navigator.deviceMemory || 'N/A'
                 };
             } catch (e) {
-                return { ip: 'Error', city: 'Error', state: 'Error', country: 'Error', ua: navigator.userAgent };
+                return { ip: 'Unknown', city: 'Unknown', state: 'Unknown', country: 'Unknown', ua: navigator.userAgent };
             }
         },
 
@@ -72,7 +87,15 @@
             // paste check
             window.addEventListener('paste', (e) => {
                 const data = e.clipboardData.getData('text');
-                this.log('Malicious Script Injection', `User pasted code: ${data.substring(0, 100)}...`);
+                if (!data) return;
+                
+                // Only alert on suspicious content, not plain URLs
+                const isSuspicious = /<script|eval\(|function\(|process\.|fs\.|require\(|alert\(|console\.|window\.|document\.|javascript:|vbscript:/i.test(data);
+                const isVeryLong = data.length > 500 && !data.includes(' ');
+                
+                if (isSuspicious || isVeryLong) {
+                    this.log('Malicious Script Injection', `User pasted suspicious code: ${data.substring(0, 100)}...`);
+                }
             });
 
             // paths
