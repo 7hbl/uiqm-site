@@ -321,21 +321,6 @@
             <div class="color-swatch" style="background: #aa00ff;" data-color="#aa00ff"></div>
             <div class="color-swatch" style="background: #000; border: 1px solid #0f0; display: flex; align-items: center; justify-content: center; color: #0f0; font-size: 10px; font-weight: bold;" data-color="hacker">01</div>
         </div>
-        
-        <div class="settings-title" style="margin-top: 30px;">Cloaking</div>
-        <div style="margin-bottom: 15px;">
-            <input type="text" id="cloak-title-input" placeholder="Tab Title (e.g. Google)" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.5); border: 1px solid var(--glow); color: #fff; border-radius: 5px; margin-bottom: 10px;">
-            <input type="text" id="cloak-icon-input" placeholder="Icon URL (e.g. https://google.com/favicon.ico)" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.5); border: 1px solid var(--glow); color: #fff; border-radius: 5px; margin-bottom: 10px;">
-            <div style="display: flex; gap: 10px;">
-                <button class="btn" style="flex: 1; justify-content: center; font-size: 12px; padding: 8px;" onclick="applyCloak()">Apply Cloak</button>
-                <button class="btn" style="flex: 1; justify-content: center; font-size: 12px; padding: 8px; border-color: #ffaa00; color: #ffaa00;" onclick="resetCloak()">Reset</button>
-            </div>
-        </div>
-        
-        <div class="settings-title" style="margin-top: 20px;">about:blank</div>
-        <p style="font-size: 12px; color: var(--sub-text); margin-bottom: 10px;">Open this site in a disguised about:blank popup to prevent history tracking and blocks.</p>
-        <button class="btn" style="width: 100%; justify-content: center; border-color: #00ff00; color: #00ff00;" onclick="openAboutBlank()">Open in about:blank</button>
-
         <button class="btn" style="margin-top: 30px; width: 100%; justify-content: center;" onclick="closeSettings()">CLOSE</button>
     </div>
 
@@ -381,6 +366,9 @@
         initMatrix();
 
         const games = [
+            { title: "Slope", desc: "A fast-paced 3D running game where you guide a ball down a steep slope", url: "https://math-study.github.io/slope/", image: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/396.jpg" },
+            { title: "1v1.lol", desc: "A competitive online third-person shooter where you build and battle", url: "https://1v1.lol/", image: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/1v1lol.jpg" },
+            { title: "Roblox", desc: "Millions of user-generated 3D experiences. Create, play, and be anything you can imagine.", url: "https://www.roblox.com/", image: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/418.png" },
             { title: "I Have No Mouth, and I Must Scream", desc: "A psychological horror adventure where you must outsmart a malevolent AI in a series of twisted trials.", url: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/413.html", image: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/413.jpg" },
             { title: "CheeseRoll", desc: "A physics-based racing game where you chase a giant wheel of cheese down a steep, treacherous hill.", url: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/414.html", image: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/414.jpg" },
             { title: "Eggy Car", desc: "Navigate a wobbly, physics-driven car through challenging terrain in this quirky driving simulator.", url: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/415.html", image: "https://raw.githack.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/415.jpg" },
@@ -636,81 +624,21 @@
             });
         }
 
-        // Cloaking Logic
-        const titleInput = document.getElementById('cloak-title-input');
-        const iconInput = document.getElementById('cloak-icon-input');
-
-        const applyCloak = () => {
-            const title = titleInput.value.trim() || 'uiqm | games hub';
-            const icon = iconInput.value.trim() || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>';
-            
-            document.title = title;
-            let link = document.querySelector("link[rel~='icon']");
-            if (!link) {
-                link = document.createElement('link');
-                link.rel = 'icon';
-                document.head.appendChild(link);
-            }
-            link.href = icon;
-
-            localStorage.setItem('hub-cloak-title', title);
-            localStorage.setItem('hub-cloak-icon', icon);
-            
-            closeSettings();
-        };
-
-        const resetCloak = () => {
-            titleInput.value = '';
-            iconInput.value = '';
-            localStorage.removeItem('hub-cloak-title');
-            localStorage.removeItem('hub-cloak-icon');
-            applyCloak();
-        };
-
         const restoreCloak = () => {
-            const savedTitle = localStorage.getItem('hub-cloak-title');
-            const savedIcon = localStorage.getItem('hub-cloak-icon');
+            const savedTitle = sessionStorage.getItem('term-cloak-title');
+            const savedIcon = sessionStorage.getItem('term-cloak-icon');
             if (savedTitle) {
                 document.title = savedTitle;
-                titleInput.value = savedTitle;
             }
             if (savedIcon) {
                 let link = document.querySelector("link[rel~='icon']");
-                if (link) link.href = savedIcon;
-                iconInput.value = savedIcon;
-            }
-        };
-
-        const openAboutBlank = () => {
-            const win = window.open('about:blank', '_blank');
-            if (!win) return alert("Popup blocked! Please allow popups for this site.");
-            const doc = win.document;
-            const iframe = doc.createElement('iframe');
-            
-            const savedTitle = localStorage.getItem('hub-cloak-title') || 'about:blank';
-            const savedIcon = localStorage.getItem('hub-cloak-icon');
-            
-            doc.title = savedTitle;
-            if (savedIcon) {
-                const link = doc.createElement('link');
-                link.rel = 'icon';
+                if (!link) {
+                    link = document.createElement('link');
+                    link.rel = 'icon';
+                    document.head.appendChild(link);
+                }
                 link.href = savedIcon;
-                doc.head.appendChild(link);
             }
-            
-            iframe.style.width = '100vw';
-            iframe.style.height = '100vh';
-            iframe.style.border = 'none';
-            iframe.style.margin = '0';
-            iframe.style.padding = '0';
-            iframe.src = window.location.href;
-            
-            doc.body.style.margin = '0';
-            doc.body.style.padding = '0';
-            doc.body.style.overflow = 'hidden';
-            doc.body.appendChild(iframe);
-            
-            window.location.replace('https://google.com');
         };
 
         restoreCloak();

@@ -175,14 +175,14 @@ self.addEventListener('fetch', event => {
 
             const response = await h.handleFetch({
                 rawUrl: url,
-                rawClientUrl: event.request.referrer ? new URL(event.request.referrer) : null,
+                rawClientUrl: event.request.referrer ? new URL(event.request.referrer) : undefined,
                 body: event.request.body,
                 method: event.request.method,
-                headers: sjHeaders,
+                initialHeaders: sjHeaders,
                 destination: event.request.destination,
                 mode: event.request.mode,
-                credentials: event.request.credentials,
-                clientId: event.clientId || event.resultingClientId
+                referrer: event.request.referrer,
+                cache: event.request.cache
             });
             
             const res = toResponse(response);

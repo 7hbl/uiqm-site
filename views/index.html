@@ -190,11 +190,14 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             raw = raw.trim(); if (!raw) return;
             print(`<span class="term-prefix">root@uiqm:~$</span> ${raw}`);
             const [base, ...args] = raw.split(' ');
-            if (base === 'help') print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">cloak [title] [iconURL]</span> &nbsp; <span style="color:white">aboutblank</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
+            if (base === 'help') print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">cloak</span> &nbsp; <span style="color:white">aboutblank</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
             else if (base === 'creds') { 
                 print('Huge shout out to <a class="fancy-link" href="https://github.com/QuiteAFancyEmerald" target="_blank">QuiteAFancyEmerald</a> for the web proxy this is js skidded <3'); 
                 print('Aswell as <a class="fancy-link" href="https://github.com/NoahsAmazingTutoringHelp" target="_blank">NoahsAmazingTutoringHelp</a> for the UBG <3'); 
-                print('Skidded by @uiqm', 'system'); 
+                print('Made by uiqm', 'system'); 
+            }
+            else if (base === 'maykol') {
+                print('this message is for maykol that dosent believe luis made this', 'system');
             }
             else if (base === 'games') {
                 print('Opening Games Hub...', 'system');
@@ -207,8 +210,8 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                     if (!win) return print("Popup blocked! Please allow popups.", "system");
                     const doc = win.document;
                     const iframe = doc.createElement('iframe');
-                    doc.title = localStorage.getItem('term-cloak-title') || 'about:blank';
-                    const icon = localStorage.getItem('term-cloak-icon');
+                    doc.title = sessionStorage.getItem('term-cloak-title') || 'about:blank';
+                    const icon = sessionStorage.getItem('term-cloak-icon');
                     if (icon) {
                         const link = doc.createElement('link');
                         link.rel = 'icon'; link.href = icon; doc.head.appendChild(link);
@@ -221,22 +224,12 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                 }, 500);
             }
             else if (base === 'cloak') {
-                if (args.length === 0) {
-                    document.title = 'uiqm web proxy | private terminal';
-                    let link = document.querySelector("link[rel~='icon']");
-                    if (link) link.href = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>';
-                    localStorage.removeItem('term-cloak-title'); localStorage.removeItem('term-cloak-icon');
-                    print('Cloak reset to default.', 'system');
-                } else {
-                    const title = args[0] || 'Google';
-                    const icon = args[1] || 'https://google.com/favicon.ico';
-                    document.title = title;
-                    let link = document.querySelector("link[rel~='icon']");
-                    if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
-                    link.href = icon;
-                    localStorage.setItem('term-cloak-title', title); localStorage.setItem('term-cloak-icon', icon);
-                    print(`Cloak applied: Title [${title}] Icon [${icon}]`, 'system');
-                }
+                print('<b>Cloak Menu:</b><br>' +
+                      '<a href="#" onclick="applyCloak(\'Google\', \'https://google.com/favicon.ico\')">[1] Google</a><br>' +
+                      '<a href="#" onclick="applyCloak(\'Canvas\', \'https://canvas.instructure.com/favicon.ico\')">[2] Canvas</a><br>' +
+                      '<a href="#" onclick="applyCloak(\'Drive\', \'https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_32dp.png\')">[3] Google Drive</a><br>' +
+                      '<a href="#" onclick="applyCloak(\'Schoology\', \'https://asset-cdn.schoology.com/sites/all/themes/schoology_theme/favicon.ico\')">[4] Schoology</a><br>' +
+                      '<a href="#" onclick="resetCloak()">[5] Reset to Default</a>', 'system');
             }
             else if (base === 'theme') { 
                 const c = args[0]?.toLowerCase(), v = ['red','green','blue','white','pink','purple','cyan','hacker']; 
@@ -268,9 +261,28 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
         };
         updateUsers(); setInterval(updateUsers, 10000);
         
+        window.applyCloak = (title, icon) => {
+            document.title = title;
+            let link = document.querySelector("link[rel~='icon']");
+            if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+            link.href = icon;
+            sessionStorage.setItem('term-cloak-title', title);
+            sessionStorage.setItem('term-cloak-icon', icon);
+            print(`Cloak applied: [${title}]`, 'system');
+        };
+
+        window.resetCloak = () => {
+            document.title = 'uiqm web proxy | private terminal';
+            let link = document.querySelector("link[rel~='icon']");
+            if (link) link.href = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>';
+            sessionStorage.removeItem('term-cloak-title');
+            sessionStorage.removeItem('term-cloak-icon');
+            print('Cloak reset to default.', 'system');
+        };
+
         // Restore Cloak
-        const savedTitle = localStorage.getItem('term-cloak-title');
-        const savedIcon = localStorage.getItem('term-cloak-icon');
+        const savedTitle = sessionStorage.getItem('term-cloak-title');
+        const savedIcon = sessionStorage.getItem('term-cloak-icon');
         if (savedTitle) document.title = savedTitle;
         if (savedIcon) {
             let link = document.querySelector("link[rel~='icon']");
