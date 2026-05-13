@@ -51,44 +51,37 @@ function toResponse(raw) {
 
 const GLOBAL_SHIM = `
 (function() {
-    const shim = (...args) => {};
-    globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || shim;
-    globalThis.$scramjet$initialized = true;
-    
-    // Intercept direct requests that missed the rewriter
-    const PROXY_ROOT = '/worker/network/';
-    const originalFetch = window.fetch;
-    window.fetch = function(url, init) {
-        if (typeof url === 'string' && !url.startsWith(location.origin) && !url.startsWith('/') && !url.startsWith('data:')) {
-            url = PROXY_ROOT + encodeURIComponent(url);
-        }
-        return originalFetch.apply(this, arguments);
-    };
-
-    const originalOpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url) {
-        if (typeof url === 'string' && !url.startsWith(location.origin) && !url.startsWith('/') && !url.startsWith('data:')) {
-            arguments[1] = PROXY_ROOT + encodeURIComponent(url);
-        }
-        return originalOpen.apply(this, arguments);
-    };
-
-    // Suppress ReferenceErrors for common libs
+    if (globalThis.$scramjet$initialized) return;
     const createSafe = () => {
-        const fn = function() { return fn; };
-        return new Proxy(fn, { get: () => fn });
+        const s = new Proxy(function() { return s; }, {
+            get: (t, p) => {
+                if (p === 'then') return undefined;
+                if (p === Symbol.toPrimitive) return () => '';
+                if (p === 'toString' || p === 'valueOf') return () => '';
+                return s;
+            }
+        });
+        return s;
     };
     const safe = createSafe();
-    ['jQuery', '$', 'React', 'ReactDOM', 'CoreUtilities', 'CoreRobloxUtilities', 'angular'].forEach(lib => {
-        if (globalThis[lib] === undefined) {
-            try { Object.defineProperty(globalThis, lib, { get: () => safe, set: () => {} }); } catch(e) {}
+    globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});
+    globalThis.$scramjet$initialized = true;
+    
+    const PROXY_ROOT = '/worker/network/';
+    const wrapUrl = u => (typeof u === 'string' && !u.startsWith(location.origin) && !u.startsWith('/') && !u.startsWith('data:')) ? PROXY_ROOT + encodeURIComponent(u) : u;
+
+    window.fetch = new Proxy(window.fetch, { apply: (t, g, a) => (a[0] = wrapUrl(a[0]), t.apply(g, a)) });
+    XMLHttpRequest.prototype.open = new Proxy(XMLHttpRequest.prototype.open, { apply: (t, g, a) => (a[1] = wrapUrl(a[1]), t.apply(g, a)) });
+
+    ['jQuery', '$', 'React', 'ReactDOM', 'CoreUtilities', 'CoreRobloxUtilities', 'angular', 'bootstrap'].forEach(lib => {
+        if (!(lib in globalThis)) {
+            try { Object.defineProperty(globalThis, lib, { get: () => safe, set: () => {}, configurable: true }); } catch(e) {}
         }
     });
 
     globalThis.addEventListener('error', e => {
-        if (e.message && (e.message.includes('$scramjet') || e.message.includes('pushsourcemap') || e.message.includes('is not defined'))) {
-            e.preventDefault();
-            e.stopPropagation();
+        if (e.message && (e.message.includes('is not defined') || e.message.includes('not a function') || e.message.includes('$scramjet'))) {
+            e.preventDefault(); e.stopPropagation();
         }
     }, true);
 })();`;
@@ -114,8 +107,7 @@ async function initHandler() {
         async request(remote, method, body, headers, signal) {
             const m = (method||'GET').toUpperCase();
             const r = await fetch(remote.toString(), {
-                method: m, 
-                headers: headers || {},
+                method: m, headers: headers || {},
                 body: ['GET','HEAD'].includes(m) ? null : (body||null),
                 signal: signal||undefined
             });
@@ -130,8 +122,7 @@ async function initHandler() {
         crossOriginIsolated: false,
         context: {
             cookieJar: new self.$scramjet.CookieJar(),
-            config: defaultConfig,
-            prefix: new URL(SCRAM_PREFIX, self.location.origin),
+            config: { ...defaultConfig, rewriteHtml: true, rewriteJs: true },
             interface: {
                 codecEncode: s => encodeURIComponent(s),
                 codecDecode: s => {
@@ -140,41 +131,14 @@ async function initHandler() {
                     if (p.startsWith('network/')) p = p.slice(8);
                     else if (p.startsWith('scramjet/')) p = p.slice(9);
                     else if (p.startsWith('worker/')) p = p.slice(7);
-                    
                     try { 
                         const d = decodeURIComponent(p); 
-                        let finalUrl = d.includes('://') ? d : 'https://' + d;
-                        new URL(finalUrl); 
-                        return finalUrl;
-                    } catch { 
-                        try {
-                            new URL(p);
-                            return p;
-                        } catch {
-                            return self.location.origin + '/';
-                        }
-                    }
+                        return d.includes('://') ? d : 'https://' + d;
+                    } catch { return p.includes('://') ? p : self.location.origin + '/'; }
                 },
                 getInjectScripts: (_m, _h, script) => [
                     script('/worker/working.all.js'),
-                    {
-                        type: 'script',
-                        content: `${GLOBAL_SHIM}
-                            if (window.$scramjet && !window.$scramjet$client_hooked) {
-                                try {
-                                    const client = new window.$scramjet.ScramjetClient(window, {
-                                        context: window.$scramjet.defaultConfig,
-                                        transport: { request: () => { throw new Error("Client transport not initialized"); } }
-                                    });
-                                    client.hook();
-                                    window.$scramjet$client_hooked = true;
-                                    console.log('[Scramjet] Client hooked successfully');
-                                } catch(e) {
-                                    console.error('[Scramjet] Client hook failed:', e);
-                                }
-                            }
-                        `
-                    }
+                    { type: 'script', content: GLOBAL_SHIM }
                 ]
             }
         },

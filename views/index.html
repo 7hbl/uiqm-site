@@ -7,6 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>">
     <script src="/gmt/index.js"></script>
     <script src="/assets/js/core.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <script>
         window._proxyReady = (async () => {
             const clearDB = (name) => new Promise(res => {
@@ -57,6 +58,14 @@
         #terminal-shell::before { content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0; background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.25) 50%), linear-gradient(90deg, rgba(255,0,0,0.06), rgba(0,255,0,0.02), rgba(0,0,255,0.06)); z-index: 20; background-size: 100% 2px, 3px 100%; pointer-events: none; }
         #terminal-shell::after { content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0; opacity: 0; z-index: 20; pointer-events: none; animation: flicker 0.15s infinite; }
         @keyframes flicker { 0% { opacity: 0.17861; } 50% { opacity: 0.24387; } 100% { opacity: 0.17861; } }
+        
+        /* Proxy Nav Styles */
+        #proxy-nav { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); border: 1px solid #ff0000; border-radius: 30px; padding: 5px 20px; display: flex; align-items: center; gap: 15px; z-index: 1000; box-shadow: 0 0 20px rgba(255,0,0,0.4); }
+        #proxy-nav button { background: none; border: none; color: #ff0000; font-size: 18px; cursor: pointer; transition: all 0.2s; padding: 5px; }
+        #proxy-nav button:hover { color: #fff; text-shadow: 0 0 10px #ff0000; transform: scale(1.1); }
+        #proxy-nav button:active { transform: scale(0.9); }
+        #proxy-url-display { color: #ff0000; font-size: 12px; font-family: monospace; opacity: 0.8; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 1px solid #ff0000; padding-left: 15px; }
+        
         a { color: inherit; text-decoration: underline; font-weight: bold; }
         a:hover { filter: brightness(1.5); }
         .fancy-link { color: #ffffff !important; text-decoration: none; font-weight: bold; transition: text-shadow 0.3s; }
@@ -68,6 +77,12 @@
     <div id="app">
         <button id="back-btn" onclick="closeProxy()">RETURN TO TERMINAL</button>
         <div id="proxy-shell">
+            <div id="proxy-nav">
+                <button onclick="document.getElementById('proxy-frame').contentWindow.history.back()" title="Back"><i class="fas fa-arrow-left"></i></button>
+                <button onclick="document.getElementById('proxy-frame').contentWindow.history.forward()" title="Forward"><i class="fas fa-arrow-right"></i></button>
+                <button onclick="document.getElementById('proxy-frame').contentWindow.location.reload()" title="Reload"><i class="fas fa-redo-alt"></i></button>
+                <span id="proxy-url-display">Connecting...</span>
+            </div>
             <iframe id="proxy-frame" title="UIQM Proxy Frame"></iframe>
             <div id="proxy-loading"><pre>   CONNECTING TO TUNNEL...</pre></div>
         </div>
@@ -276,7 +291,14 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
 
         input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runCommand(input.value); input.value = ''; } });
         document.addEventListener('click', () => { if (!input.disabled) input.focus(); });
-        frame.onload = () => { loading.style.display = 'none'; print('Tunnel established.', 'system'); };
+        frame.onload = () => { 
+            loading.style.display = 'none'; 
+            print('Tunnel established.', 'system'); 
+            try {
+                const rawUrl = frame.contentWindow.location.pathname.split('/network/')[1];
+                if (rawUrl) document.getElementById('proxy-url-display').innerText = decodeURIComponent(rawUrl);
+            } catch(e) {}
+        };
         
         const updateUsers = () => {
             const count = Math.floor(Math.random() * (3 - 1) + 1);
