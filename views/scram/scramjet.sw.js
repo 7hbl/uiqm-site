@@ -59,7 +59,10 @@ const GLOBAL_SHIM = `
                 if (p === Symbol.toPrimitive) return () => '';
                 if (p === 'toString' || p === 'valueOf') return () => '';
                 return s;
-            }
+            },
+            set: () => true,
+            defineProperty: () => true,
+            deleteProperty: () => true
         });
         return s;
     };
@@ -68,12 +71,26 @@ const GLOBAL_SHIM = `
     globalThis.$scramjet$initialized = true;
     
     const PROXY_ROOT = '/worker/network/';
-    const wrapUrl = u => (typeof u === 'string' && !u.startsWith(location.origin) && !u.startsWith('/') && !u.startsWith('data:')) ? PROXY_ROOT + encodeURIComponent(u) : u;
+    const wrapUrl = u => {
+        if (typeof u !== 'string' || u.startsWith(location.origin) || u.startsWith('/') || u.startsWith('data:') || u.startsWith('blob:')) return u;
+        return PROXY_ROOT + encodeURIComponent(u);
+    };
 
-    window.fetch = new Proxy(window.fetch, { apply: (t, g, a) => (a[0] = wrapUrl(a[0]), t.apply(g, a)) });
-    XMLHttpRequest.prototype.open = new Proxy(XMLHttpRequest.prototype.open, { apply: (t, g, a) => (a[1] = wrapUrl(a[1]), t.apply(g, a)) });
+    const wrapMethod = (obj, prop) => {
+        const original = obj[prop];
+        if (!original) return;
+        obj[prop] = new Proxy(original, {
+            apply: (t, g, a) => {
+                try { if (prop === 'fetch') a[0] = wrapUrl(a[0]); else if (prop === 'open') a[1] = wrapUrl(a[1]); } catch(e) {}
+                return t.apply(g, a);
+            }
+        });
+    };
+    
+    wrapMethod(window, 'fetch');
+    wrapMethod(XMLHttpRequest.prototype, 'open');
 
-    ['jQuery', '$', 'React', 'ReactDOM', 'CoreUtilities', 'CoreRobloxUtilities', 'angular', 'bootstrap'].forEach(lib => {
+    ['jQuery', '$', 'React', 'ReactDOM', 'CoreUtilities', 'CoreRobloxUtilities', 'angular', 'bootstrap', 'ReactStyleGuide'].forEach(lib => {
         if (!(lib in globalThis)) {
             try { Object.defineProperty(globalThis, lib, { get: () => safe, set: () => {}, configurable: true }); } catch(e) {}
         }
@@ -120,6 +137,7 @@ async function initHandler() {
     handler = new ScramjetFetchHandler({
         transport,
         crossOriginIsolated: false,
+        prefix: new URL('/worker/network/', self.location.origin),
         context: {
             cookieJar: new self.$scramjet.CookieJar(),
             config: { ...defaultConfig, rewriteHtml: true, rewriteJs: true },
