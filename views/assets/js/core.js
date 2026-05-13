@@ -76,11 +76,11 @@
             });
 
             // paths
-            const bad = ['/.env', '/package.json', '/config.js', '/.git', '/node_modules', '/api/v1'];
+            const bad = ['/.env', '/package.json', '/config.js', '/.git', '/node_modules', '/api/v1', '/admin', '/login', '/wp-admin', '/phpmyadmin', '/config.php', '/settings.json', '/.htaccess', '/server-status'];
             const p = window.location.pathname.toLowerCase();
             bad.forEach(f => {
-                if (p === f || p.startsWith(f + '/') || p.endsWith(f)) {
-                    this.log('Subdomain / Directory Finder', `User probed hidden path: ${f}`);
+                if (p === f || p.startsWith(f + '/') || p.endsWith(f) || window.location.search.includes(f)) {
+                    this.log('Subdomain / Directory Finder', `User probed hidden path: ${f} via ${window.location.href}`);
                     window.location.href = 'https://google.com';
                 }
             });

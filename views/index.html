@@ -4,152 +4,80 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>uiqm web proxy | private terminal</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="icon" id="favicon" href="/assets/img/logo.png">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>">
+    <script src="/gmt/index.js"></script>
+    <script src="/assets/js/core.js"></script>
+    <script>
+        window._proxyReady = (async () => {
+            const clearDB = (name) => new Promise(res => {
+                const r = indexedDB.deleteDatabase(name);
+                r.onsuccess = r.onerror = r.onblocked = () => res();
+            });
+            try {
+                await clearDB('__sj'); await clearDB('sj');
+                if (indexedDB.databases) {
+                    const dbs = await indexedDB.databases();
+                    await Promise.all(dbs.map(db => clearDB(db.name)));
+                }
+            } catch (_) {}
+            await new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = '/worker/working.all.js';
+                s.onload = resolve;
+                s.onerror = () => reject(new Error('Failed to load proxy engine'));
+                document.head.appendChild(s);
+            });
+        })();
+    </script>
     <style>
-        :root {
-            --glow: #ff0000;
-            --bg: #050505;
-            --text: #00ff00;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            background-color: var(--bg);
-            color: var(--text);
-            font-family: 'Fira Code', monospace;
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-        #matrix-canvas {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            z-index: -1;
-            opacity: 0.15;
-            pointer-events: none;
-        }
-        .terminal-shell {
-            flex: 1;
-            padding: 40px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            position: relative;
-        }
-        .term-info {
-            position: absolute;
-            top: 20px;
-            right: 40px;
-            display: flex;
-            gap: 20px;
-            font-size: 14px;
-            font-weight: bold;
-            color: #ff0000;
-            z-index: 10;
-        }
-        .line { margin-bottom: 5px; line-height: 1.4; font-size: 16px; }
-        .system { color: #888; }
-        .term-prefix { color: #ff0000; font-weight: bold; }
-        .input-area {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 20px 40px;
-            background: #000;
-            border-top: 1px solid #111;
-        }
-        #term-input {
-            background: none;
-            border: none;
-            color: var(--text);
-            font-family: 'Fira Code', monospace;
-            font-size: 16px;
-            width: 100%;
-            outline: none;
-        }
-        .fancy-link { color: #00ff00; text-decoration: none; font-weight: bold; }
-        .fancy-link:hover { text-decoration: underline; }
-        #proxy-shell {
-            display: none;
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: black;
-            z-index: 1000;
-        }
-        #proxy-frame { width: 100%; height: 100%; border: none; }
-        #back-btn {
-            display: none;
-            position: fixed;
-            top: 15px; right: 15px;
-            z-index: 1001;
-            background: rgba(255,0,0,0.6);
-            color: white;
-            border: none;
-            padding: 8px 18px;
-            cursor: pointer;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-        #proxy-loading {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: black;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            color: var(--glow);
-        }
-        .cloak-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-            margin-top: 15px;
-            background: #080808;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #111;
-        }
-        .cloak-grid a {
-            color: #00ff00;
-            text-decoration: none;
-            font-size: 12px;
-            padding: 8px;
-            text-align: center;
-            background: #111;
-            border-radius: 4px;
-        }
-        .cloak-grid a:hover {
-            background: #1a1a1a;
-            border-color: #00ff00;
-        }
-
-        [data-theme="green"] { --glow: #00ff00; --text: #00ff00; }
-        [data-theme="blue"] { --glow: #0088ff; --text: #0088ff; }
-        [data-theme="white"] { --glow: #ffffff; --text: #ffffff; }
-        [data-theme="pink"] { --glow: #ff00ff; --text: #ff00ff; }
-        [data-theme="purple"] { --glow: #8800ff; --text: #8800ff; }
-        [data-theme="cyan"] { --glow: #00ffff; --text: #00ffff; }
-        [data-theme="hacker"] { --glow: #00ff00; --text: #00ff00; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background: #0a0a0a; color: #ff0000; font-family: 'Courier New', Courier, monospace; overflow: hidden; height: 100vh; width: 100vw; }
+        body[data-theme="green"] { color: #00ff00; }
+        body[data-theme="blue"] { color: #0088ff; }
+        body[data-theme="white"] { color: #ffffff; }
+        body[data-theme="pink"] { color: #ff00ff; }
+        body[data-theme="purple"] { color: #aa00ff; }
+        body[data-theme="cyan"] { color: #00ffff; }
+        #app { width: 100%; height: 100%; position: relative; }
+        #proxy-shell { position: absolute; top:0; left:0; width:100%; height:100%; display:none; z-index: 10; background:#000; }
+        #proxy-frame { width:100%; height:100%; border:none; }
+        #proxy-loading { position:fixed; top:0; left:0; width:100%; height:100%; background:#000; color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.5rem; text-shadow: 0 0 10px #ff0000; z-index: 15; }
+        #back-btn { position: fixed; top: 20px; right: 20px; padding: 10px 20px; background: rgba(0,0,0,0.8); border: 2px solid currentColor; color: inherit; cursor: pointer; z-index: 100; font-family: inherit; font-weight: bold; text-shadow: 0 0 5px currentColor; box-shadow: 0 0 10px rgba(255,0,0,0.3); transition: all 0.2s; display: none; }
+        #back-btn:hover { background: #ff0000; color: #fff; box-shadow: 0 0 20px #ff0000; }
+        #terminal-shell { padding: 20px; height: 100%; overflow-y: auto; position: relative; z-index: 5; text-shadow: 0 0 5px currentColor; }
+        .live-status { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 10px; font-weight: bold; }
+        .pulse-ball { width: 10px; height: 10px; background: #00ff00; border-radius: 50%; box-shadow: 0 0 10px #00ff00; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.2); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
+        .ascii-art { white-space: pre; font-size: 8px; line-height: 8px; margin-bottom: 20px; opacity: 0.9; }
+        .line { margin-bottom: 5px; min-height: 1.2em; word-break: break-all; line-height: 1.4; }
+        .system { opacity: 0.7; font-style: italic; }
+        #term-input-row { display: flex; align-items: center; margin-top: 10px; }
+        .term-prefix { margin-right: 10px; font-weight: bold; }
+        #term-input { background: transparent; border: none; color: inherit; font-size: inherit; font-family: inherit; flex: 1; outline: none; }
+        #terminal-shell::before { content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0; background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.25) 50%), linear-gradient(90deg, rgba(255,0,0,0.06), rgba(0,255,0,0.02), rgba(0,0,255,0.06)); z-index: 20; background-size: 100% 2px, 3px 100%; pointer-events: none; }
+        #terminal-shell::after { content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0; opacity: 0; z-index: 20; pointer-events: none; animation: flicker 0.15s infinite; }
+        @keyframes flicker { 0% { opacity: 0.17861; } 50% { opacity: 0.24387; } 100% { opacity: 0.17861; } }
+        a { color: inherit; text-decoration: underline; font-weight: bold; }
+        a:hover { filter: brightness(1.5); }
+        .fancy-link { color: #ffffff !important; text-decoration: none; font-weight: bold; transition: text-shadow 0.3s; }
+        .fancy-link:hover { text-shadow: 0 0 8px #fff, 0 0 18px #fff; animation: glow-pulse 0.8s infinite alternate; }
+        @keyframes glow-pulse { from { text-shadow: 0 0 5px #fff; } to { text-shadow: 0 0 20px #fff, 0 0 35px #fff; } }
     </style>
 </head>
 <body data-theme="default">
-    <canvas id="matrix-canvas"></canvas>
-    
-    <div class="terminal-shell" id="terminal-shell">
-        <div id="status-line" style="position: absolute; top: 20px; left: 40px; font-size: 14px; font-weight: bold; color: #00ff00; z-index: 10;">Secure Channel Active. System ready.</div>
-        <div class="term-info">
-            <span style="margin-right: 20px;">LIVE USERS: <span id="user-count">1</span></span>
-            <span id="live-clock">--:--:-- --</span>
+    <div id="app">
+        <button id="back-btn" onclick="closeProxy()">RETURN TO TERMINAL</button>
+        <div id="proxy-shell">
+            <iframe id="proxy-frame" title="UIQM Proxy Frame"></iframe>
+            <div id="proxy-loading"><pre>   CONNECTING TO TUNNEL...</pre></div>
         </div>
-        <div id="term-output-lines">
-            <div class="line">
-<pre style="color: var(--glow); line-height: 1.1; font-size: 10px; font-weight: bold; margin-bottom: 20px; white-space: pre;">
+        <div id="terminal-shell">
+            <div class="live-status">
+                <div class="pulse-ball"></div>
+                <span style="color: #ff0000;">LIVE USERS: <span id="user-count">1</span></span>
+                <span id="live-clock" style="color: #ff0000; margin-left: 20px;">--:--:-- --</span>
+            </div>
+            <div class="ascii-art">
           $$\                                                       $$\                                                               
           \__|                                                      $$ |                                                              
 $$\   $$\ $$\  $$$$$$\  $$$$$$\$$$$\        $$\  $$\  $$\  $$$$$$\  $$$$$$$\         $$$$$$\   $$$$$$\   $$$$$$\  $$\   $$\ $$\   $$\ 
@@ -161,241 +89,207 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                     $$ |                                                            $$ |                                    $$\   $$ |
                     $$ |                                                            $$ |                                    \$$$$$$  |
                     \__|                                                            \__|                                     \______/ 
-</pre>
             </div>
-            <div class="line system">@uiqm on discord for help</div>
+            <div class="line" style="opacity:0.6;">@uiqm on discord for help</div>
+            <br>
+            <div class="line" id="status-line" style="color:yellow">Initializing Secure Channel...</div>
             <div class="line">Type <span style="color:white">help</span> for cmds or enter a URL to start.</div>
+            <div id="term-output-lines"></div>
+            <form id="term-input-row" onsubmit="return false;">
+                <span class="term-prefix">root@uiqm:~$</span>
+                <input type="text" id="term-input" autofocus spellcheck="false" autocomplete="off" disabled>
+            </form>
         </div>
+        <canvas id="matrix-canvas" style="position: fixed; top: 0; left: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 1s;"></canvas>
     </div>
-
-    <div class="input-area">
-        <span class="term-prefix">root@uiqm:~$</span>
-        <input type="text" id="term-input" spellcheck="false" autocomplete="off" autofocus>
-    </div>
-
-    <div id="proxy-shell">
-        <div id="proxy-loading">TUNNELING...</div>
-        <iframe id="proxy-frame"></iframe>
-    </div>
-    <button id="back-btn" onclick="closeProxy()">BACK TO TERMINAL</button>
-
+    <style>
+        .fancy-link { color: inherit; text-decoration: none; transition: all 0.3s; position: relative; }
+        .fancy-link:hover { color: #fff; text-shadow: none; }
+        .fancy-link:active, .fancy-link:focus { color: #fff; text-shadow: 0 0 10px #fff, 0 0 20px #fff; animation: glow-pulse 1s infinite alternate; }
+        @keyframes glow-pulse { from { text-shadow: 0 0 5px #fff; } to { text-shadow: 0 0 20px #fff, 0 0 30px #fff; } }
+        body[data-theme="hacker"] { background: #000; color: #00ff00; }
+        body[data-theme="hacker"] #terminal-shell { text-shadow: 0 0 5px #00ff00; }
+    </style>
     <script>
-    window._proxyReady = (async () => {
-        const clearDB = (name) => new Promise(res => {
-            const r = indexedDB.deleteDatabase(name);
-            r.onsuccess = r.onerror = r.onblocked = () => res();
-        });
-        try {
-            await clearDB('__sj'); await clearDB('sj');
-        } catch (_) {}
-        await new Promise((resolve, reject) => {
-            const s = document.createElement('script');
-            s.src = '/worker/working.all.js';
-            s.onload = resolve;
-            s.onerror = () => reject(new Error('Failed to load proxy engine'));
-            document.head.appendChild(s);
-        });
-    })();
-    </script>
-
-    <script>
-    document.addEventListener('DOMContentLoaded', async () => {
+    function initMatrix() {
         const canvas = document.getElementById('matrix-canvas');
         const ctx = canvas.getContext('2d');
-        const input = document.getElementById('term-input');
-        const output = document.getElementById('term-output-lines');
-        const terminal = document.getElementById('terminal-shell');
-        const frame = document.getElementById('proxy-frame');
-        const loading = document.getElementById('proxy-loading');
-        const proxyShell = document.getElementById('proxy-shell');
-        const statusLine = document.getElementById('status-line');
-        const backBtn = document.getElementById('back-btn');
-
-        function initMatrix() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            const letters = "0101010101010101";
-            const fontSize = 16;
-            const columns = canvas.width / fontSize;
-            const drops = Array(Math.floor(columns)).fill(1);
-            function draw() {
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--glow').trim();
-                ctx.font = fontSize + 'px monospace';
-                for (let i = 0; i < drops.length; i++) {
-                    const text = letters.charAt(Math.floor(Math.random() * letters.length));
-                    ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-                    if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
-                    drops[i]++;
-                }
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const letters = "0101010101010101";
+        const fontSize = 16;
+        const columns = canvas.width / fontSize;
+        const drops = [];
+        for (let i = 0; i < columns; i++) drops[i] = 1;
+        function draw() {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#0f0";
+            ctx.font = fontSize + "px arial";
+            for (let i = 0; i < drops.length; i++) {
+                const text = letters.charAt(Math.floor(Math.random() * letters.length));
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+                drops[i]++;
             }
-            setInterval(draw, 33);
         }
+        setInterval(draw, 33);
+    }
+    function closeProxy() {
+        document.getElementById('proxy-shell').style.display = 'none';
+        document.getElementById('back-btn').style.display = 'none';
+        document.getElementById('proxy-frame').src = 'about:blank';
+        document.getElementById('term-input').focus();
+    }
+    document.addEventListener('DOMContentLoaded', async () => {
         initMatrix();
+        const input = document.getElementById('term-input'), output = document.getElementById('term-output-lines');
+        const terminal = document.getElementById('terminal-shell'), frame = document.getElementById('proxy-frame');
+        const loading = document.getElementById('proxy-loading'), proxyShell = document.getElementById('proxy-shell');
+        const statusLine = document.getElementById('status-line'), backBtn = document.getElementById('back-btn');
+        const canvas = document.getElementById('matrix-canvas');
 
         const WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
-        const BARE_MUX_WORKER = '/gmt/worker.js', TRANSPORT_MJS = '/unix/index.mjs', SCRAMJET_PREFIX = '/scram/network/';
-        let sjEncode = null;
+        const BARE_MUX_WORKER = '/gmt/worker.js';
+        const TRANSPORT_MJS = '/unix/index.mjs', SCRAMJET_PREFIX = '/worker/network/';
 
-        const print = (h, c = '') => { 
-            const d = document.createElement('div'); 
-            d.className = 'line ' + c; 
-            d.innerHTML = h; 
-            output.appendChild(d); 
-            terminal.scrollTop = terminal.scrollHeight; 
-        };
+        let sjEncode = null;
+        const print = (h, c = '') => { const d = document.createElement('div'); d.className = 'line ' + c; d.innerHTML = h; output.appendChild(d); terminal.scrollTop = terminal.scrollHeight; };
         const setStatus = (m, c = 'yellow') => statusLine.innerHTML = `<span style="color:${c}">${m}</span>`;
 
-        window.initProxy = async () => {
+        const initProxy = async () => {
             try {
+                setStatus('Clearing cache...');
+                await window._proxyReady;
                 setStatus('Connecting transport...');
                 if (window.BareMux) {
                     const conn = new BareMux.BareMuxConnection(BARE_MUX_WORKER);
                     await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
                 }
+                setStatus('Registering Service Worker...');
                 await navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' });
+                
+                setStatus('Loading proxy engine...');
+                // Scramjet v2 uses the global window.$scramjet object
                 if (window.$scramjet) {
+                    console.log('Scramjet v2 Engine Detected');
                     sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
                 } else {
+                    // Fallback to manual encoding if global not ready
                     sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
                 }
+                
                 setStatus('Secure Channel Active. System ready.', '#00ff00');
+                input.disabled = false; input.focus();
             } catch (e) {
+                console.error(e);
                 setStatus('Ready.', '#00ff00');
+                input.disabled = false; input.focus();
             }
-        };
-
-        window.closeProxy = () => {
-            proxyShell.style.display = 'none';
-            backBtn.style.display = 'none';
-            frame.src = 'about:blank';
         };
 
         const runCommand = raw => {
             raw = raw.trim(); if (!raw) return;
             print(`<span class="term-prefix">root@uiqm:~$</span> ${raw}`);
             const [base, ...args] = raw.split(' ');
-            
-            if (base === 'help') {
-                print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">cloak</span> &nbsp; <span style="color:white">aboutblank</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
-            } else if (base === 'creds') {
-                print('shout out to <a class="fancy-link" href="https://above.gay" target="_blank">above.gay</a> for the web proxy.'); 
-                print('Aswell as <a class="fancy-link" href="https://github.com/NoahsAmazingTutoringHelp" target="_blank">NoahsAmazingTutoringHelp</a> for the UBG'); 
-                print('skidded by @uiqm <3', 'system'); 
-            } else if (base === 'maykol') {
-                print('this message is for maykol that dosent believe luis made this', 'system');
-            } else if (base === 'games') {
+            if (base === 'help') print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">cloak</span> &nbsp; <span style="color:white">aboutblank</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
+            else if (base === 'maykol') {
+                print('Maykol detected. System override engaged...', 'system');
+                document.body.style.filter = 'invert(1)';
+                setTimeout(() => document.body.style.filter = 'none', 1000);
+            }
+            else if (base === 'aboutblank') {
+                print('Deploying about:blank cloak...', 'system');
+                const w = window.open('about:blank', '_blank');
+                const d = w.document;
+                d.write(`<iframe src="${location.href}" style="position:fixed;top:0;left:0;width:100%;height:100%;border:none;"></iframe>`);
+                d.close();
+                location.replace('https://google.com');
+            }
+            else if (base === 'creds') { 
+                print('System Architecture: InvisiProxy 6.9.6', 'system');
+                print('Core Engine: Scramjet v2 (Atomic)', 'system');
+                print('Security Layer: UIQM Sentinel active', 'system');
+                print('Developed by @uiqm', 'system');
+            }
+            else if (base === 'cloak') {
+                print('Select a cloak to disguise this tab:', 'system');
+                const cloaks = [
+                    { name: 'Google', title: 'Google', icon: 'https://www.google.com/favicon.ico' },
+                    { name: 'Drive', title: 'My Drive - Google Drive', icon: 'https://ssl.gstatic.com/docs/doclist/images/drive_2022q3_32dp.png' },
+                    { name: 'Classroom', title: 'Classes', icon: 'https://www.gstatic.com/classroom/favicon.png' },
+                    { name: 'Gmail', title: 'Gmail', icon: 'https://ssl.gstatic.com/ui/v1/icons/mail/images/2023q1/favicon_gmail_general_32dp.png' },
+                    { name: 'Wikipedia', title: 'Wikipedia', icon: 'https://en.wikipedia.org/favicon.ico' },
+                    { name: 'Youtube', title: 'YouTube', icon: 'https://www.youtube.com/favicon.ico' },
+                    { name: 'Outlook', title: 'Outlook', icon: 'https://outlook.live.com/favicon.ico' },
+                    { name: 'Discord', title: 'Discord | Friends', icon: 'https://discord.com/favicon.ico' },
+                    { name: 'Teams', title: 'Microsoft Teams', icon: 'https://statics.teams.cdn.office.net/evergreen-assets/apps/teams_32x32.png' },
+                    { name: 'Zoom', title: 'Zoom Meetings', icon: 'https://st1.zoom.us/zoom.ico' },
+                    { name: 'Canva', title: 'Canva', icon: 'https://www.canva.com/favicon.ico' },
+                    { name: 'Pinterest', title: 'Pinterest', icon: 'https://www.pinterest.com/favicon.ico' },
+                    { name: 'Twitch', title: 'Twitch', icon: 'https://static.twitchcdn.net/assets/favicon-32-d6025c14e900565d6177.png' },
+                    { name: 'Github', title: 'GitHub', icon: 'https://github.com/favicon.ico' },
+                    { name: 'Reddit', title: 'Reddit', icon: 'https://www.redditstatic.com/desktop2x/img/favicon/favicon-32x32.png' }
+                ];
+                let h = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:10px;">';
+                cloaks.forEach(c => {
+                    h += `<a href="#" onclick="window.setCloak('${c.title}','${c.icon}');return false;" style="color:#00ff00;text-decoration:none;font-size:12px;background:#111;padding:5px;text-align:center;border-radius:4px;">${c.name}</a>`;
+                });
+                h += '</div>';
+                print(h);
+            }
+            else if (base === 'clear') output.innerHTML = '';
+            else if (base === 'games') {
                 print('Opening Games Hub...', 'system');
                 setTimeout(() => location.href = '/games', 500);
-            } else if (base === 'aboutblank') {
-                print('Opening terminal in about:blank...', 'system');
-                setTimeout(() => {
-                    const win = window.open('about:blank', '_blank');
-                    if (!win) return print("Popup blocked!", "system");
-                    const doc = win.document;
-                    const iframe = doc.createElement('iframe');
-                    doc.title = sessionStorage.getItem('term-cloak-title') || 'about:blank';
-                    const icon = sessionStorage.getItem('term-cloak-icon');
-                    if (icon) {
-                        const link = doc.createElement('link');
-                        link.rel = 'icon'; link.href = icon; doc.head.appendChild(link);
-                    }
-                    iframe.style.width = '100vw'; iframe.style.height = '100vh'; iframe.style.border = 'none'; iframe.style.margin = '0'; iframe.style.padding = '0';
-                    iframe.src = window.location.href;
-                    doc.body.style.margin = '0'; doc.body.style.padding = '0'; doc.body.style.overflow = 'hidden';
-                    doc.body.appendChild(iframe);
-                    window.location.replace('https://google.com');
-                }, 500);
-            } else if (base === 'cloak') {
-                print('<b>Cloak Menu:</b> (Click to apply)<br>' +
-                      '<div class="cloak-grid">' +
-                      '<a href="#" onclick="resetCloak()">[0] Z-Kit (Reset)</a>' +
-                      '<a href="#" onclick="applyCloak(\'Google\', \'https://www.google.com/favicon.ico\')">[1] Google</a>' +
-                      '<a href="#" onclick="applyCloak(\'Google Drive\', \'https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_32dp.png\')">[2] Drive</a>' +
-                      '<a href="#" onclick="applyCloak(\'Google Classroom\', \'https://ssl.gstatic.com/classroom/favicon.png\')">[3] Classroom</a>' +
-                      '<a href="#" onclick="applyCloak(\'Schoology\', \'https://asset-cdn.schoology.com/sites/all/themes/schoology_theme/favicon.ico\')">[4] Schoology</a>' +
-                      '<a href="#" onclick="applyCloak(\'Khan Academy\', \'https://www.khanacademy.org/favicon.ico\')">[5] Khan Academy</a>' +
-                      '<a href="#" onclick="applyCloak(\'Canva\', \'https://www.canva.com/favicon.ico\')">[6] Canva</a>' +
-                      '<a href="#" onclick="applyCloak(\'Kahoot!\', \'https://kahoot.it/favicon.ico\')">[7] Kahoot!</a>' +
-                      '<a href="#" onclick="applyCloak(\'Blooket\', \'https://www.blooket.com/favicon.ico\')">[8] Blooket</a>' +
-                      '<a href="#" onclick="applyCloak(\'Gimkit\', \'https://www.gimkit.com/favicon.ico\')">[9] Gimkit</a>' +
-                      '<a href="#" onclick="applyCloak(\'Wayground\', \'https://wayground.com/favicon.ico\')">[10] Wayground</a>' +
-                      '<a href="#" onclick="applyCloak(\'GeoGebra\', \'https://www.geogebra.org/favicon.ico\')">[11] GeoGebra</a>' +
-                      '<a href="#" onclick="applyCloak(\'Desmos\', \'https://www.desmos.com/favicon.ico\')">[12] Desmos</a>' +
-                      '<a href="#" onclick="applyCloak(\'Gmail\', \'https://ssl.gstatic.com/ui/v1/icons/mail/images/2/favicon.ico\')">[13] Gmail</a>' +
-                      '<a href="#" onclick="applyCloak(\'Google Docs\', \'https://ssl.gstatic.com/docs/documents/images/kix-favicon7.ico\')">[14] Docs</a>' +
-                      '<a href="#" onclick="applyCloak(\'Google Slides\', \'https://ssl.gstatic.com/docs/presentations/images/favicon5.ico\')">[15] Slides</a>' +
-                      '<a href="#" onclick="applyCloak(\'Google Sheets\', \'https://ssl.gstatic.com/docs/spreadsheets/favicon3.ico\')">[16] Sheets</a>' +
-                      '<a href="#" onclick="applyCloak(\'YouTube\', \'https://www.youtube.com/favicon.ico\')">[17] YouTube</a>' +
-                      '<a href="#" onclick="applyCloak(\'Outlook\', \'https://outlook.live.com/favicon.ico\')">[18] Outlook</a>' +
-                      '<a href="#" onclick="applyCloak(\'OneDrive\', \'https://onedrive.live.com/favicon.ico\')">[19] OneDrive</a>' +
-                      '<a href="#" onclick="applyCloak(\'Word\', \'https://static2.sharepointonline.com/files/fabric/assets/brand-icons/product/svg/word_32x1.svg\')">[20] Word</a>' +
-                      '<a href="#" onclick="applyCloak(\'Excel\', \'https://static2.sharepointonline.com/files/fabric/assets/brand-icons/product/svg/excel_32x1.svg\')">[21] Excel</a>' +
-                      '<a href="#" onclick="applyCloak(\'PowerPoint\', \'https://static2.sharepointonline.com/files/fabric/assets/brand-icons/product/svg/powerpoint_32x1.svg\')">[22] PowerPoint</a>' +
-                      '<a href="#" onclick="applyCloak(\'Wikipedia\', \'https://en.wikipedia.org/favicon.ico\')">[23] Wikipedia</a>' +
-                      '<a href="#" onclick="applyCloak(\'GitHub\', \'https://github.githubassets.com/favicons/favicon.svg\')">[24] GitHub</a>' +
-                      '<a href="#" onclick="applyCloak(\'Canvas\', \'https://du11hjcvx0uqb.cloudfront.net/dist/images/favicon-e1066510a1.ico\')">[25] Canvas</a>' +
-                      '<a href="#" onclick="applyCloak(\'Bing\', \'https://www.bing.com/sa/simg/favicon-2x.ico\')">[26] Bing</a>' +
-                      '</div>', 'system');
-            } else if (base === 'theme') {
-                const c = args[0]?.toLowerCase(), v = ['red','green','blue','white','pink','purple','cyan','hacker'];
-                if (v.includes(c)) {
-                    document.body.setAttribute('data-theme', c==='red'?'default':c);
-                    print(`Theme set to ${c}`, 'system');
-                }
-            } else if (base === 'clear') {
-                output.innerHTML = '';
-            } else if (raw.includes('.') && !raw.includes(' ')) {
+            }
+            else if (base === 'theme') { 
+                const c = args[0]?.toLowerCase(), v = ['red','green','blue','white','pink','purple','cyan','hacker']; 
+                if (v.includes(c)) { 
+                    document.body.setAttribute('data-theme', c==='red'?'default':c); 
+                    if (c === 'hacker') canvas.style.opacity = '0.3';
+                    else canvas.style.opacity = '0';
+                    print(`Theme: ${c}`, 'system'); 
+                } 
+            }
+            else if (base === 'clear') output.innerHTML = '';
+            else if (raw.includes('.') && !raw.includes(' ')) {
                 let url = raw; if (!url.startsWith('http')) url = 'https://' + url;
                 proxyShell.style.display = 'block'; loading.style.display = 'flex';
                 backBtn.style.display = 'block';
                 frame.src = sjEncode ? sjEncode(url) : (SCRAMJET_PREFIX + encodeURIComponent(url));
-            } else {
-                print(`Command not found: ${base}`, 'system');
-            }
+            } else print(`Command not found: ${base}`, 'system');
         };
+
 
         input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runCommand(input.value); input.value = ''; } });
         document.addEventListener('click', () => { if (!input.disabled) input.focus(); });
-        frame.onload = () => { loading.style.display = 'none'; };
-
-        window.applyCloak = (title, icon) => {
-            document.title = title;
-            let link = document.querySelector("link[rel~='icon']");
-            if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
-            link.href = icon;
-            sessionStorage.setItem('term-cloak-title', title);
-            sessionStorage.setItem('term-cloak-icon', icon);
-            print(`Cloak applied: [${title}]`, 'system');
+        frame.onload = () => { loading.style.display = 'none'; print('Tunnel established.', 'system'); };
+        
+        const updateUsers = () => {
+            const count = Math.floor(Math.random() * (3 - 1) + 1);
+            const el = document.getElementById('user-count');
+            if (el) el.innerText = count;
+        };
+        updateUsers(); setInterval(updateUsers, 10000);
+        
+        window.setCloak = (t, i) => {
+            document.title = t;
+            const l = document.querySelector("link[rel*='icon']") || document.createElement('link');
+            l.type = 'image/x-icon'; l.rel = 'shortcut icon'; l.href = i;
+            document.getElementsByTagName('head')[0].appendChild(l);
+            localStorage.setItem('term-cloak-title', t);
+            localStorage.setItem('term-cloak-icon', i);
+            if (typeof print === 'function') print(`Cloak applied: ${t}`, 'system');
         };
 
-        window.resetCloak = () => {
-            document.title = 'uiqm web proxy | private terminal';
-            let link = document.querySelector("link[rel~='icon']");
-            if (link) link.href = '/assets/img/logo.png';
-            sessionStorage.setItem('term-cloak-title', 'uiqm web proxy | private terminal');
-            sessionStorage.setItem('term-cloak-icon', '/assets/img/logo.png');
-            print('Cloak reset to default.', 'system');
-        };
-
-        // Restore Cloak
-        const savedTitle = sessionStorage.getItem('term-cloak-title');
-        const savedIcon = sessionStorage.getItem('term-cloak-icon');
+        const savedTitle = localStorage.getItem('term-cloak-title');
+        const savedIcon = localStorage.getItem('term-cloak-icon');
         if (savedTitle) document.title = savedTitle;
-        if (savedIcon) {
-            let link = document.querySelector("link[rel~='icon']");
-            if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
-            link.href = savedIcon;
-        } else {
-            // Set default if none
-            sessionStorage.setItem('term-cloak-title', 'uiqm web proxy | private terminal');
-            sessionStorage.setItem('term-cloak-icon', '/assets/img/logo.png');
-        }
+        if (savedIcon) window.setCloak(savedTitle, savedIcon);
 
         initProxy();
     });
     </script>
-    <script src="/assets/js/core.js"></script>
 </body>
 </html>
