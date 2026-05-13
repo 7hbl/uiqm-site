@@ -58,6 +58,7 @@ const GLOBAL_SHIM = `
                 if (p === 'then') return undefined;
                 if (p === Symbol.toPrimitive) return () => '';
                 if (p === 'toString' || p === 'valueOf') return () => '';
+                if (p === 'length') return 0;
                 return s;
             },
             set: () => true,
@@ -70,6 +71,21 @@ const GLOBAL_SHIM = `
     globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});
     globalThis.$scramjet$initialized = true;
     
+    // Aggressive Array/String/Number Guard
+    const wrapProto = (proto, methods) => {
+        methods.forEach(m => {
+            const orig = proto[m];
+            if (!orig) return;
+            proto[m] = function(...args) {
+                if (this == null) return safe;
+                try { return orig.apply(this, args); } catch(e) { return safe; }
+            };
+        });
+    };
+    wrapProto(Array.prototype, ['every', 'forEach', 'indexOf', 'join', 'lastIndexOf', 'reduce', 'reduceRight', 'some', 'sort', 'toLocaleString', 'toString', 'push', 'unshift']);
+    wrapProto(String.prototype, ['endsWith', 'includes', 'matchAll', 'startsWith', 'split', 'match']);
+    wrapProto(Number.prototype, ['toExponential', 'toFixed', 'toPrecision']);
+
     const PROXY_ROOT = '/worker/network/';
     const wrapUrl = u => {
         if (typeof u !== 'string' || u.startsWith(location.origin) || u.startsWith('/') || u.startsWith('data:') || u.startsWith('blob:')) return u;
@@ -88,16 +104,16 @@ const GLOBAL_SHIM = `
     };
     
     wrapMethod(window, 'fetch');
-    wrapMethod(XMLHttpRequest.prototype, 'open');
+    if (window.XMLHttpRequest) wrapMethod(XMLHttpRequest.prototype, 'open');
 
-    ['jQuery', '$', 'React', 'ReactDOM', 'CoreUtilities', 'CoreRobloxUtilities', 'angular', 'bootstrap', 'ReactStyleGuide'].forEach(lib => {
+    ['jQuery', '$', 'React', 'ReactDOM', 'CoreUtilities', 'CoreRobloxUtilities', 'angular', 'bootstrap', 'ReactStyleGuide', 'Sentry'].forEach(lib => {
         if (!(lib in globalThis)) {
             try { Object.defineProperty(globalThis, lib, { get: () => safe, set: () => {}, configurable: true }); } catch(e) {}
         }
     });
 
     globalThis.addEventListener('error', e => {
-        if (e.message && (e.message.includes('is not defined') || e.message.includes('not a function') || e.message.includes('$scramjet'))) {
+        if (e.message && (e.message.includes('is not defined') || e.message.includes('not a function') || e.message.includes('$scramjet') || e.message.includes('null'))) {
             e.preventDefault(); e.stopPropagation();
         }
     }, true);
@@ -137,18 +153,16 @@ async function initHandler() {
     handler = new ScramjetFetchHandler({
         transport,
         crossOriginIsolated: false,
-        prefix: new URL('/worker/network/', self.location.origin),
+        prefix: SCRAM_PREFIX + 'network/',
         context: {
             cookieJar: new self.$scramjet.CookieJar(),
-            config: { ...defaultConfig, rewriteHtml: true, rewriteJs: true },
+            config: { ...defaultConfig, rewriteHtml: true, rewriteJs: true, rewriteCss: true },
             interface: {
                 codecEncode: s => encodeURIComponent(s),
                 codecDecode: s => {
                     if (!s) return self.location.origin + '/';
                     let p = s;
                     if (p.startsWith('network/')) p = p.slice(8);
-                    else if (p.startsWith('scramjet/')) p = p.slice(9);
-                    else if (p.startsWith('worker/')) p = p.slice(7);
                     try { 
                         const d = decodeURIComponent(p); 
                         return d.includes('://') ? d : 'https://' + d;
@@ -159,10 +173,6 @@ async function initHandler() {
                     { type: 'script', content: GLOBAL_SHIM }
                 ]
             }
-        },
-        sendSetCookie: async (url, cookie) => {
-            for (const c of await self.clients.matchAll())
-                c.postMessage({ type:'scramjet-set-cookie', url:url.href, cookie });
         }
     });
     return handler;
@@ -187,8 +197,8 @@ self.addEventListener('fetch', event => {
 
             const response = await h.handleFetch({
                 rawUrl: url,
-                rawClientUrl: event.request.referrer ? new URL(event.request.referrer) : undefined,
-                body: event.request.body,
+                rawClientUrl: event.request.referrer ? new URL(event.request.referrer) : url,
+                body: ['GET','HEAD'].includes(event.request.method) ? null : event.request.body,
                 method: event.request.method,
                 initialHeaders: sjHeaders,
                 destination: event.request.destination,
