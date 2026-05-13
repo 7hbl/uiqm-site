@@ -85,7 +85,8 @@
       };
 
       navigator.serviceWorker.register(
-        swRoutes.sj[readStorage('HideAds') !== false ? 1 : 0]
+        swRoutes.sj[readStorage('HideAds') !== false ? 1 : 0],
+        { scope: '/scram/' }
       );
     } catch (err) {
       console.error('Scramjet initialization failed:', err);

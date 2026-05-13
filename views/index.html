@@ -74,6 +74,7 @@
             <div class="live-status">
                 <div class="pulse-ball"></div>
                 <span style="color: #00ff00;">LIVE USERS: <span id="user-count">1</span></span>
+                <span style="color: #00ff00; margin-left: 20px;">TIME: <span id="live-clock">--:--:-- --</span></span>
             </div>
             <div class="ascii-art">
           $$\                                                       $$\                                                               
@@ -149,7 +150,7 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
 
         const WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
         const BARE_MUX_WORKER = '/gmt/worker.js';
-        const TRANSPORT_MJS = '/unix/index.mjs', SCRAMJET_PREFIX = '/worker/network/';
+        const TRANSPORT_MJS = '/unix/index.mjs', SCRAMJET_PREFIX = '/scram/network/';
 
         let sjEncode = null;
         const print = (h, c = '') => { const d = document.createElement('div'); d.className = 'line ' + c; d.innerHTML = h; output.appendChild(d); terminal.scrollTop = terminal.scrollHeight; };
@@ -192,9 +193,9 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             const [base, ...args] = raw.split(' ');
             if (base === 'help') print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">cloak</span> &nbsp; <span style="color:white">aboutblank</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
             else if (base === 'creds') { 
-                print('Huge shout out to <a class="fancy-link" href="https://github.com/QuiteAFancyEmerald" target="_blank">QuiteAFancyEmerald</a> for the web proxy this is js skidded <3'); 
-                print('Aswell as <a class="fancy-link" href="https://github.com/NoahsAmazingTutoringHelp" target="_blank">NoahsAmazingTutoringHelp</a> for the UBG <3'); 
-                print('Made by uiqm', 'system'); 
+                print('shout out to <a class="fancy-link" href="https://above.gay" target="_blank">above.gay</a> for the web proxy.'); 
+                print('Aswell as <a class="fancy-link" href="https://github.com/NoahsAmazingTutoringHelp" target="_blank">NoahsAmazingTutoringHelp</a> for the UBG'); 
+                print('skidded by @uiqm <3', 'system'); 
             }
             else if (base === 'maykol') {
                 print('this message is for maykol that dosent believe luis made this', 'system');
@@ -224,12 +225,36 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                 }, 500);
             }
             else if (base === 'cloak') {
-                print('<b>Cloak Menu:</b><br>' +
-                      '<a href="#" onclick="applyCloak(\'Google\', \'https://google.com/favicon.ico\')">[1] Google</a><br>' +
-                      '<a href="#" onclick="applyCloak(\'Canvas\', \'https://canvas.instructure.com/favicon.ico\')">[2] Canvas</a><br>' +
-                      '<a href="#" onclick="applyCloak(\'Drive\', \'https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_32dp.png\')">[3] Google Drive</a><br>' +
-                      '<a href="#" onclick="applyCloak(\'Schoology\', \'https://asset-cdn.schoology.com/sites/all/themes/schoology_theme/favicon.ico\')">[4] Schoology</a><br>' +
-                      '<a href="#" onclick="resetCloak()">[5] Reset to Default</a>', 'system');
+                print('<b>Cloak Menu:</b> (Click to apply)<br>' +
+                      '<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px;">' +
+                      '<a href="#" onclick="resetCloak()">[0] Z-Kit (Reset)</a>' +
+                      '<a href="#" onclick="applyCloak(\'Google\', \'https://www.google.com/favicon.ico\')">[1] Google</a>' +
+                      '<a href="#" onclick="applyCloak(\'Google Drive\', \'https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_32dp.png\')">[2] Drive</a>' +
+                      '<a href="#" onclick="applyCloak(\'Google Classroom\', \'https://ssl.gstatic.com/classroom/favicon.png\')">[3] Classroom</a>' +
+                      '<a href="#" onclick="applyCloak(\'Schoology\', \'https://asset-cdn.schoology.com/sites/all/themes/schoology_theme/favicon.ico\')">[4] Schoology</a>' +
+                      '<a href="#" onclick="applyCloak(\'Khan Academy\', \'https://www.khanacademy.org/favicon.ico\')">[5] Khan Academy</a>' +
+                      '<a href="#" onclick="applyCloak(\'Canva\', \'https://www.canva.com/favicon.ico\')">[6] Canva</a>' +
+                      '<a href="#" onclick="applyCloak(\'Kahoot!\', \'https://kahoot.it/favicon.ico\')">[7] Kahoot!</a>' +
+                      '<a href="#" onclick="applyCloak(\'Blooket\', \'https://www.blooket.com/favicon.ico\')">[8] Blooket</a>' +
+                      '<a href="#" onclick="applyCloak(\'Gimkit\', \'https://www.gimkit.com/favicon.ico\')">[9] Gimkit</a>' +
+                      '<a href="#" onclick="applyCloak(\'Wayground\', \'https://wayground.com/favicon.ico\')">[10] Wayground</a>' +
+                      '<a href="#" onclick="applyCloak(\'GeoGebra\', \'https://www.geogebra.org/favicon.ico\')">[11] GeoGebra</a>' +
+                      '<a href="#" onclick="applyCloak(\'Desmos\', \'https://www.desmos.com/favicon.ico\')">[12] Desmos</a>' +
+                      '<a href="#" onclick="applyCloak(\'Gmail\', \'https://ssl.gstatic.com/ui/v1/icons/mail/images/2/favicon.ico\')">[13] Gmail</a>' +
+                      '<a href="#" onclick="applyCloak(\'Google Docs\', \'https://ssl.gstatic.com/docs/documents/images/kix-favicon7.ico\')">[14] Docs</a>' +
+                      '<a href="#" onclick="applyCloak(\'Google Slides\', \'https://ssl.gstatic.com/docs/presentations/images/favicon5.ico\')">[15] Slides</a>' +
+                      '<a href="#" onclick="applyCloak(\'Google Sheets\', \'https://ssl.gstatic.com/docs/spreadsheets/favicon3.ico\')">[16] Sheets</a>' +
+                      '<a href="#" onclick="applyCloak(\'YouTube\', \'https://www.youtube.com/favicon.ico\')">[17] YouTube</a>' +
+                      '<a href="#" onclick="applyCloak(\'Outlook\', \'https://outlook.live.com/favicon.ico\')">[18] Outlook</a>' +
+                      '<a href="#" onclick="applyCloak(\'OneDrive\', \'https://onedrive.live.com/favicon.ico\')">[19] OneDrive</a>' +
+                      '<a href="#" onclick="applyCloak(\'Word\', \'https://static2.sharepointonline.com/files/fabric/assets/brand-icons/product/svg/word_32x1.svg\')">[20] Word</a>' +
+                      '<a href="#" onclick="applyCloak(\'Excel\', \'https://static2.sharepointonline.com/files/fabric/assets/brand-icons/product/svg/excel_32x1.svg\')">[21] Excel</a>' +
+                      '<a href="#" onclick="applyCloak(\'PowerPoint\', \'https://static2.sharepointonline.com/files/fabric/assets/brand-icons/product/svg/powerpoint_32x1.svg\')">[22] PowerPoint</a>' +
+                      '<a href="#" onclick="applyCloak(\'Wikipedia\', \'https://en.wikipedia.org/favicon.ico\')">[23] Wikipedia</a>' +
+                      '<a href="#" onclick="applyCloak(\'GitHub\', \'https://github.githubassets.com/favicon.ico\')">[24] GitHub</a>' +
+                      '<a href="#" onclick="applyCloak(\'Canvas\', \'https://canvas.instructure.com/favicon.ico\')">[25] Canvas</a>' +
+                      '<a href="#" onclick="applyCloak(\'Bing\', \'https://www.bing.com/favicon.ico\')">[26] Bing</a>' +
+                      '</div>', 'system');
             }
             else if (base === 'theme') { 
                 const c = args[0]?.toLowerCase(), v = ['red','green','blue','white','pink','purple','cyan','hacker']; 
@@ -291,7 +316,16 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
         }
 
         initProxy();
+
+        const updateClock = () => {
+            const now = new Date();
+            const time = now.toLocaleTimeString('en-US', { hour12: true, hour: 'numeric', minute: '2-digit', second: '2-digit' });
+            const clockEl = document.getElementById('live-clock');
+            if (clockEl) clockEl.innerText = time;
+        };
+        updateClock(); setInterval(updateClock, 1000);
     });
     </script>
+    <script src="/assets/js/core.js"></script>
 </body>
 </html>
