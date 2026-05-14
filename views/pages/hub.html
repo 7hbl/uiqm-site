@@ -6052,18 +6052,18 @@
         const frame = document.getElementById('proxy-frame');
 
         const BARE_MUX_WORKER = '/gmt/worker.js', TRANSPORT_MJS = '/unix/index.mjs';
-        const SCRAMJET_PREFIX = '/scram/network/', WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
-        const WORKER_ROOT = '/scram/';
+        const SCRAMJET_PREFIX = '/worker/network/', WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
+        const WORKER_ROOT = '/worker/';
 
         const initProxy = async () => {
             try {
                 if ('serviceWorker' in navigator) {
-                    await navigator.serviceWorker.register('/scram/working.sw.js', {
-                        scope: '/scram/'
+                    await navigator.serviceWorker.register('/worker/working.sw.js', {
+                        scope: '/worker/'
                     });
                     
                     const script = document.createElement('script');
-                    script.src = '/scram/working.all.js';
+                    script.src = '/worker/working.all.js';
                     document.head.appendChild(script);
                     script.onload = () => {
                         console.log('Scramjet v2 Engine Loaded');

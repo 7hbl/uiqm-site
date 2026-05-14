@@ -1,8 +1,9 @@
-// Scramjet v2 Service Worker - v2.4.0 (Crash-Free)
+// Scramjet v2 Service Worker - v2.5.0 (Root Cause Fixed)
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
-const SCRAM_PREFIX = self.location.pathname.replace('working.sw.js', '').replace('scramjet.sw.js', '');
+// Server maps: scram/ -> worker/ so the external URL is /worker/
+const SCRAM_PREFIX = '/worker/';
 const WISP_URL = (self.location.protocol === 'https:' ? 'wss' : 'ws') + '://' + self.location.host + '/cron/';
 const ORIGIN = self.location.origin;
 
@@ -201,15 +202,24 @@ async function initHandler() {
             config: { ...defaultConfig, rewriteHtml: true, rewriteJs: true, rewriteCss: true },
             interface: {
                 codecEncode: s => encodeURIComponent(s),
+                // CRITICAL FIX: codecDecode MUST return a URL object.
+                // Scramjet internally calls .href on the return value.
+                // Returning a string means .href = undefined → crash.
                 codecDecode: s => {
-                    if (!s) return ORIGIN + '/';
-                    let p = s;
-                    if (p.startsWith('network/')) p = p.slice(8);
                     try {
-                        const d = decodeURIComponent(p);
-                        return d.includes('://') ? d : 'https://' + d;
+                        if (!s) return new URL(ORIGIN + '/');
+                        let p = s;
+                        if (p.startsWith('network/')) p = p.slice(8);
+                        try {
+                            const d = decodeURIComponent(p);
+                            const urlStr = d.includes('://') ? d : 'https://' + d;
+                            return new URL(urlStr);
+                        } catch(_) {
+                            const urlStr = p.includes('://') ? p : 'https://' + p;
+                            return new URL(urlStr);
+                        }
                     } catch(_) {
-                        return p.includes('://') ? p : ORIGIN + '/';
+                        return new URL(ORIGIN + '/');
                     }
                 },
                 getInjectScripts: (_m, _h, script) => [
