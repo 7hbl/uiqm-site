@@ -6052,18 +6052,18 @@
         const frame = document.getElementById('proxy-frame');
 
         const BARE_MUX_WORKER = '/gmt/worker.js', TRANSPORT_MJS = '/unix/index.mjs';
-        const SCRAMJET_PREFIX = '/worker/network/', WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
-        const WORKER_ROOT = '/worker/';
+        const SCRAMJET_PREFIX = '/scram/network/', WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
+        const WORKER_ROOT = '/scram/';
 
         const initProxy = async () => {
             try {
                 if ('serviceWorker' in navigator) {
-                    await navigator.serviceWorker.register('/worker/working.sw.js', {
-                        scope: '/worker/'
+                    await navigator.serviceWorker.register('/scram/working.sw.js', {
+                        scope: '/scram/'
                     });
                     
                     const script = document.createElement('script');
-                    script.src = '/worker/working.all.js';
+                    script.src = '/scram/working.all.js';
                     document.head.appendChild(script);
                     script.onload = () => {
                         console.log('Scramjet v2 Engine Loaded');
@@ -6080,26 +6080,42 @@
 
         const renderGames = (filter = '') => {
             grid.innerHTML = '';
-            const filtered = games.filter(g => g.title && g.title.toLowerCase().includes(filter.toLowerCase()));
-            if (filter) {
-                search.placeholder = `${filtered.length} of ${games.length} games...`;
-            } else {
-                search.placeholder = `Search ${games.length} games...`;
-            }
+            const q = (filter || '').toLowerCase();
+            const filtered = games.filter(g => g.title && g.title.toLowerCase().includes(q));
+            search.placeholder = filter
+                ? (filtered.length + ' of ' + games.length + ' games...')
+                : ('Search ' + games.length + ' games...');
             filtered.forEach(game => {
                 if (!game.title || !game.url) return;
                 const card = document.createElement('div');
                 card.className = 'game-card';
-                const fallbackImg = `https://placehold.co/320x180/0d1117/00ff88?text=${encodeURIComponent(game.title.substring(0,16))}`;
-                card.innerHTML = `
-                    <img src="${game.image || fallbackImg}" class="card-img" alt="${game.title}" loading="lazy" onerror="this.onerror=null;this.src='${fallbackImg}'">
-                    <div class="card-content">
-                        <div class="card-title">${game.title}</div>
-                        <div class="card-desc">${game.desc || ''}</div>
-                        <button class="launch-btn" onclick="launchGame('${game.url}')">Launch Game</button>
-                    </div>
-                `;
-                card.onclick = (e) => { if(!e.target.classList.contains('launch-btn')) launchGame(game.url); };
+                const img = document.createElement('img');
+                img.className = 'card-img';
+                img.alt = game.title;
+                img.loading = 'lazy';
+                img.src = game.image || '';
+                img.onerror = function() {
+                    this.onerror = null;
+                    this.src = 'https://placehold.co/320x180/0d1117/00ff88?text=' + encodeURIComponent((game.title||'Game').substring(0,16));
+                };
+                const content = document.createElement('div');
+                content.className = 'card-content';
+                const titleEl = document.createElement('div');
+                titleEl.className = 'card-title';
+                titleEl.textContent = game.title;
+                const descEl = document.createElement('div');
+                descEl.className = 'card-desc';
+                descEl.textContent = game.desc || '';
+                const btn = document.createElement('button');
+                btn.className = 'launch-btn';
+                btn.textContent = 'Launch Game';
+                btn.onclick = function(e) { e.stopPropagation(); launchGame(game.url); };
+                content.appendChild(titleEl);
+                content.appendChild(descEl);
+                content.appendChild(btn);
+                card.appendChild(img);
+                card.appendChild(content);
+                card.onclick = (e) => { if (e.target !== btn) launchGame(game.url); };
                 grid.appendChild(card);
             });
         };

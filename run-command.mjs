@@ -239,20 +239,18 @@ commands: for (let i = 2; i < process.argv.length; i++)
         console.log('[Build] Applying Global Stability Patches to working.all.js...');
         
         // Correctly fix assignments like this.stack.length = 0
-        // We use (obj.stack && (obj.stack.length = 0)) which is a valid expression
         content = content.replace(/([\w$]+)\.stack\??\.length\s*=\s*0/g, '($1.stack && ($1.stack.length = 0))');
         content = content.replace(/([\w$]+)\.buffers\??\.length\s*=\s*0/g, '($1.buffers && ($1.buffers.length = 0))');
         content = content.replace(/([\w$]+)\.foreignContext\??\.length\s*=\s*0/g, '($1.foreignContext && ($1.foreignContext.length = 0))');
         
-        // Safety check for reading length (using optional chaining for modern browser compatibility)
-        // This prevents the "Cannot read properties of undefined" crash in the rewriter
+        // Safety check for reading length
         content = content.replace(/([\w$]+)\.stack\.length(?!\s*=)/g, '($1.stack?.length||0)');
         content = content.replace(/([\w$]+)\.buffers\.length(?!\s*=)/g, '($1.buffers?.length||0)');
         content = content.replace(/([\w$]+)\.foreignContext\.length(?!\s*=)/g, '($1.foreignContext?.length||0)');
         content = content.replace(/([\w$]+)\.children\.length(?!\s*=)/g, '($1.children?.length||0)');
         content = content.replace(/([\w$]+)\.keys\.length(?!\s*=)/g, '($1.keys?.length||0)');
         
-        // Final catch-all for .length in loops if the variable is a single letter (common minified crash)
+        // Final catch-all for .length in loops
         content = content.replace(/([^\w$])([a-zA-Z])\.length(?!\s*=)/g, '$1($2?.length||0)');
 
         // INJECT $scramjet$pushsourcemap AT THE VERY TOP
