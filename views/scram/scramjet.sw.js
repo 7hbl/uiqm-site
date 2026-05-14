@@ -26,8 +26,37 @@ async function getEpoxy() {
     return null;
 }
 
+// Headers that must be stripped from every proxied response to allow iframe embedding
+const BLOCKED_HEADERS = [
+    'x-frame-options',
+    'content-security-policy',
+    'content-security-policy-report-only',
+    'cross-origin-opener-policy',
+    'cross-origin-embedder-policy',
+    'cross-origin-resource-policy',
+    'x-content-type-options'
+];
+
+function sanitizeHeaders(h) {
+    BLOCKED_HEADERS.forEach(name => h.delete(name));
+    // Allow all origins so sub-resources load
+    h.set('access-control-allow-origin', '*');
+    h.set('access-control-allow-methods', 'GET, POST, OPTIONS, PUT, DELETE');
+    h.set('access-control-allow-headers', '*');
+    return h;
+}
+
 function toResponse(raw) {
-    if (raw instanceof Response) return raw;
+    if (raw instanceof Response) {
+        // Clone and sanitize headers on real Response objects too
+        const h = new Headers(raw.headers);
+        sanitizeHeaders(h);
+        return new Response(raw.body, {
+            status: raw.status,
+            statusText: raw.statusText,
+            headers: h
+        });
+    }
     const h = new Headers();
     try {
         const hdrs = raw.headers;
@@ -39,6 +68,7 @@ function toResponse(raw) {
         }
     } catch(e) {}
     if (!h.has('content-type')) h.set('content-type', 'text/html; charset=UTF-8');
+    sanitizeHeaders(h);
     return new Response(raw.body || null, {
         status: raw.status || 200,
         statusText: raw.statusText || 'OK',
@@ -196,8 +226,8 @@ async function initHandler() {
     handler = new ScramjetFetchHandler({
         transport,
         crossOriginIsolated: false,
-        prefix: SCRAM_PREFIX + 'network/',
         context: {
+            prefix: new URL(SCRAM_PREFIX, self.location.origin),
             cookieJar: new self.$scramjet.CookieJar(),
             config: { ...defaultConfig, rewriteHtml: true, rewriteJs: true, rewriteCss: true },
             interface: {
@@ -283,7 +313,8 @@ self.addEventListener('fetch', event => {
             if (contentType.includes('javascript') || contentType.includes('application/x-javascript') || url.pathname.endsWith('.js')) {
                 let text = await res.text();
                 const newHeaders = new Headers(res.headers);
-                newHeaders.set('content-type', 'application/javascript');
+                newHeaders.set('content-type', 'application/javascript; charset=UTF-8');
+                sanitizeHeaders(newHeaders);
                 return new Response(GLOBAL_SHIM + '\n' + text, {
                     status: res.status,
                     statusText: res.statusText,
@@ -294,6 +325,7 @@ self.addEventListener('fetch', event => {
                 text = '<script>' + GLOBAL_SHIM + '</script>\n' + text;
                 const newHeaders = new Headers(res.headers);
                 newHeaders.set('content-type', 'text/html; charset=UTF-8');
+                sanitizeHeaders(newHeaders);
                 return new Response(text, {
                     status: res.status,
                     statusText: res.statusText,
@@ -337,9 +369,13 @@ async function emergencyBypass(request, urlObj) {
 
     const contentType = response.headers.get('content-type') || '';
 
+    // Strip blocking headers from bypass responses too
+    const bypassHeaders = new Headers(response.headers);
+    sanitizeHeaders(bypassHeaders);
+
     // Skip binary injection
     if (contentType.includes('font') || contentType.includes('image') || contentType.includes('wasm')) {
-        return response;
+        return new Response(response.body, { headers: bypassHeaders, status: response.status });
     }
 
     const runtimeScript = `<script>
@@ -354,12 +390,14 @@ async function emergencyBypass(request, urlObj) {
     if (contentType.includes('text/html')) {
         let text = await response.text();
         text = runtimeScript + text;
-        return new Response(text, { headers: response.headers, status: response.status });
+        bypassHeaders.set('content-type', 'text/html; charset=UTF-8');
+        return new Response(text, { headers: bypassHeaders, status: response.status });
     } else if (contentType.includes('javascript') || targetUrl.endsWith('.js')) {
         let text = await response.text();
         const inlineShim = `(function(){if(globalThis.__scramjet_emergency_active)return;globalThis.__scramjet_emergency_active=true;${GLOBAL_SHIM}})();\n`;
-        return new Response(inlineShim + text, { headers: response.headers, status: response.status });
+        bypassHeaders.set('content-type', 'application/javascript; charset=UTF-8');
+        return new Response(inlineShim + text, { headers: bypassHeaders, status: response.status });
     }
 
-    return response;
+    return new Response(response.body, { headers: bypassHeaders, status: response.status });
 }

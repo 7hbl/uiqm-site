@@ -226,8 +226,8 @@ async function initHandler() {
     handler = new ScramjetFetchHandler({
         transport,
         crossOriginIsolated: false,
-        prefix: SCRAM_PREFIX + 'network/',
         context: {
+            prefix: new URL(SCRAM_PREFIX, self.location.origin),
             cookieJar: new self.$scramjet.CookieJar(),
             config: { ...defaultConfig, rewriteHtml: true, rewriteJs: true, rewriteCss: true },
             interface: {
