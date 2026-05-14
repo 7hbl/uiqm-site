@@ -1,4 +1,5 @@
 import {
+  readFileSync,
   writeFileSync,
   unlinkSync,
   mkdirSync,
@@ -123,8 +124,15 @@ commands: for (let i = 2; i < process.argv.length; i++)
 
     case 'build': {
       const dist = fileURLToPath(new URL('./views/dist', import.meta.url));
-      rmSync(dist, { force: true, recursive: true });
-      mkdirSync(dist);
+      try {
+        if (existsSync(dist)) {
+          rmSync(dist, { force: true, recursive: true });
+          console.log('[Build] Cleaned existing dist directory');
+        }
+      } catch (e) {
+        console.warn('[Build Warning] Could not fully clean dist directory (files might be in use):', e.message);
+      }
+      if (!existsSync(dist)) mkdirSync(dist, { recursive: true });
 
       /* The archive directory is excluded from this process, since source
        * rewrites are not intended to be used by any of those files.
@@ -199,7 +207,7 @@ commands: for (let i = 2; i < process.argv.length; i++)
       for (const [name, path] of Object.entries(compilePaths)) {
         const prefix = name + '/';
         const prefixUrl = new URL('./views/dist/' + prefix, import.meta.url);
-        if (!existsSync(prefixUrl)) mkdirSync(prefixUrl);
+        if (!existsSync(prefixUrl)) mkdirSync(prefixUrl, { recursive: true });
 
         // Force copy all files from the module dist to the production dist
         const moduleDist = path.startsWith('node_modules') ? join(rootPath, path) : path;
@@ -214,6 +222,45 @@ commands: for (let i = 2; i < process.argv.length; i++)
             }
           });
         }
+      }
+
+      // CRITICAL: Re-copy our custom scramjet.sw.js AFTER npm files are copied,
+      // because the npm package overwrites it with its own minified version.
+      const customSwSrc = join(rootPath, 'views/scram/scramjet.sw.js');
+      const customSwDest = join(rootPath, 'views/dist/scram/working.sw.js');
+      if (existsSync(customSwSrc)) {
+        copyFileSync(customSwSrc, customSwDest);
+        console.log('[Build] Custom scramjet.sw.js -> scram/working.sw.js ✅ (overrode npm version)');
+      }
+
+      const scramjetBundle = join(rootPath, 'views/dist/scram/working.all.js');
+      if (existsSync(scramjetBundle)) {
+        let content = readFileSync(scramjetBundle, 'utf8');
+        console.log('[Build] Applying Global Stability Patches to working.all.js...');
+        
+        // Correctly fix assignments like this.stack.length = 0
+        // We use (obj.stack && (obj.stack.length = 0)) which is a valid expression
+        content = content.replace(/([\w$]+)\.stack\??\.length\s*=\s*0/g, '($1.stack && ($1.stack.length = 0))');
+        content = content.replace(/([\w$]+)\.buffers\??\.length\s*=\s*0/g, '($1.buffers && ($1.buffers.length = 0))');
+        content = content.replace(/([\w$]+)\.foreignContext\??\.length\s*=\s*0/g, '($1.foreignContext && ($1.foreignContext.length = 0))');
+        
+        // Safety check for reading length (using optional chaining for modern browser compatibility)
+        // This prevents the "Cannot read properties of undefined" crash in the rewriter
+        content = content.replace(/([\w$]+)\.stack\.length(?!\s*=)/g, '($1.stack?.length||0)');
+        content = content.replace(/([\w$]+)\.buffers\.length(?!\s*=)/g, '($1.buffers?.length||0)');
+        content = content.replace(/([\w$]+)\.foreignContext\.length(?!\s*=)/g, '($1.foreignContext?.length||0)');
+        content = content.replace(/([\w$]+)\.children\.length(?!\s*=)/g, '($1.children?.length||0)');
+        content = content.replace(/([\w$]+)\.keys\.length(?!\s*=)/g, '($1.keys?.length||0)');
+        
+        // Final catch-all for .length in loops if the variable is a single letter (common minified crash)
+        content = content.replace(/([^\w$])([a-zA-Z])\.length(?!\s*=)/g, '$1($2?.length||0)');
+
+        // INJECT $scramjet$pushsourcemap AT THE VERY TOP
+        const shim = `globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || function() {}; globalThis.$scramjet$initialized = true;`;
+        content = shim + "\n" + content;
+        
+        writeFileSync(scramjetBundle, content);
+        console.log('[Build] Global Stability Patches applied ✅');
       }
 
       // Minify the scripts and stylesheets upon compiling, if enabled in config.

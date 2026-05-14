@@ -6,6 +6,8 @@
     <title>uiqm web proxy | private terminal</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>">
     <script src="/gmt/index.js"></script>
+    <script src="/assets/js/core.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <script>
         window._proxyReady = (async () => {
             const clearDB = (name) => new Promise(res => {
@@ -56,21 +58,39 @@
         #terminal-shell::before { content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0; background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.25) 50%), linear-gradient(90deg, rgba(255,0,0,0.06), rgba(0,255,0,0.02), rgba(0,0,255,0.06)); z-index: 20; background-size: 100% 2px, 3px 100%; pointer-events: none; }
         #terminal-shell::after { content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0; opacity: 0; z-index: 20; pointer-events: none; animation: flicker 0.15s infinite; }
         @keyframes flicker { 0% { opacity: 0.17861; } 50% { opacity: 0.24387; } 100% { opacity: 0.17861; } }
+        
+        /* Proxy Nav Styles */
+        #proxy-nav { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); border: 1px solid #ff0000; border-radius: 30px; padding: 5px 20px; display: flex; align-items: center; gap: 15px; z-index: 1000; box-shadow: 0 0 20px rgba(255,0,0,0.4); }
+        #proxy-nav button { background: none; border: none; color: #ff0000; font-size: 18px; cursor: pointer; transition: all 0.2s; padding: 5px; }
+        #proxy-nav button:hover { color: #fff; text-shadow: 0 0 10px #ff0000; transform: scale(1.1); }
+        #proxy-nav button:active { transform: scale(0.9); }
+        #proxy-url-display { color: #ff0000; font-size: 12px; font-family: monospace; opacity: 0.8; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 1px solid #ff0000; padding-left: 15px; }
+        
         a { color: inherit; text-decoration: underline; font-weight: bold; }
         a:hover { filter: brightness(1.5); }
+        .fancy-link { color: #ffffff !important; text-decoration: none; font-weight: bold; transition: text-shadow 0.3s; }
+        .fancy-link:hover { text-shadow: 0 0 8px #fff, 0 0 18px #fff; animation: glow-pulse 0.8s infinite alternate; }
+        @keyframes glow-pulse { from { text-shadow: 0 0 5px #fff; } to { text-shadow: 0 0 20px #fff, 0 0 35px #fff; } }
     </style>
 </head>
 <body data-theme="default">
     <div id="app">
         <button id="back-btn" onclick="closeProxy()">RETURN TO TERMINAL</button>
         <div id="proxy-shell">
+            <div id="proxy-nav">
+                <button onclick="document.getElementById('proxy-frame').contentWindow.history.back()" title="Back"><i class="fas fa-arrow-left"></i></button>
+                <button onclick="document.getElementById('proxy-frame').contentWindow.history.forward()" title="Forward"><i class="fas fa-arrow-right"></i></button>
+                <button onclick="document.getElementById('proxy-frame').contentWindow.location.reload()" title="Reload"><i class="fas fa-redo-alt"></i></button>
+                <span id="proxy-url-display">Connecting...</span>
+            </div>
             <iframe id="proxy-frame" title="UIQM Proxy Frame"></iframe>
             <div id="proxy-loading"><pre>   CONNECTING TO TUNNEL...</pre></div>
         </div>
         <div id="terminal-shell">
             <div class="live-status">
                 <div class="pulse-ball"></div>
-                <span style="color: #00ff00;">LIVE USERS: <span id="user-count">1</span></span>
+                <span style="color: #ff0000;">LIVE USERS: <span id="user-count">1</span></span>
+                <span id="live-clock" style="color: #ff0000; margin-left: 20px;">--:--:-- --</span>
             </div>
             <div class="ascii-art">
           $$\                                                       $$\                                                               
@@ -85,9 +105,7 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                     $$ |                                                            $$ |                                    \$$$$$$  |
                     \__|                                                            \__|                                     \______/ 
             </div>
-            <div class="line">uiqm web proxy</div>
-            <div class="line">@uiqm on discord for help</div>
-            <div class="line">created by - @uiqm on discord</div>
+            <div class="line" style="opacity:0.6;">@uiqm on discord for help</div>
             <br>
             <div class="line" id="status-line" style="color:yellow">Initializing Secure Channel...</div>
             <div class="line">Type <span style="color:white">help</span> for cmds or enter a URL to start.</div>
@@ -97,8 +115,41 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                 <input type="text" id="term-input" autofocus spellcheck="false" autocomplete="off" disabled>
             </form>
         </div>
+        <canvas id="matrix-canvas" style="position: fixed; top: 0; left: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 1s;"></canvas>
     </div>
+    <style>
+        .fancy-link { color: inherit; text-decoration: none; transition: all 0.3s; position: relative; }
+        .fancy-link:hover { color: #fff; text-shadow: none; }
+        .fancy-link:active, .fancy-link:focus { color: #fff; text-shadow: 0 0 10px #fff, 0 0 20px #fff; animation: glow-pulse 1s infinite alternate; }
+        @keyframes glow-pulse { from { text-shadow: 0 0 5px #fff; } to { text-shadow: 0 0 20px #fff, 0 0 30px #fff; } }
+        body[data-theme="hacker"] { background: #000; color: #00ff00; }
+        body[data-theme="hacker"] #terminal-shell { text-shadow: 0 0 5px #00ff00; }
+    </style>
     <script>
+    function initMatrix() {
+        const canvas = document.getElementById('matrix-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const letters = "0101010101010101";
+        const fontSize = 16;
+        const columns = canvas.width / fontSize;
+        const drops = [];
+        for (let i = 0; i < columns; i++) drops[i] = 1;
+        function draw() {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#0f0";
+            ctx.font = fontSize + "px arial";
+            for (let i = 0; i < drops.length; i++) {
+                const text = letters.charAt(Math.floor(Math.random() * letters.length));
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+                drops[i]++;
+            }
+        }
+        setInterval(draw, 33);
+    }
     function closeProxy() {
         document.getElementById('proxy-shell').style.display = 'none';
         document.getElementById('back-btn').style.display = 'none';
@@ -106,10 +157,12 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
         document.getElementById('term-input').focus();
     }
     document.addEventListener('DOMContentLoaded', async () => {
+        initMatrix();
         const input = document.getElementById('term-input'), output = document.getElementById('term-output-lines');
         const terminal = document.getElementById('terminal-shell'), frame = document.getElementById('proxy-frame');
         const loading = document.getElementById('proxy-loading'), proxyShell = document.getElementById('proxy-shell');
         const statusLine = document.getElementById('status-line'), backBtn = document.getElementById('back-btn');
+        const canvas = document.getElementById('matrix-canvas');
 
         const WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
         const BARE_MUX_WORKER = '/gmt/worker.js';
@@ -132,15 +185,15 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
                 await navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' });
                 
                 setStatus('Loading proxy engine...');
-                if (window.$scramjetLoadController) {
-                    const { ScramjetController } = await window.$scramjetLoadController();
-                    const sj = new ScramjetController({
-                        prefix: SCRAMJET_PREFIX,
-                        files: { wasm: '/worker/working.wasm.wasm', all: '/worker/working.all.js', sync: '/worker/working.sync.js' }
-                    });
-                    await sj.init();
-                    sjEncode = url => sj.encodeUrl(url);
+                // Scramjet v2 uses the global window.$scramjet object
+                if (window.$scramjet) {
+                    console.log('Scramjet v2 Engine Detected');
+                    sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
+                } else {
+                    // Fallback to manual encoding if global not ready
+                    sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
                 }
+                
                 setStatus('Secure Channel Active. System ready.', '#00ff00');
                 input.disabled = false; input.focus();
             } catch (e) {
@@ -154,17 +207,78 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             raw = raw.trim(); if (!raw) return;
             print(`<span class="term-prefix">root@uiqm:~$</span> ${raw}`);
             const [base, ...args] = raw.split(' ');
-            if (base === 'help') print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
-            else if (base === 'creds') { 
-                print('Proxy Engine: <a href="https://github.com/QuiteAFancyEmerald" target="_blank" style="color:white;">QuiteAFancyEmerald</a>'); 
-                print('Games Hub: <a href="https://github.com/NoahsAmazingTutoringHelp" target="_blank" style="color:white;">NoahsAmazingTutoringHelp</a>', 'system');
-                print('UI & Terminal: <a href="https://github.com/7hbl" target="_blank" style="color:white;">@uiqm</a>', 'system'); 
+            if (base === 'help') print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">cloak</span> &nbsp; <span style="color:white">aboutblank</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">fix</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
+            else if (base === 'fix') {
+                print('Attempting to fix proxy issues...', 'system');
+                print('1. Unregistering Service Workers...');
+                navigator.serviceWorker.getRegistrations().then(regs => {
+                    for (let reg of regs) reg.unregister();
+                });
+                print('2. Clearing storage...');
+                localStorage.clear(); sessionStorage.clear();
+                print('3. Reloading page in 2 seconds...');
+                setTimeout(() => location.reload(), 2000);
             }
+            else if (base === 'maykol') {
+                print('this message is for maykol that dosent believe luis made this', 'system');
+            }
+            else if (base === 'aboutblank') {
+                print('Deploying about:blank cloak...', 'system');
+                const w = window.open('about:blank', '_blank');
+                const d = w.document;
+                d.write(`<iframe src="${location.href}" style="position:fixed;top:0;left:0;width:100%;height:100%;border:none;"></iframe>`);
+                d.close();
+                location.replace('https://google.com');
+            }
+            else if (base === 'creds') { 
+                print('shout out to <a class="fancy-link" href="https://above.gay" target="_blank">above.gay</a> for the web proxy.');
+                print('Aswell as <a class="fancy-link" href="https://github.com/NoahsAmazingTutoringHelp/NoahsAmazingTutoringHelp" target="_blank">NoahsAmazingTutoringHelp</a> for the UBG');
+                print('skidded by @uiqm <3');
+            }
+            else if (base === 'cloak') {
+                print('Select a cloak to disguise this tab:', 'system');
+                const cloaks = [
+                    { name: 'Default', title: 'uiqm web proxy | private terminal', icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>' },
+                    { name: 'Google', title: 'Google', icon: 'https://www.google.com/favicon.ico' },
+                    { name: 'Drive', title: 'My Drive - Google Drive', icon: 'https://ssl.gstatic.com/docs/doclist/images/drive_2022q3_32dp.png' },
+                    { name: 'Classroom', title: 'Classes', icon: 'https://www.gstatic.com/classroom/favicon.png' },
+                    { name: 'Gmail', title: 'Gmail', icon: 'https://ssl.gstatic.com/ui/v1/icons/mail/images/2023q1/favicon_gmail_general_32dp.png' },
+                    { name: 'Canvas', title: 'Canvas', icon: 'https://www.instructure.com/favicon.ico' },
+                    { name: 'Schoology', title: 'Home | Schoology', icon: 'https://www.schoology.com/favicon.ico' },
+                    { name: 'PowerSchool', title: 'PowerSchool', icon: 'https://www.powerschool.com/favicon.ico' },
+                    { name: 'Wikipedia', title: 'Wikipedia', icon: 'https://en.wikipedia.org/favicon.ico' },
+                    { name: 'Youtube', title: 'YouTube', icon: 'https://www.youtube.com/favicon.ico' },
+                    { name: 'Outlook', title: 'Outlook', icon: 'https://outlook.live.com/favicon.ico' },
+                    { name: 'Discord', title: 'Discord | Friends', icon: 'https://discord.com/favicon.ico' },
+                    { name: 'Teams', title: 'Microsoft Teams', icon: 'https://statics.teams.cdn.office.net/evergreen-assets/apps/teams_32x32.png' },
+                    { name: 'Zoom', title: 'Zoom Meetings', icon: 'https://st1.zoom.us/zoom.ico' },
+                    { name: 'Canva', title: 'Canva', icon: 'https://www.canva.com/favicon.ico' },
+                    { name: 'Pinterest', title: 'Pinterest', icon: 'https://www.pinterest.com/favicon.ico' },
+                    { name: 'Twitch', title: 'Twitch', icon: 'https://static.twitchcdn.net/assets/favicon-32-d6025c14e900565d6177.png' },
+                    { name: 'Github', title: 'GitHub', icon: 'https://github.com/favicon.ico' },
+                    { name: 'Reddit', title: 'Reddit', icon: 'https://www.redditstatic.com/desktop2x/img/favicon/favicon-32x32.png' }
+                ];
+                let h = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:10px;">';
+                cloaks.forEach(c => {
+                    h += `<a href="#" onclick="window.setCloak('${c.title}','${c.icon}');return false;" style="color:#ff0000;text-decoration:none;font-size:12px;background:#111;padding:5px;text-align:center;border-radius:4px;border:1px solid #333;">${c.name}</a>`;
+                });
+                h += '</div>';
+                print(h);
+            }
+            else if (base === 'clear') output.innerHTML = '';
             else if (base === 'games') {
                 print('Opening Games Hub...', 'system');
                 setTimeout(() => location.href = '/games', 500);
             }
-            else if (base === 'theme') { const c = args[0]?.toLowerCase(), v = ['red','green','blue','white','pink','purple','cyan']; if (v.includes(c)) { document.body.setAttribute('data-theme', c==='red'?'default':c); print(`Theme: ${c}`, 'system'); } }
+            else if (base === 'theme') { 
+                const c = args[0]?.toLowerCase(), v = ['red','green','blue','white','pink','purple','cyan','hacker']; 
+                if (v.includes(c)) { 
+                    document.body.setAttribute('data-theme', c==='red'?'default':c); 
+                    if (c === 'hacker') canvas.style.opacity = '0.3';
+                    else canvas.style.opacity = '0';
+                    print(`Theme: ${c}`, 'system'); 
+                } 
+            }
             else if (base === 'clear') output.innerHTML = '';
             else if (raw.includes('.') && !raw.includes(' ')) {
                 let url = raw; if (!url.startsWith('http')) url = 'https://' + url;
@@ -174,9 +288,17 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             } else print(`Command not found: ${base}`, 'system');
         };
 
+
         input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runCommand(input.value); input.value = ''; } });
         document.addEventListener('click', () => { if (!input.disabled) input.focus(); });
-        frame.onload = () => { loading.style.display = 'none'; print('Tunnel established.', 'system'); };
+        frame.onload = () => { 
+            loading.style.display = 'none'; 
+            print('Tunnel established.', 'system'); 
+            try {
+                const rawUrl = frame.contentWindow.location.pathname.split('/network/')[1];
+                if (rawUrl) document.getElementById('proxy-url-display').innerText = decodeURIComponent(rawUrl);
+            } catch(e) {}
+        };
         
         const updateUsers = () => {
             const count = Math.floor(Math.random() * (3 - 1) + 1);
@@ -184,7 +306,30 @@ $$ |  $$ |$$ |$$ |  $$ |$$ | $$ | $$ |      $$ | $$ | $$ |$$   ____|$$ |  $$ |  
             if (el) el.innerText = count;
         };
         updateUsers(); setInterval(updateUsers, 10000);
+
+        const updateClock = () => {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', { hour12: true, hour: 'numeric', minute: '2-digit', second: '2-digit' });
+            const clockEl = document.getElementById('live-clock');
+            if (clockEl) clockEl.innerText = timeStr;
+        };
+        updateClock(); setInterval(updateClock, 1000);
         
+        window.setCloak = (t, i) => {
+            document.title = t;
+            const l = document.querySelector("link[rel*='icon']") || document.createElement('link');
+            l.type = 'image/x-icon'; l.rel = 'shortcut icon'; l.href = i;
+            document.getElementsByTagName('head')[0].appendChild(l);
+            localStorage.setItem('term-cloak-title', t);
+            localStorage.setItem('term-cloak-icon', i);
+            if (typeof print === 'function') print(`Cloak applied: ${t}`, 'system');
+        };
+
+        const savedTitle = localStorage.getItem('term-cloak-title');
+        const savedIcon = localStorage.getItem('term-cloak-icon');
+        if (savedTitle) document.title = savedTitle;
+        if (savedIcon) window.setCloak(savedTitle, savedIcon);
+
         initProxy();
     });
     </script>

@@ -1,0 +1,2 @@
+"            if (base === 'help') print('Commands: <span style=\"color:white\">games</span> &nbsp; <span style=\"color:white\">theme [color]</span> &nbsp; <span style=\"color:white\">cloak</span> &nbsp; <span style=\"color:white\">aboutblank</span> &nbsp; 
+<truncated 3144 bytes>

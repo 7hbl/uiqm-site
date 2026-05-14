@@ -1,0 +1,25 @@
+<USER_REQUEST>
+for the cloak option, everything looks good, i just want more options, everything in this screenshot 
+
+the creds SHOULD NOT say this
+
+Huge shout out to QuiteAFancyEmerald for the web proxy this is js skidded <3
+Aswell as NoahsAmazingTutoringHelp for the UBG <3
+Made by uiqm
+
+it SHOULD say this
+
+shout out to above.gay for the web proxy.
+Aswell as NoahsAmazingTutoringHelp for the UBG
+skidded by @uiqm <3
+
+the 2 noahs amazing tutoring help and above.gay should be clickable, not uiqm
+
+
+now when i enter a site, and hit enter, now remember this should work for every or most sites, im just testing it on roblox and youtube, ill test for more ,
+
+says this log
+
+Scramjet v2 Engine Detected
+https://www.roblox.com/js/utilities/bundleVerifier.js?v=91dceb4978eda412b09842312dd6cbaa:1 Uncaught SyntaxError: Unexpected token '<' (at https://www.roblox.com/js/utilities/bundleVerifier.js?v=91dceb4978eda412b09842312dd6cbaa:1:1)Understand this error
+<truncated 25118 bytes>
