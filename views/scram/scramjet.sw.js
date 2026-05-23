@@ -46,13 +46,18 @@ function sanitizeHeaders(h) {
     return h;
 }
 
+// Status codes that must not have a response body per spec
+const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
+
 function toResponse(raw) {
+    const status = raw.status || 200;
+    const nullBody = NULL_BODY_STATUSES.has(status);
+
     if (raw instanceof Response) {
-        // Clone and sanitize headers on real Response objects too
         const h = new Headers(raw.headers);
         sanitizeHeaders(h);
-        return new Response(raw.body, {
-            status: raw.status,
+        return new Response(nullBody ? null : raw.body, {
+            status,
             statusText: raw.statusText,
             headers: h
         });
@@ -67,10 +72,10 @@ function toResponse(raw) {
             else { for (const k in hdrs) h.set(k, String(hdrs[k])); }
         }
     } catch(e) {}
-    if (!h.has('content-type')) h.set('content-type', 'text/html; charset=UTF-8');
+    if (!nullBody && !h.has('content-type')) h.set('content-type', 'text/html; charset=UTF-8');
     sanitizeHeaders(h);
-    return new Response(raw.body || null, {
-        status: raw.status || 200,
+    return new Response(nullBody ? null : (raw.body || null), {
+        status,
         statusText: raw.statusText || 'OK',
         headers: h
     });
@@ -257,7 +262,16 @@ async function initHandler() {
                     { type: 'script', content: GLOBAL_SHIM }
                 ]
             }
-        }
+        },
+        // NOTE: The installed @mercuryworkshop/scramjet npm package (v2.0.2-alpha)
+        // calls sendSetCookie(url, cookie) — old 2-arg signature — NOT the array format
+        // that appears in the newer unbuilt TypeScript source.
+        sendSetCookie: async (url, cookie) => {
+            for (const c of await self.clients.matchAll())
+                c.postMessage({ type: 'scramjet-set-cookie', url: url.href, cookie });
+        },
+        fetchBlobUrl: async (url) => fetch(url),
+        fetchDataUrl: async (url) => fetch(url)
     });
     return handler;
 }
@@ -367,15 +381,22 @@ async function emergencyBypass(request, urlObj) {
 
     if (!response) return new Response('Proxy Error: All bypass tiers failed for ' + targetUrl, { status: 502 });
 
-    const contentType = response.headers.get('content-type') || '';
+    const bypassStatus = response.status || 200;
+    const bypassNullBody = NULL_BODY_STATUSES.has(bypassStatus);
+    const contentType = bypassNullBody ? '' : (response.headers.get('content-type') || '');
 
     // Strip blocking headers from bypass responses too
     const bypassHeaders = new Headers(response.headers);
     sanitizeHeaders(bypassHeaders);
 
+    // Null-body responses (204, 304, etc.) — return immediately with no body
+    if (bypassNullBody) {
+        return new Response(null, { headers: bypassHeaders, status: bypassStatus });
+    }
+
     // Skip binary injection
     if (contentType.includes('font') || contentType.includes('image') || contentType.includes('wasm')) {
-        return new Response(response.body, { headers: bypassHeaders, status: response.status });
+        return new Response(response.body, { headers: bypassHeaders, status: bypassStatus });
     }
 
     const runtimeScript = `<script>
@@ -391,13 +412,13 @@ async function emergencyBypass(request, urlObj) {
         let text = await response.text();
         text = runtimeScript + text;
         bypassHeaders.set('content-type', 'text/html; charset=UTF-8');
-        return new Response(text, { headers: bypassHeaders, status: response.status });
+        return new Response(text, { headers: bypassHeaders, status: bypassStatus });
     } else if (contentType.includes('javascript') || targetUrl.endsWith('.js')) {
         let text = await response.text();
         const inlineShim = `(function(){if(globalThis.__scramjet_emergency_active)return;globalThis.__scramjet_emergency_active=true;${GLOBAL_SHIM}})();\n`;
         bypassHeaders.set('content-type', 'application/javascript; charset=UTF-8');
-        return new Response(inlineShim + text, { headers: bypassHeaders, status: response.status });
+        return new Response(inlineShim + text, { headers: bypassHeaders, status: bypassStatus });
     }
 
-    return new Response(response.body, { headers: bypassHeaders, status: response.status });
+    return new Response(response.body, { headers: bypassHeaders, status: bypassStatus });
 }
