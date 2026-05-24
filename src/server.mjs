@@ -13,7 +13,7 @@ import {
 } from './routes.mjs';
 import { tryReadFile, preloaded404 } from './templates.mjs';
 import { fileURLToPath } from 'node:url';
-import { existsSync, unlinkSync } from 'node:fs';
+import { existsSync, unlinkSync, readFileSync } from 'node:fs';
 
 /* Record the server's location as a URL object, including its host and port.
  * The host can be modified at /src/config.json, whereas the ports can be modified
@@ -309,13 +309,33 @@ app.get(serverUrl.pathname + 'github/:redirect', (req, reply) => {
   else reply.code(404).type(supportedTypes.default).send(preloaded404);
 });
 
-if (serverUrl.pathname === '/')
-  // Set an error page for invalid paths outside the query string system.
-  // If the server URL has a prefix, then avoid doing this for stealth reasons.
-  app.setNotFoundHandler((req, reply) => {
+if (serverUrl.pathname === '/') {
+  const proxyPrefixes = [
+    { prefix: '/worker/', engine: 'scram' },
+    { prefix: '/scram/', engine: 'scram' },
+    { prefix: '/uv/', engine: 'uv' },
+    { prefix: '/network/', engine: 'uv' },
+    { prefix: '/bare/', engine: 'bare' },
+    { prefix: '/baremux/', engine: 'bare' },
+    { prefix: '/gmt/', engine: 'bare' },
+  ];
+
+  app.setNotFoundHandler(async (request, reply) => {
+    const reqPath = new URL(request.url, serverUrl).pathname;
+    const cleanPath = reqPath.startsWith(serverUrl.pathname)
+      ? reqPath.slice(serverUrl.pathname.length - 1)
+      : reqPath;
+
+    for (const item of proxyPrefixes) {
+      if (cleanPath.startsWith(item.prefix)) {
+        const wildcard = cleanPath.slice(item.prefix.length) + (new URL(request.url, serverUrl).search || '');
+        return handleProxyRequest(request, reply, item.engine, wildcard);
+      }
+    }
+
     reply.code(404).type(supportedTypes.default).send(preloaded404);
   });
-else {
+} else {
   // Apply the following patch(es) if the server URL has a prefix.
 
   // Patch to fix serving index.html.
@@ -324,6 +344,133 @@ else {
       .type(supportedTypes.default)
       .send(tryReadFile('../views/dist/' + pages.index, import.meta.url));
   });
+}
+
+// Ultraviolet XOR decoding helper
+const uvXorDecode = (str) => {
+  if (!str) return str;
+  let [input, ...search] = str.split('?');
+  try {
+    return (
+      decodeURIComponent(input)
+        .split('')
+        .map((char, ind) =>
+          ind % 2 ? String.fromCharCode(char.charCodeAt(0) ^ 2) : char
+        )
+        .join('') + (search.length ? '?' + search.join('?') : '')
+    );
+  } catch (_) {
+    return (
+      input
+        .split('')
+        .map((char, ind) =>
+          ind % 2 ? String.fromCharCode(char.charCodeAt(0) ^ 2) : char
+        )
+        .join('') + (search.length ? '?' + search.join('?') : '')
+    );
+  }
+};
+
+async function handleProxyRequest(request, reply, engine, wildcard) {
+  try {
+    let targetUrlStr = wildcard;
+    
+    // 1. Extract and decode the URL based on the engine
+    if (engine === 'scram') {
+      if (targetUrlStr.startsWith('network/')) {
+        targetUrlStr = targetUrlStr.slice(8);
+      }
+      try {
+        targetUrlStr = decodeURIComponent(targetUrlStr);
+      } catch (_) {}
+    } else if (engine === 'uv') {
+      if (targetUrlStr.startsWith('service/')) {
+        targetUrlStr = targetUrlStr.slice(8);
+      }
+      targetUrlStr = uvXorDecode(targetUrlStr);
+    } else if (engine === 'bare') {
+      try {
+        targetUrlStr = decodeURIComponent(targetUrlStr);
+      } catch (_) {}
+    }
+    
+    // Ensure it starts with http:// or https://
+    if (!targetUrlStr.includes('://')) {
+      targetUrlStr = 'https://' + targetUrlStr;
+    }
+    
+    console.log(`[Proxy Server Fallback] Fetching upstream: ${targetUrlStr}`);
+    
+    const forwardHeaders = {};
+    const headersToCopy = ['user-agent', 'accept', 'accept-language', 'referer'];
+    for (const h of headersToCopy) {
+      if (request.headers[h]) {
+        forwardHeaders[h] = request.headers[h];
+      }
+    }
+    if (!forwardHeaders['user-agent']) {
+      forwardHeaders['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+    }
+    
+    const response = await fetch(targetUrlStr, {
+      method: request.method,
+      headers: forwardHeaders,
+      body: ['GET', 'HEAD'].includes(request.method) ? null : request.body,
+      redirect: 'follow',
+    });
+    
+    const responseHeaders = {};
+    response.headers.forEach((value, key) => {
+      const blockedHeaders = [
+        'x-frame-options',
+        'content-security-policy',
+        'content-security-policy-report-only',
+        'cross-origin-opener-policy',
+        'cross-origin-embedder-policy',
+        'cross-origin-resource-policy',
+        'x-content-type-options',
+        'content-length',
+        'content-encoding',
+        'transfer-encoding',
+      ];
+      if (!blockedHeaders.includes(key.toLowerCase())) {
+        responseHeaders[key] = value;
+      }
+    });
+    
+    responseHeaders['access-control-allow-origin'] = '*';
+    responseHeaders['access-control-allow-methods'] = 'GET, POST, OPTIONS, PUT, DELETE';
+    responseHeaders['access-control-allow-headers'] = '*';
+    
+    let contentType = response.headers.get('content-type') || '';
+    const ext = targetUrlStr.split('?')[0].split('.').pop().toLowerCase();
+    
+    if (ext === 'js' || targetUrlStr.includes('/js/')) {
+      contentType = 'application/javascript; charset=UTF-8';
+    } else if (ext === 'css') {
+      contentType = 'text/css; charset=UTF-8';
+    } else if (ext === 'woff2') {
+      contentType = 'font/woff2';
+    } else if (ext === 'woff') {
+      contentType = 'font/woff';
+    } else if (ext === 'ttf') {
+      contentType = 'font/ttf';
+    }
+    
+    if (contentType) {
+      responseHeaders['content-type'] = contentType;
+    }
+    
+    reply.headers(responseHeaders);
+    reply.code(response.status);
+    
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+    
+  } catch (err) {
+    console.error(`[Proxy Server Fallback Error] ${err.message} for wildcard: ${wildcard}`);
+    reply.code(500).type('text/plain').send(`Proxy Error: ${err.message}`);
+  }
 }
 
 app.listen({ port: serverUrl.port, host: serverUrl.hostname });

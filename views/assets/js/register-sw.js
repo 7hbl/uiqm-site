@@ -1,9 +1,9 @@
 (() => {
   const swRoutes = {
-      uv: ['{{route}}{{/uv/sw.js}}', '{{route}}{{/uv/sw-blacklist.js}}'],
+      uv: ['{{route /uv/sw.js}}', '{{route /uv/sw-blacklist.js}}'],
       sj: [
-        '{{route}}{{/scram/scramjet.sw.js}}',
-        '{{route}}{{/scram/scramjet.sw-blacklist.js}}'
+        '{{route /scram/scramjet.sw.js}}',
+        '{{route /scram/scramjet.sw-blacklist.js}}'
       ],
     },
     swAllowedHostnames = ['localhost', '127.0.0.1'],
@@ -84,10 +84,12 @@
           console.log('Scramjet v2 Engine Loaded');
       };
 
-      navigator.serviceWorker.register(
+      const sjReg = await navigator.serviceWorker.register(
         swRoutes.sj[readStorage('HideAds') !== false ? 1 : 0],
-        { scope: '/scram/' }
+        { scope: '{{route /scram/}}', updateViaCache: 'none' }
       );
+      // Force the browser to immediately check for a newer SW version
+      sjReg.update().catch(() => {});
     } catch (err) {
       console.error('Scramjet initialization failed:', err);
     }
