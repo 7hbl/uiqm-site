@@ -117,6 +117,42 @@ const app = Fastify({
   serverFactory: serverFactory,
 });
 
+// Proxy prefix routing table — shared between the onRequest hook and
+// the setNotFoundHandler fallback further below.
+const proxyPrefixes = [
+  { prefix: '/worker/', engine: 'scram' },
+  { prefix: '/scram/', engine: 'scram' },
+  { prefix: '/uv/', engine: 'uv' },
+  { prefix: '/network/', engine: 'uv' },
+  { prefix: '/bare/', engine: 'bare' },
+  { prefix: '/baremux/', engine: 'bare' },
+  { prefix: '/gmt/', engine: 'bare' },
+];
+
+// Matches the path segment after the proxy prefix when it looks like an
+// encoded or raw URL — e.g. https%3A%2F%2F... or https://...
+const PROXY_URL_RE = /^https?(?:%3A|:)/i;
+
+// CRITICAL FIX: Intercept proxy-URL requests in onRequest, BEFORE
+// fastifyStatic can handle them. fastifyStatic registers a wildcard route
+// for /worker/*, /uv/*, etc. and when no matching file exists it returns a
+// 404 HTML page directly — bypassing setNotFoundHandler entirely. This causes
+// "Unexpected token '<'" when the browser parses that HTML as JavaScript.
+// The onRequest hook fires before any route handler and short-circuits here.
+app.addHook('onRequest', async (request, reply) => {
+  const url = new URL(request.url, serverUrl);
+  const reqPath = url.pathname;
+  for (const item of proxyPrefixes) {
+    if (reqPath.startsWith(item.prefix)) {
+      const wildcard = reqPath.slice(item.prefix.length);
+      if (PROXY_URL_RE.test(wildcard)) {
+        await handleProxyRequest(request, reply, item.engine, wildcard + (url.search || ''));
+        return; // reply has been sent by handleProxyRequest
+      }
+    }
+  }
+});
+
 // Apply Helmet middleware for security.
 app.register(fastifyHelmet, {
   contentSecurityPolicy: false, // Disable CSP
@@ -310,16 +346,9 @@ app.get(serverUrl.pathname + 'github/:redirect', (req, reply) => {
 });
 
 if (serverUrl.pathname === '/') {
-  const proxyPrefixes = [
-    { prefix: '/worker/', engine: 'scram' },
-    { prefix: '/scram/', engine: 'scram' },
-    { prefix: '/uv/', engine: 'uv' },
-    { prefix: '/network/', engine: 'uv' },
-    { prefix: '/bare/', engine: 'bare' },
-    { prefix: '/baremux/', engine: 'bare' },
-    { prefix: '/gmt/', engine: 'bare' },
-  ];
-
+  // setNotFoundHandler is a last-resort fallback for proxy paths not caught
+  // by the onRequest hook (e.g. requests from older cached service workers).
+  // proxyPrefixes is defined at module scope above.
   app.setNotFoundHandler(async (request, reply) => {
     const reqPath = new URL(request.url, serverUrl).pathname;
     const cleanPath = reqPath.startsWith(serverUrl.pathname)
@@ -465,8 +494,11 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     reply.code(response.status);
     
     const arrayBuffer = await response.arrayBuffer();
-    return Buffer.from(arrayBuffer);
-    
+    // Must call reply.send() explicitly — when called from an onRequest hook
+    // Fastify does NOT auto-send return values (unlike route handlers).
+    reply.send(Buffer.from(arrayBuffer));
+    return;
+
   } catch (err) {
     console.error(`[Proxy Server Fallback Error] ${err.message} for wildcard: ${wildcard}`);
     reply.code(500).type('text/plain').send(`Proxy Error: ${err.message}`);
