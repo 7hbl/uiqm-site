@@ -120,32 +120,47 @@ const app = Fastify({
 // Proxy prefix routing table — shared between the onRequest hook and
 // the setNotFoundHandler fallback further below.
 const proxyPrefixes = [
+  { prefix: '/proxy/', engine: 'direct' },
+  { prefix: '/worker/network/', engine: 'scram' },
   { prefix: '/worker/', engine: 'scram' },
+  { prefix: '/scram/network/', engine: 'scram' },
   { prefix: '/scram/', engine: 'scram' },
-  { prefix: '/uv/', engine: 'uv' },
+  { prefix: '/network/service/', engine: 'uv' },
   { prefix: '/network/', engine: 'uv' },
+  { prefix: '/uv/service/', engine: 'uv' },
+  { prefix: '/uv/', engine: 'uv' },
+  { prefix: '/service/', engine: 'uv' },
   { prefix: '/bare/', engine: 'bare' },
   { prefix: '/baremux/', engine: 'bare' },
   { prefix: '/gmt/', engine: 'bare' },
 ];
 
-// Matches the path segment after the proxy prefix when it looks like an
-// encoded or raw URL — e.g. https%3A%2F%2F... or https://...
-const PROXY_URL_RE = /^https?(?:%3A|:)/i;
+const staticAssetFiles = new Set([
+  'networking.bundle.js', 'networking.client.js', 'networking.config.js', 'networking.handler.js', 'networking.sw.js',
+  'uv.bundle.js', 'uv.client.js', 'uv.config.js', 'uv.handler.js', 'uv.sw.js', 'sw.js', 'sw-blacklist.js', 'workerware.js', 'WWError.js',
+  'working.all.js', 'working.sw.js', 'working.wasm.wasm', 'scramjet.js', 'scramjet.mjs', 'scramjet_bundled.js', 'scramjet_bundled.mjs',
+  'index.js', 'worker.js', 'index.mjs', 'index.cjs', 'a68dd7a5344f1722.wasm', 'c34a4f083a11eae2.wasm'
+]);
 
-// CRITICAL FIX: Intercept proxy-URL requests in onRequest, BEFORE
-// fastifyStatic can handle them. fastifyStatic registers a wildcard route
-// for /worker/*, /uv/*, etc. and when no matching file exists it returns a
-// 404 HTML page directly — bypassing setNotFoundHandler entirely. This causes
-// "Unexpected token '<'" when the browser parses that HTML as JavaScript.
-// The onRequest hook fires before any route handler and short-circuits here.
+function isProxyWildcard(wildcard, prefix) {
+  if (!wildcard) return false;
+  const clean = wildcard.split('?')[0];
+  if (staticAssetFiles.has(clean)) return false;
+  if (prefix === '/proxy/') return true;
+  if (clean.startsWith('network/') || clean.startsWith('service/')) return true;
+  if (/^https?(?:%3A|:)/i.test(clean)) return true;
+  if (/^hvtr?s/i.test(clean)) return true;
+  if (clean.includes('://') || clean.includes('%3A%2F%2F')) return true;
+  return false;
+}
+
 app.addHook('onRequest', async (request, reply) => {
   const url = new URL(request.url, serverUrl);
   const reqPath = url.pathname;
   for (const item of proxyPrefixes) {
     if (reqPath.startsWith(item.prefix)) {
       const wildcard = reqPath.slice(item.prefix.length);
-      if (PROXY_URL_RE.test(wildcard)) {
+      if (isProxyWildcard(wildcard, item.prefix)) {
         await handleProxyRequest(request, reply, item.engine, wildcard + (url.search || ''));
         return; // reply has been sent by handleProxyRequest
       }
@@ -404,20 +419,17 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
   try {
     let targetUrlStr = wildcard;
     
-    // 1. Extract and decode the URL based on the engine
-    if (engine === 'scram') {
-      if (targetUrlStr.startsWith('network/')) {
-        targetUrlStr = targetUrlStr.slice(8);
-      }
-      try {
-        targetUrlStr = decodeURIComponent(targetUrlStr);
-      } catch (_) {}
-    } else if (engine === 'uv') {
-      if (targetUrlStr.startsWith('service/')) {
-        targetUrlStr = targetUrlStr.slice(8);
-      }
+    // 1. Extract and decode the URL based on the engine and format
+    if (targetUrlStr.startsWith('network/')) {
+      targetUrlStr = targetUrlStr.slice(8);
+    }
+    if (targetUrlStr.startsWith('service/')) {
+      targetUrlStr = targetUrlStr.slice(8);
+    }
+
+    if (/^hvtr?s/i.test(targetUrlStr)) {
       targetUrlStr = uvXorDecode(targetUrlStr);
-    } else if (engine === 'bare') {
+    } else {
       try {
         targetUrlStr = decodeURIComponent(targetUrlStr);
       } catch (_) {}
@@ -427,9 +439,25 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     if (!targetUrlStr.includes('://')) {
       targetUrlStr = 'https://' + targetUrlStr;
     }
+
+    // YouTube watch embed optimizer for iframe compatibility
+    if (/youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/i.test(targetUrlStr) || /youtu\.be\/([a-zA-Z0-9_-]+)/i.test(targetUrlStr)) {
+      const match = targetUrlStr.match(/(?:watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/i);
+      if (match && match[1]) {
+        targetUrlStr = `https://www.youtube-nocookie.com/embed/${match[1]}?autoplay=1`;
+      }
+    }
     
     console.log(`[Proxy Server Fallback] Fetching upstream: ${targetUrlStr}`);
     
+    let parsedTarget;
+    try {
+      parsedTarget = new URL(targetUrlStr);
+    } catch (_) {
+      parsedTarget = new URL('https://' + targetUrlStr);
+    }
+    const targetOrigin = parsedTarget.origin;
+
     const forwardHeaders = {};
     const headersToCopy = ['user-agent', 'accept', 'accept-language', 'referer'];
     for (const h of headersToCopy) {
@@ -438,8 +466,9 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       }
     }
     if (!forwardHeaders['user-agent']) {
-      forwardHeaders['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+      forwardHeaders['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
     }
+    forwardHeaders['referer'] = targetOrigin + '/';
     
     const response = await fetch(targetUrlStr, {
       method: request.method,
@@ -472,9 +501,10 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     responseHeaders['access-control-allow-headers'] = '*';
     
     let contentType = response.headers.get('content-type') || '';
-    const ext = targetUrlStr.split('?')[0].split('.').pop().toLowerCase();
+    const cleanUrl = targetUrlStr.split('?')[0].toLowerCase();
+    const ext = cleanUrl.split('.').pop();
     
-    if (ext === 'js' || targetUrlStr.includes('/js/')) {
+    if (ext === 'js' || cleanUrl.includes('/js/')) {
       contentType = 'application/javascript; charset=UTF-8';
     } else if (ext === 'css') {
       contentType = 'text/css; charset=UTF-8';
@@ -484,18 +514,69 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       contentType = 'font/woff';
     } else if (ext === 'ttf') {
       contentType = 'font/ttf';
+    } else if (ext === 'html' || cleanUrl.endsWith('.html')) {
+      contentType = 'text/html; charset=UTF-8';
     }
     
     if (contentType) {
       responseHeaders['content-type'] = contentType;
+    }
+
+    // HTML Rewriting for seamless in-iframe browsing
+    if (contentType.includes('text/html') || cleanUrl.endsWith('.html')) {
+      let html = await response.text();
+      const proxyPrefix = request.url.startsWith('/worker/network/')
+        ? '/worker/network/'
+        : (request.url.startsWith('/network/service/') ? '/network/service/' : '/proxy/');
+
+      const baseTag = `<base href="${targetOrigin}/">`;
+      const clientScript = `
+<script>
+(function() {
+  const PROXY_ROOT = '${proxyPrefix}';
+  try { Object.defineProperty(window, 'top', { get: () => window }); } catch(e) {}
+  try { Object.defineProperty(window, 'parent', { get: () => window }); } catch(e) {}
+  document.addEventListener('click', function(e) {
+    const a = e.target.closest('a');
+    if (!a || !a.href) return;
+    try {
+      const u = new URL(a.href, window.location.href);
+      if (u.protocol === 'http:' || u.protocol === 'https:') {
+        e.preventDefault();
+        window.location.href = PROXY_ROOT + encodeURIComponent(u.href);
+      }
+    } catch(_) {}
+  }, true);
+  document.addEventListener('submit', function(e) {
+    const form = e.target;
+    if (!form || !form.action) return;
+    try {
+      const u = new URL(form.action, window.location.href);
+      form.action = PROXY_ROOT + encodeURIComponent(u.href);
+    } catch(_) {}
+  }, true);
+})();
+</script>`;
+
+      if (html.includes('<head>')) {
+        html = html.replace('<head>', '<head>' + baseTag + clientScript);
+      } else if (html.includes('<HEAD>')) {
+        html = html.replace('<HEAD>', '<HEAD>' + baseTag + clientScript);
+      } else {
+        html = baseTag + clientScript + html;
+      }
+
+      responseHeaders['content-type'] = 'text/html; charset=UTF-8';
+      reply.headers(responseHeaders);
+      reply.code(response.status);
+      reply.send(html);
+      return;
     }
     
     reply.headers(responseHeaders);
     reply.code(response.status);
     
     const arrayBuffer = await response.arrayBuffer();
-    // Must call reply.send() explicitly — when called from an onRequest hook
-    // Fastify does NOT auto-send return values (unlike route handlers).
     reply.send(Buffer.from(arrayBuffer));
     return;
 
