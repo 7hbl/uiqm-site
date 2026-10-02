@@ -306,6 +306,8 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/i);
                 if (ytMatch && ytMatch[1]) {
                     frame.src = 'https://www.youtube-nocookie.com/embed/' + ytMatch[1] + '?autoplay=1';
+                } else if (/^https?:\/\/(?:[a-zA-Z0-9_.-]+\.)?youtube\.com(?:\/.*)?$/i.test(url)) {
+                    frame.src = '/proxy/' + encodeURIComponent(url);
                 } else if (window._rhSession) {
                     frame.src = '/' + window._rhSession + '/' + url;
                 } else if (sjEncode) {

@@ -119,17 +119,17 @@ const GLOBAL_SHIM = `
     // Scramjet runtime shims (prevents ReferenceErrors on rewritten scripts)
     globalThis.$scramerr = globalThis.$scramerr || ((e) => {});
     globalThis.$scramjet$get = globalThis.$scramjet$get || ((o, p) => {
-        if (!o) return safe;
+        if (!o) return undefined;
         if (p === 'location' && (o === window || o === document)) return window.location;
-        try { return (o[p] === undefined) ? safe : o[p]; } catch(_) { return safe; }
+        try { return o[p]; } catch(_) { return undefined; }
     });
     globalThis.$scramjet$call = globalThis.$scramjet$call || ((o, p, a) => {
-        try { const fn = o && o[p]; return typeof fn === 'function' ? fn.apply(o, a) : safe; } catch(_) { return safe; }
+        try { const fn = o && o[p]; return typeof fn === 'function' ? fn.apply(o, a) : undefined; } catch(_) { return undefined; }
     });
     globalThis.$scramjet$apply = globalThis.$scramjet$apply || ((o, p, a) => globalThis.$scramjet$call(o, p, a));
-    globalThis.$scramjet$prop = globalThis.$scramjet$prop || ((o, p) => { try { return o ? o[p] : undefined; } catch(_) { return safe; } });
-    globalThis.$scramjet$set = globalThis.$scramjet$set || ((o, p, v) => { try { if(o) o[p] = v; } catch(_) {} return v; });
-    globalThis.$scramjet$wrap = globalThis.$scramjet$wrap || ((o) => o || safe);
+    globalThis.$scramjet$prop = globalThis.$scramjet$prop || ((o, p) => { try { return o ? o[p] : undefined; } catch(_) { return undefined; } });
+    globalThis.$scramjet$set = globalThis.$scramjet$set || ((o, p, v) => { try { if(o && p !== 'undefined') o[p] = v; } catch(_) {} return v; });
+    globalThis.$scramjet$wrap = globalThis.$scramjet$wrap || ((o) => o);
     
     // Aggressive Array/String/Number Guard — stops "called on null" crashes
     const wrapProto = (proto, methods) => {
