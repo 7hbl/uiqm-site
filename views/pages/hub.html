@@ -309,7 +309,7 @@
             <button class="tool-btn" onclick="toggleFullscreen()">FULLSCREEN</button>
             <button class="tool-btn" onclick="closeGame()" style="border-color: #ff0000; color: #ff0000;">EXIT</button>
         </div>
-        <iframe id="proxy-frame"></iframe>
+        <iframe id="proxy-frame" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen; gamepad" allowfullscreen></iframe>
     </div>
 
     <div id="settings-modal">
@@ -6070,12 +6070,20 @@
                         sjEncode = url => WORKER_ROOT + 'network/' + encodeURIComponent(url);
                     };
                 }
-                document.getElementById('loading-screen').style.display = 'none';
             } catch (e) {
-                console.error(e);
-                document.getElementById('loading-screen').innerText = 'ERROR: RELOADING...';
-                setTimeout(() => location.reload(), 2000);
+                console.warn('Service Worker initialization note:', e);
+            } finally {
+                const ls = document.getElementById('loading-screen');
+                if (ls) ls.style.display = 'none';
             }
+            
+            // Pre-fetch Rammerhead session ID for games
+            fetch('/newsession')
+                .then(r => r.text())
+                .then(id => {
+                    if (id && id.length === 32) window._rhSession = id;
+                })
+                .catch(() => {});
         };
 
         const renderGames = (filter = '') => {
@@ -6122,7 +6130,13 @@
 
         const launchGame = (url) => {
             overlay.style.display = 'block';
-            frame.src = sjEncode ? sjEncode(url) : (SCRAMJET_PREFIX + encodeURIComponent(url));
+            if (window._rhSession) {
+                frame.src = '/' + window._rhSession + '/' + url;
+            } else if (sjEncode) {
+                frame.src = sjEncode(url);
+            } else {
+                frame.src = '/proxy/' + encodeURIComponent(url);
+            }
         };
 
         const closeGame = () => {
@@ -6176,6 +6190,16 @@
             document.getElementById('user-count').innerText = count;
         };
         updateUsers(); setInterval(updateUsers, 10000);
+
+        // Restore saved tab cloak from localStorage
+        const savedTitle = localStorage.getItem('term-cloak-title');
+        const savedIcon = localStorage.getItem('term-cloak-icon');
+        if (savedTitle) document.title = savedTitle;
+        if (savedIcon) {
+            const l = document.querySelector("link[rel*='icon']") || document.createElement('link');
+            l.type = 'image/x-icon'; l.rel = 'shortcut icon'; l.href = savedIcon;
+            document.head.appendChild(l);
+        }
 
         renderGames();
         initProxy();

@@ -446,6 +446,55 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       if (match && match[1]) {
         targetUrlStr = `https://www.youtube-nocookie.com/embed/${match[1]}?autoplay=1`;
       }
+    } else if (/^https?:\/\/(www\.)?youtube\.com\/?$/i.test(targetUrlStr)) {
+      const ytPortalHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube Web Player</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0a0a0a; color: #fff; font-family: 'Courier New', monospace; height: 100vh; display: flex; flex-direction: column; }
+header { background: #111; padding: 15px 25px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #ff0000; box-shadow: 0 0 15px rgba(255,0,0,0.3); }
+.logo { font-size: 20px; font-weight: bold; color: #ff0000; text-shadow: 0 0 10px #ff0000; }
+.search-bar { display: flex; flex: 1; max-width: 650px; margin: 0 20px; }
+.search-bar input { flex: 1; padding: 10px 15px; border-radius: 4px 0 0 4px; border: 1px solid #ff0000; background: #000; color: #ff0000; font-family: inherit; font-size: 14px; outline: none; }
+.search-bar button { padding: 10px 20px; border-radius: 0 4px 4px 0; border: 1px solid #ff0000; border-left: none; background: #200; color: #fff; font-family: inherit; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+.search-bar button:hover { background: #ff0000; color: #000; }
+.player-container { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; padding: 20px; }
+iframe { width: 100%; height: 100%; max-width: 1200px; max-height: 700px; border: 2px solid #ff0000; border-radius: 6px; box-shadow: 0 0 25px rgba(255,0,0,0.4); }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">▶ YOUTUBE WEB PLAYER</div>
+  <form class="search-bar" onsubmit="playVideo(event)">
+    <input type="text" id="yt-query" placeholder="Enter video URL, Video ID, or search query..." spellcheck="false" autocomplete="off" />
+    <button type="submit">PLAY</button>
+  </form>
+</header>
+<div class="player-container">
+  <iframe id="main-player" src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe>
+</div>
+<script>
+function playVideo(e) {
+  if (e) e.preventDefault();
+  const val = document.getElementById('yt-query').value.trim();
+  if (!val) return;
+  const match = val.match(/(?:watch\\?v=|youtu\\.be\\/|embed\\/)([a-zA-Z0-9_-]{11})/i);
+  const id = match ? match[1] : (val.length === 11 && !val.includes(' ') ? val : null);
+  if (id) {
+    document.getElementById('main-player').src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1';
+  } else {
+    document.getElementById('main-player').src = 'https://www.youtube-nocookie.com/embed?listType=search&list=' + encodeURIComponent(val);
+  }
+}
+</script>
+</body>
+</html>`;
+      reply.type('text/html; charset=UTF-8').send(ytPortalHtml);
+      return;
     }
     
     console.log(`[Proxy Server Fallback] Fetching upstream: ${targetUrlStr}`);
@@ -536,6 +585,39 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
   const PROXY_ROOT = '${proxyPrefix}';
   try { Object.defineProperty(window, 'top', { get: () => window }); } catch(e) {}
   try { Object.defineProperty(window, 'parent', { get: () => window }); } catch(e) {}
+  
+  // Intercept fetch
+  try {
+    const origFetch = window.fetch;
+    window.fetch = function(input, init) {
+      if (typeof input === 'string') {
+        try {
+          const u = new URL(input, window.location.href);
+          if (u.origin === window.location.origin && !u.pathname.startsWith(PROXY_ROOT)) {
+            input = PROXY_ROOT + encodeURIComponent('${targetOrigin}' + u.pathname + u.search);
+          }
+        } catch (_) {}
+      }
+      return origFetch.call(this, input, init);
+    };
+  } catch(_) {}
+
+  // Intercept XHR
+  try {
+    const origOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url, ...args) {
+      if (typeof url === 'string') {
+        try {
+          const u = new URL(url, window.location.href);
+          if (u.origin === window.location.origin && !u.pathname.startsWith(PROXY_ROOT)) {
+            url = PROXY_ROOT + encodeURIComponent('${targetOrigin}' + u.pathname + u.search);
+          }
+        } catch (_) {}
+      }
+      return origOpen.call(this, method, url, ...args);
+    };
+  } catch(_) {}
+
   document.addEventListener('click', function(e) {
     const a = e.target.closest('a');
     if (!a || !a.href) return;
