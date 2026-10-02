@@ -77,6 +77,8 @@ const rammerheadSession = new RegExp(
     try {
       const url = new URL(req.url, serverUrl);
       return (
+        url.pathname.startsWith('/rammer/') ||
+        url.pathname === '/rammer' ||
         rammerheadScopes.includes(url.pathname) ||
         rammerheadSession.test(url.pathname)
       );
@@ -86,10 +88,16 @@ const rammerheadSession = new RegExp(
   },
   routeRhRequest = (req, res) => {
     req.url = req.url.slice(serverUrl.pathname.length - 1);
+    if (req.url.startsWith('/rammer/')) {
+      req.url = '/' + req.url.slice(8);
+    }
     rh.emit('request', req, res);
   },
   routeRhUpgrade = (req, socket, head) => {
     req.url = req.url.slice(serverUrl.pathname.length - 1);
+    if (req.url.startsWith('/rammer/')) {
+      req.url = '/' + req.url.slice(8);
+    }
     rh.emit('upgrade', req, socket, head);
   };
 
@@ -279,6 +287,7 @@ if (config.disguiseFiles) {
       serverUrl.pathname.length
     );
     if (
+      reqPath.startsWith('rammer/') ||
       shouldNotHandle.test(reqPath) ||
       exemptDirs.some((dir) => reqPath.indexOf(dir + '/') === 0) ||
       exemptPages.includes(reqPath) ||
@@ -452,7 +461,7 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       const initialQuery = searchMatch && searchMatch[1] ? decodeURIComponent(searchMatch[1].replace(/\+/g, ' ')) : '';
       const initialSrc = initialQuery
         ? `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(initialQuery)}`
-        : 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1';
+        : 'https://www.youtube-nocookie.com/embed?listType=search&list=trending';
 
       const ytPortalHtml = `<!DOCTYPE html>
 <html lang="en">
