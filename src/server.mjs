@@ -441,12 +441,19 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     }
 
     // YouTube watch embed optimizer for iframe compatibility
-    if (/youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/i.test(targetUrlStr) || /youtu\.be\/([a-zA-Z0-9_-]+)/i.test(targetUrlStr)) {
-      const match = targetUrlStr.match(/(?:watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/i);
-      if (match && match[1]) {
-        targetUrlStr = `https://www.youtube-nocookie.com/embed/${match[1]}?autoplay=1`;
-      }
-    } else if (/^https?:\/\/(www\.)?youtube\.com\/?$/i.test(targetUrlStr)) {
+    const ytWatchMatch = targetUrlStr.match(/(?:watch\?v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/i);
+    if (ytWatchMatch && ytWatchMatch[1]) {
+      reply.redirect(`https://www.youtube-nocookie.com/embed/${ytWatchMatch[1]}?autoplay=1`, 302);
+      return;
+    }
+
+    if (/youtube\.com/i.test(targetUrlStr)) {
+      const searchMatch = targetUrlStr.match(/[?&]search_query=([^&]+)/i);
+      const initialQuery = searchMatch && searchMatch[1] ? decodeURIComponent(searchMatch[1].replace(/\+/g, ' ')) : '';
+      const initialSrc = initialQuery
+        ? `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(initialQuery)}`
+        : 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1';
+
       const ytPortalHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -470,20 +477,20 @@ iframe { width: 100%; height: 100%; max-width: 1200px; max-height: 700px; border
 <header>
   <div class="logo">▶ YOUTUBE WEB PLAYER</div>
   <form class="search-bar" onsubmit="playVideo(event)">
-    <input type="text" id="yt-query" placeholder="Enter video URL, Video ID, or search query..." spellcheck="false" autocomplete="off" />
+    <input type="text" id="yt-query" value="${initialQuery.replace(/"/g, '&quot;')}" placeholder="Enter video URL, Video ID, or search query..." spellcheck="false" autocomplete="off" />
     <button type="submit">PLAY</button>
   </form>
 </header>
 <div class="player-container">
-  <iframe id="main-player" src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe>
+  <iframe id="main-player" src="${initialSrc}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe>
 </div>
 <script>
 function playVideo(e) {
   if (e) e.preventDefault();
   const val = document.getElementById('yt-query').value.trim();
   if (!val) return;
-  const match = val.match(/(?:watch\\?v=|youtu\\.be\\/|embed\\/)([a-zA-Z0-9_-]{11})/i);
-  const id = match ? match[1] : (val.length === 11 && !val.includes(' ') ? val : null);
+  const match = val.match(/(?:watch\\?v=|youtu\\.be\\/|embed\\/|shorts\\/)([a-zA-Z0-9_-]{11})/i);
+  const id = match ? match[1] : (val.length === 11 && !val.includes(' ') && !val.includes('?') ? val : null);
   if (id) {
     document.getElementById('main-player').src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1';
   } else {
