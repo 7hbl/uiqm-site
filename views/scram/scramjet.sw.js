@@ -276,12 +276,13 @@ var $scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});`
 
 function injectScriptHeader(code) {
     if (typeof code !== 'string') return code;
-    const strictMatch = code.match(/^\\s*(['"])use strict\\1;?/);
+    const strictMatch = code.match(/^\s*(['"])use strict\1;?/);
     if (strictMatch) {
-        return strictMatch[0] + '\\n' + SCRIPT_HEADER + '\\n' + code.slice(strictMatch[0].length);
+        return `${strictMatch[0]}\n${SCRIPT_HEADER}\n${code.slice(strictMatch[0].length)}`;
     }
-    return SCRIPT_HEADER + '\\n' + code;
+    return `${SCRIPT_HEADER}\n${code}`;
 }
+
 
 
 async function initHandler() {
