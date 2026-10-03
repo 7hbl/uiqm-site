@@ -272,7 +272,48 @@ var $scramjet$apply = globalThis.$scramjet$apply || ((o, p, a) => (globalThis.$s
 var $scramjet$set = globalThis.$scramjet$set || ((o, p, v) => { try { if (o && p !== 'undefined') o[p] = v; } catch(_) {} return v; });
 var $scramjet$clean = globalThis.$scramjet$clean || ((...a) => a);
 var $scramjet$tryset = globalThis.$scramjet$tryset || ((o, p, v) => { try { o[p] = v; } catch(_) {} return v; });
-var $scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});`;
+var $scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});
+(function() {
+    if (globalThis.__sj_fetch_wrapped) return;
+    globalThis.__sj_fetch_wrapped = true;
+    var _P = '/worker/network/';
+    var _wrap = function(u) {
+        if (!u) return u;
+        var s = typeof u === 'string' ? u : (u.href ? u.href : (u.url ? u.url : ''));
+        if (!s || typeof s !== 'string') return u;
+        var o = (typeof location !== 'undefined' && location.origin) || (typeof self !== 'undefined' && self.location && self.location.origin) || '';
+        if (s.indexOf('://') !== -1 && (!o || s.indexOf(o) !== 0)) {
+            return _P + encodeURIComponent(s);
+        }
+        return s;
+    };
+    try {
+        var _f = globalThis.fetch;
+        if (_f) {
+            globalThis.fetch = function(r, i) {
+                try {
+                    if (typeof r === 'string') r = _wrap(r);
+                    else if (r && typeof r === 'object' && r.href) r = _wrap(r.href);
+                    else if (r && typeof r === 'object' && r.url) {
+                        var nw = _wrap(r.url);
+                        if (nw !== r.url) r = new Request(nw, r);
+                    }
+                } catch(_) {}
+                return _f.call(this, r, i);
+            };
+        }
+    } catch(_) {}
+    try {
+        if (globalThis.XMLHttpRequest && globalThis.XMLHttpRequest.prototype) {
+            var _op = globalThis.XMLHttpRequest.prototype.open;
+            globalThis.XMLHttpRequest.prototype.open = function(m, u) {
+                try { u = _wrap(u); } catch(_) {}
+                var rest = Array.prototype.slice.call(arguments, 2);
+                return _op.apply(this, [m, u].concat(rest));
+            };
+        }
+    } catch(_) {}
+})();`;
 
 function injectScriptHeader(code) {
     if (typeof code !== 'string') return code;
