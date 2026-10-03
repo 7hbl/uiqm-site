@@ -41,7 +41,11 @@ import puppeteer from 'puppeteer';
               mathEquals: typeof window !== 'undefined' ? (window.Math === Math) : 'no',
               undefinedWritable: typeof window !== 'undefined' ? Object.getOwnPropertyDescriptor(window, 'undefined') : null,
               scriptsCount: document.querySelectorAll('script').length,
-              title: document.title
+              title: document.title,
+              hasYtdApp: !!document.querySelector('ytd-app'),
+              hasMasthead: !!document.querySelector('#masthead'),
+              hasButtons: document.querySelectorAll('button').length,
+              bodyHtmlLength: document.body ? document.body.innerHTML.length : 0
             };
           });
           console.log('YouTube Frame Diagnosis:', JSON.stringify(evalResult, null, 2));
@@ -50,6 +54,9 @@ import puppeteer from 'puppeteer';
         }
       }
     }
+
+    await page.screenshot({ path: 'tools/maintenance/live_test.png' });
+    console.log('Saved screenshot to tools/maintenance/live_test.png');
   } catch (err) {
     console.error('Test error:', err.message);
   } finally {

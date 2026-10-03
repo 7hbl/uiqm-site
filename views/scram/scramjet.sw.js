@@ -267,8 +267,11 @@ async function initHandler() {
                 codecDecode: s => {
                     try {
                         if (!s) return new URL(ORIGIN + '/');
-                        let p = s;
+                        let p = String(s);
+                        if (p.startsWith('#')) p = p.slice(1);
+                        if (p.includes('#')) p = p.split('#')[0];
                         if (p.startsWith('network/')) p = p.slice(8);
+                        if (!p) return new URL(ORIGIN + '/');
                         try {
                             const d = decodeURIComponent(p);
                             const urlStr = d.includes('://') ? d : 'https://' + d;
