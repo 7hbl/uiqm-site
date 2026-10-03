@@ -13,7 +13,10 @@ import puppeteer from 'puppeteer';
     console.log(`[Browser Console ${msg.type().toUpperCase()}]`, msg.text());
   });
   page.on('pageerror', err => {
-    console.log(`[Browser Uncaught Error]`, err.message);
+    console.log(`[Browser Uncaught Error]`, err.message, err.stack);
+  });
+  page.on('requestfailed', req => {
+    console.log(`[Request Failed] ${req.url()} (${req.failure()?.errorText})`);
   });
 
   try {

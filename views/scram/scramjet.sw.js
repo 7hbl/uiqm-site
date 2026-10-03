@@ -389,34 +389,6 @@ self.addEventListener('fetch', event => {
             const res = toResponse(response);
             const contentType = res.headers.get('content-type') || '';
 
-            // Skip binary re-wrapping
-            if (contentType.includes('font') || contentType.includes('image') || contentType.includes('audio') || contentType.includes('video') || contentType.includes('wasm')) {
-                return res;
-            }
-
-            if (contentType.includes('javascript') || contentType.includes('application/x-javascript') || rawUrl.pathname.endsWith('.js')) {
-                let text = await res.text();
-                const newHeaders = new Headers(res.headers);
-                newHeaders.set('content-type', 'application/javascript; charset=UTF-8');
-                sanitizeHeaders(newHeaders);
-                return new Response(GLOBAL_SHIM + '\n' + text, {
-                    status: res.status,
-                    statusText: res.statusText,
-                    headers: newHeaders
-                });
-            } else if (contentType.includes('text/html')) {
-                let text = await res.text();
-                text = '<script>' + GLOBAL_SHIM + '</script>\n' + text;
-                const newHeaders = new Headers(res.headers);
-                newHeaders.set('content-type', 'text/html; charset=UTF-8');
-                sanitizeHeaders(newHeaders);
-                return new Response(text, {
-                    status: res.status,
-                    statusText: res.statusText,
-                    headers: newHeaders
-                });
-            }
-
             return res;
         } catch(e) {
             console.error('[Scramjet v2 SW] Rewriter crashed, using Epoxy bypass:', e);
@@ -442,15 +414,26 @@ async function emergencyBypass(request, urlObj) {
     try {
         const ep = await getEpoxy();
         if (ep) {
-            const res = await ep.request(new URL(targetUrl), request.method, request.body, request.headers);
+            const epHeaders = {};
+            if (request.headers && typeof request.headers.forEach === 'function') {
+                request.headers.forEach((v, k) => {
+                    const lk = k.toLowerCase();
+                    if (lk !== 'host' && lk !== 'origin' && lk !== 'referer') epHeaders[k] = v;
+                });
+            }
+            if (targetUrl.includes('youtube.com') || targetUrl.includes('googlevideo.com') || targetUrl.includes('gstatic.com')) {
+                epHeaders['referer'] = 'https://www.youtube.com/';
+            }
+            const body = ['GET', 'HEAD'].includes(request.method) ? null : request.body;
+            const res = await ep.request(new URL(targetUrl), request.method, body, epHeaders);
             response = toResponse(res);
         }
     } catch(e) { console.warn('[SW] Epoxy bypass failed:', e.message); }
 
     if (!response) {
         try {
-            const direct = await fetch(targetUrl, { mode: 'cors', credentials: 'omit' });
-            if (direct.ok) response = direct;
+            const direct = await fetch(targetUrl, { mode: 'no-cors', credentials: 'omit' });
+            if (direct.ok || direct.type === 'opaque') response = direct;
         } catch(_) {}
     }
 
