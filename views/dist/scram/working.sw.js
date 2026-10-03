@@ -1,4 +1,4 @@
-importScripts("/worker/working.all.js"),importScripts("/epoch/index.js");const SCRAM_PREFIX="/worker/",WISP_URL=(self.location.protocol==="https:"?"wss":"ws")+"://"+self.location.host+"/cron/",ORIGIN=self.location.origin;let handler,epoxy=null;globalThis.$scramjet$pushsourcemap=globalThis.$scramjet$pushsourcemap||(()=>{});async function getEpoxy(){if(epoxy&&epoxy.ready)return epoxy;try{const e=self.EpoxyTransport||self.EpxMod&&(self.EpxMod.default||self.EpxMod.EpoxyTransport||self.EpxMod);if(e&&(typeof e=="function"||typeof e.prototype?.init=="function")){const r=new e({wisp:WISP_URL});return await r.init(),epoxy=r,epoxy}}catch(e){console.warn("[SW] Epoxy init failed:",e)}return null}const BLOCKED_HEADERS=["x-frame-options","content-security-policy","content-security-policy-report-only","cross-origin-opener-policy","cross-origin-embedder-policy","cross-origin-resource-policy","x-content-type-options"];function sanitizeHeaders(e){return BLOCKED_HEADERS.forEach(r=>e.delete(r)),e.set("access-control-allow-origin","*"),e.set("access-control-allow-methods","GET, POST, OPTIONS, PUT, DELETE"),e.set("access-control-allow-headers","*"),e}const NULL_BODY_STATUSES=new Set([101,204,205,304]);function toResponse(e){const r=e.status||200,s=NULL_BODY_STATUSES.has(r);if(e instanceof Response){const t=new Headers(e.headers);return sanitizeHeaders(t),new Response(s?null:e.body,{status:r,statusText:e.statusText,headers:t})}const c=new Headers;try{const t=e.headers;if(t)if(typeof t.forEach=="function")t.forEach((o,a)=>c.set(a,o));else if(typeof t.entries=="function")for(const[o,a]of t.entries())c.set(o,a);else if(typeof t[Symbol.iterator]=="function")for(const[o,a]of t)c.set(o,a);else for(const o in t)c.set(o,String(t[o]))}catch{}return!s&&!c.has("content-type")&&c.set("content-type","text/html; charset=UTF-8"),sanitizeHeaders(c),new Response(s?null:e.body||null,{status:r,statusText:e.statusText||"OK",headers:c})}function safeURL(e,r){if(e instanceof URL)return e;if(!e||typeof e!="string")return new URL(r||ORIGIN+"/");try{return new URL(e)}catch{}try{return new URL(e,r||ORIGIN)}catch{}return new URL(ORIGIN+"/")}const GLOBAL_SHIM=`
+importScripts("/worker/working.all.js"),importScripts("/epoch/index.js");const SCRAM_PREFIX="/worker/",WISP_URL=(self.location.protocol==="https:"?"wss":"ws")+"://"+self.location.host+"/cron/",ORIGIN=self.location.origin;let handler,epoxy=null;globalThis.$scramjet$pushsourcemap=globalThis.$scramjet$pushsourcemap||(()=>{});async function getEpoxy(){if(epoxy&&epoxy.ready)return epoxy;try{const e=self.EpoxyTransport||self.EpxMod&&(self.EpxMod.default||self.EpxMod.EpoxyTransport||self.EpxMod);if(e&&(typeof e=="function"||typeof e.prototype?.init=="function")){const r=new e({wisp:WISP_URL});return await r.init(),epoxy=r,epoxy}}catch(e){console.warn("[SW] Epoxy init failed:",e)}return null}const BLOCKED_HEADERS=["x-frame-options","content-security-policy","content-security-policy-report-only","cross-origin-opener-policy","cross-origin-embedder-policy","cross-origin-resource-policy","x-content-type-options"];function sanitizeHeaders(e){return BLOCKED_HEADERS.forEach(r=>e.delete(r)),e.set("access-control-allow-origin","*"),e.set("access-control-allow-methods","GET, POST, OPTIONS, PUT, DELETE"),e.set("access-control-allow-headers","*"),e}const NULL_BODY_STATUSES=new Set([101,204,205,304]);function toResponse(e){const r=e.status||200,s=NULL_BODY_STATUSES.has(r);if(e instanceof Response){const t=new Headers(e.headers);return sanitizeHeaders(t),new Response(s?null:e.body,{status:r,statusText:e.statusText,headers:t})}const c=new Headers;try{const t=e.headers;if(t)if(typeof t.forEach=="function")t.forEach((n,a)=>c.set(a,n));else if(typeof t.entries=="function")for(const[n,a]of t.entries())c.set(n,a);else if(typeof t[Symbol.iterator]=="function")for(const[n,a]of t)c.set(n,a);else for(const n in t)c.set(n,String(t[n]))}catch{}return!s&&!c.has("content-type")&&c.set("content-type","text/html; charset=UTF-8"),sanitizeHeaders(c),new Response(s?null:e.body||null,{status:r,statusText:e.statusText||"OK",headers:c})}function safeURL(e,r){if(e instanceof URL)return e;if(!e||typeof e!="string")return new URL(r||ORIGIN+"/");try{return new URL(e)}catch{}try{return new URL(e,r||ORIGIN)}catch{}return new URL(ORIGIN+"/")}const GLOBAL_SHIM=`
 (function() {
     if (globalThis.$scramjet$initialized) return;
     const createSafe = () => {
@@ -30,6 +30,9 @@ importScripts("/worker/working.all.js"),importScripts("/epoch/index.js");const S
         if (!o) return undefined;
         if (p === 'location' && (o === (typeof window !== 'undefined' ? window : null) || o === (typeof document !== 'undefined' ? document : null))) {
             return typeof window !== 'undefined' ? window.location : (typeof self !== 'undefined' ? self.location : undefined);
+        }
+        if ((p === 'top' || p === 'parent') && (o === (typeof window !== 'undefined' ? window : null) || o === globalThis)) {
+            return o;
         }
         try { return o[p]; } catch(_) { return undefined; }
     });
@@ -91,10 +94,19 @@ importScripts("/worker/working.all.js"),importScripts("/epoch/index.js");const S
         if (!('$scramjet__location' in Object.prototype)) {
             try {
                 Object.defineProperty(Object.prototype, '$scramjet__location', {
-                    get: function() { return (this && this.location) || globalThis.location; },
-                    set: function(v) {
+                    get: function() {
                         if (this === globalThis || (typeof window !== 'undefined' && this === window) || (typeof document !== 'undefined' && this === document)) {
-                            globalThis.location = v;
+                            return globalThis.location;
+                        }
+                        return this ? this.location : undefined;
+                    },
+                    set: function(v) {
+                        if (!v || typeof v === 'boolean' || v === 'true' || v === 'false') return;
+                        if (this === globalThis || (typeof window !== 'undefined' && this === window) || (typeof document !== 'undefined' && this === document)) {
+                            var target = typeof _wrapUrl === 'function' ? _wrapUrl(v) : v;
+                            if (target && typeof target === 'string' && !target.endsWith('/true') && !target.endsWith('/false')) {
+                                globalThis.location.href = target;
+                            }
                         } else if (this) {
                             try { Object.defineProperty(this, '$scramjet__location', { value: v, writable: true, configurable: true, enumerable: true }); } catch(_) { this['$scramjet__location'] = v; }
                         }
@@ -107,11 +119,14 @@ importScripts("/worker/working.all.js"),importScripts("/epoch/index.js");const S
         if (!('$scramjet__parent' in Object.prototype)) {
             try {
                 Object.defineProperty(Object.prototype, '$scramjet__parent', {
-                    get: function() { return (this && this.parent) || globalThis.parent; },
-                    set: function(v) {
+                    get: function() {
                         if (this === globalThis || (typeof window !== 'undefined' && this === window)) {
-                            globalThis.parent = v;
-                        } else if (this) {
+                            return this;
+                        }
+                        return this ? this.parent : undefined;
+                    },
+                    set: function(v) {
+                        if (this) {
                             try { Object.defineProperty(this, '$scramjet__parent', { value: v, writable: true, configurable: true, enumerable: true }); } catch(_) { this['$scramjet__parent'] = v; }
                         }
                     },
@@ -123,11 +138,14 @@ importScripts("/worker/working.all.js"),importScripts("/epoch/index.js");const S
         if (!('$scramjet__top' in Object.prototype)) {
             try {
                 Object.defineProperty(Object.prototype, '$scramjet__top', {
-                    get: function() { return (this && this.top) || globalThis.top; },
-                    set: function(v) {
+                    get: function() {
                         if (this === globalThis || (typeof window !== 'undefined' && this === window)) {
-                            globalThis.top = v;
-                        } else if (this) {
+                            return this;
+                        }
+                        return this ? this.top : undefined;
+                    },
+                    set: function(v) {
+                        if (this) {
                             try { Object.defineProperty(this, '$scramjet__top', { value: v, writable: true, configurable: true, enumerable: true }); } catch(_) { this['$scramjet__top'] = v; }
                         }
                     },
@@ -137,22 +155,6 @@ importScripts("/worker/working.all.js"),importScripts("/epoch/index.js");const S
             } catch(_) {}
         }
     }
-
-    // Array/String/Number Guard \u2014 stops "called on null" crashes without corrupting returns
-    const wrapProto = (proto, methods) => {
-        if (!proto) return;
-        methods.forEach(m => {
-            const orig = proto[m];
-            if (!orig) return;
-            proto[m] = function(...args) {
-                if (this == null) return undefined;
-                return orig.apply(this, args);
-            };
-        });
-    };
-    wrapProto(Array.prototype, ['every','forEach','indexOf','join','lastIndexOf','reduce','reduceRight','some','sort','filter','map','find','findIndex','flat','includes']);
-    wrapProto(String.prototype, ['endsWith','includes','matchAll','startsWith','split','match','replace','replaceAll','slice','trim']);
-    wrapProto(Number.prototype, ['toExponential','toFixed','toPrecision']);
 
     // Universal Proxy Intercept for fetch/XHR
     var _getProxyOrigin = function() {
@@ -290,11 +292,19 @@ importScripts("/worker/working.all.js"),importScripts("/epoch/index.js");const S
         }
     } catch(_) {}
 
-    // Stub out commonly missing globals that crash Roblox/React apps
-    const stubs = ['jQuery','$','React','ReactDOM','CoreUtilities','CoreRobloxUtilities','angular','bootstrap','ReactStyleGuide','Sentry','require'];
+    // Stub out commonly missing globals that crash Roblox apps
+    const stubs = ['CoreUtilities','CoreRobloxUtilities','ReactStyleGuide','Sentry'];
     stubs.forEach(lib => {
         if (!(lib in globalThis)) {
-            try { Object.defineProperty(globalThis, lib, { get: () => safe, set: (v) => {}, configurable: true, enumerable: false }); } catch(_) {}
+            try {
+                let val = safe;
+                Object.defineProperty(globalThis, lib, {
+                    get: () => val,
+                    set: (v) => { val = v; },
+                    configurable: true,
+                    enumerable: false
+                });
+            } catch(_) {}
         }
     });
 
@@ -325,7 +335,16 @@ importScripts("/worker/working.all.js"),importScripts("/epoch/index.js");const S
     globalThis.$scramdbg = globalThis.$scramdbg || ((i, e) => e);
     globalThis.$scramjet$prop = (p) => p;
     globalThis.$scramjet$wrap = (o) => o;
-    globalThis.$scramjet$get = (o, p) => { try { return o[p]; } catch(_) { return undefined; } };
+    globalThis.$scramjet$get = (o, p) => {
+        if (!o) return undefined;
+        if (p === 'location' && (o === (typeof window !== 'undefined' ? window : null) || o === (typeof document !== 'undefined' ? document : null))) {
+            return typeof window !== 'undefined' ? window.location : (typeof self !== 'undefined' ? self.location : undefined);
+        }
+        if ((p === 'top' || p === 'parent') && (o === (typeof window !== 'undefined' ? window : null) || o === globalThis)) {
+            return o;
+        }
+        try { return o[p]; } catch(_) { return undefined; }
+    };
     globalThis.$scramjet$call = (o, p, a) => { try { const fn = o && o[p]; return typeof fn === 'function' ? fn.apply(o, a) : undefined; } catch(_) { return undefined; } };
     globalThis.$scramjet$apply = (o, p, a) => (globalThis.$scramjet$call ? globalThis.$scramjet$call(o, p, a) : undefined);
     globalThis.$scramjet$set = (o, p, v) => { try { if (o && p !== 'undefined') o[p] = v; } catch(_) {} return v; };
@@ -383,10 +402,19 @@ if (typeof Object !== 'undefined' && Object.prototype) {
     if (!('$scramjet__location' in Object.prototype)) {
         try {
             Object.defineProperty(Object.prototype, '$scramjet__location', {
-                get: function() { return (this && this.location) || globalThis.location; },
-                set: function(v) {
+                get: function() {
                     if (this === globalThis || (typeof window !== 'undefined' && this === window) || (typeof document !== 'undefined' && this === document)) {
-                        globalThis.location = v;
+                        return globalThis.location;
+                    }
+                    return this ? this.location : undefined;
+                },
+                set: function(v) {
+                    if (!v || typeof v === 'boolean' || v === 'true' || v === 'false') return;
+                    if (this === globalThis || (typeof window !== 'undefined' && this === window) || (typeof document !== 'undefined' && this === document)) {
+                        var target = typeof _wrapUrl === 'function' ? _wrapUrl(v) : v;
+                        if (target && typeof target === 'string' && !target.endsWith('/true') && !target.endsWith('/false')) {
+                            globalThis.location.href = target;
+                        }
                     } else if (this) {
                         try { Object.defineProperty(this, '$scramjet__location', { value: v, writable: true, configurable: true, enumerable: true }); } catch(_) { this['$scramjet__location'] = v; }
                     }
@@ -399,11 +427,14 @@ if (typeof Object !== 'undefined' && Object.prototype) {
     if (!('$scramjet__parent' in Object.prototype)) {
         try {
             Object.defineProperty(Object.prototype, '$scramjet__parent', {
-                get: function() { return (this && this.parent) || globalThis.parent; },
-                set: function(v) {
+                get: function() {
                     if (this === globalThis || (typeof window !== 'undefined' && this === window)) {
-                        globalThis.parent = v;
-                    } else if (this) {
+                        return this;
+                    }
+                    return this ? this.parent : undefined;
+                },
+                set: function(v) {
+                    if (this) {
                         try { Object.defineProperty(this, '$scramjet__parent', { value: v, writable: true, configurable: true, enumerable: true }); } catch(_) { this['$scramjet__parent'] = v; }
                     }
                 },
@@ -415,11 +446,14 @@ if (typeof Object !== 'undefined' && Object.prototype) {
     if (!('$scramjet__top' in Object.prototype)) {
         try {
             Object.defineProperty(Object.prototype, '$scramjet__top', {
-                get: function() { return (this && this.top) || globalThis.top; },
-                set: function(v) {
+                get: function() {
                     if (this === globalThis || (typeof window !== 'undefined' && this === window)) {
-                        globalThis.top = v;
-                    } else if (this) {
+                        return this;
+                    }
+                    return this ? this.top : undefined;
+                },
+                set: function(v) {
+                    if (this) {
                         try { Object.defineProperty(this, '$scramjet__top', { value: v, writable: true, configurable: true, enumerable: true }); } catch(_) { this['$scramjet__top'] = v; }
                     }
                 },
@@ -568,12 +602,12 @@ if (typeof Object !== 'undefined' && Object.prototype) {
 })();`;function injectScriptHeader(e){if(typeof e!="string")return e;const r=e.match(/^\s*(['"])use strict\1;?/);return r?`${r[0]}
 ${SCRIPT_HEADER}
 ${e.slice(r[0].length)}`:`${SCRIPT_HEADER}
-${e}`}async function initHandler(){if(handler)return handler;const{ScramjetFetchHandler:e,defaultConfig:r}=self.$scramjet,s=await getEpoxy(),c=s?{...s,async request(t,o,a,i,p){let n=i instanceof Headers?i:new Headers(i||{});const l=t&&t.hostname?t.hostname:"";l.includes("youtube.com")||l.includes("googleapis.com")||l.includes("googlevideo.com")||l.includes("gstatic.com")?(n.set("origin","https://www.youtube.com"),n.set("referer","https://www.youtube.com/")):t&&t.origin&&t.origin.startsWith("http")&&(!n.has("origin")&&!["GET","HEAD"].includes((o||"GET").toUpperCase())&&n.set("origin",t.origin),n.has("referer")||n.set("referer",t.origin+"/"));const u=await s.request(t,o,a,n,p);return{body:u.body||null,headers:u.headers instanceof Headers?u.headers:new Headers(u.headers||{}),status:u.status||200,statusText:u.statusText||"OK"}}}:{async init(){},async request(t,o,a,i,p){const n=(o||"GET").toUpperCase(),l=await fetch(t.toString(),{method:n,headers:i||{},body:["GET","HEAD"].includes(n)?null:a||null,signal:p||void 0});return{body:l.body,headers:l.headers,status:l.status,statusText:l.statusText}},async fetch(t,o){return fetch(t.toString(),o||{})},connect(){}};return handler=new e({transport:c,crossOriginIsolated:!1,context:{prefix:new URL(SCRAM_PREFIX,self.location.origin),cookieJar:new self.$scramjet.CookieJar,config:{...r,rewriteHtml:!0,rewriteJs:!0,rewriteCss:!0},interface:{codecEncode:t=>encodeURIComponent(t),codecDecode:t=>{try{if(!t)return new URL(ORIGIN+"/");let o=String(t);if(o.startsWith("#")&&(o=o.slice(1)),o.includes("#")&&(o=o.split("#")[0]),o.startsWith("network/")&&(o=o.slice(8)),!o)return new URL(ORIGIN+"/");try{const a=decodeURIComponent(o),i=a.includes("://")?a:"https://"+a;return new URL(i)}catch{const i=o.includes("://")?o:"https://"+o;return new URL(i)}}catch{return new URL(ORIGIN+"/")}},getInjectScripts:(t,o,a)=>[a("/worker/working.all.js")],getWorkerInjectScripts:(t,o,a)=>a("/worker/working.all.js")}},sendSetCookie:async(t,o)=>{for(const a of await self.clients.matchAll())a.postMessage({type:"scramjet-set-cookie",url:t.href,cookie:o})},fetchBlobUrl:async t=>fetch(t),fetchDataUrl:async t=>fetch(t)}),handler}self.addEventListener("install",()=>self.skipWaiting()),self.addEventListener("activate",e=>e.waitUntil(self.clients.claim())),self.addEventListener("fetch",e=>{const r=new URL(e.request.url);if(["working.all.js","working.sw.js","working.wasm.wasm","epoch/index.js"].some(i=>r.pathname.endsWith(i))||e.request.headers.has("x-scramjet-bypass"))return;const c=r.origin===self.location.origin;if(c&&(r.pathname.startsWith("/cron/")||r.pathname.startsWith("/gmt/")||r.pathname.startsWith("/unix/")||r.pathname.startsWith("/epoch/")||r.pathname.startsWith("/assets/")||r.pathname.startsWith("/dist/")||r.pathname==="/"||r.pathname==="/index.html"||r.pathname==="/games"||r.pathname==="/newsession"||r.pathname==="/favicon.ico"))return;if(!c&&e.request.mode==="navigate"){const i=new URL(SCRAM_PREFIX+"network/"+encodeURIComponent(r.href),self.location.origin);return e.respondWith(Response.redirect(i.href,307))}let o,a;if(c&&r.pathname.startsWith(SCRAM_PREFIX))o=r,a=e.request.referrer?safeURL(e.request.referrer):new URL(r.origin+"/");else if(c){const i=e.request.referrer||"",p=i.match(/\/worker\/network\/([^/?#]+)/);if(p)try{const n=decodeURIComponent(p[1]),u=new URL(n.includes("://")?n:"https://"+n).origin+r.pathname+r.search;o=new URL(SCRAM_PREFIX+"network/"+encodeURIComponent(u),self.location.origin),a=safeURL(i)}catch{return}else return}else{if(r.pathname.startsWith("/worker/network/")){const i=r.pathname.slice(16)+r.search;o=new URL(SCRAM_PREFIX+"network/"+i,self.location.origin)}else o=new URL(SCRAM_PREFIX+"network/"+encodeURIComponent(r.href),self.location.origin);a=e.request.referrer?safeURL(e.request.referrer):new URL("https://www.youtube.com/")}e.respondWith((async()=>{try{const i=await initHandler(),{ScramjetHeaders:p}=self.$scramjet,n=new p;e.request.headers.forEach((f,h)=>{try{n.set(h,f)}catch{}});const l=await i.handleFetch({rawUrl:o,rawClientUrl:a,body:["GET","HEAD"].includes(e.request.method)?null:e.request.body,method:e.request.method,initialHeaders:n,destination:e.request.destination,mode:e.request.mode,referrer:e.request.referrer,cache:e.request.cache}),u=toResponse(l),g=u.headers.get("content-type")||"";if(!NULL_BODY_STATUSES.has(u.status)&&(g.includes("javascript")||o.pathname.endsWith(".js")||e.request.destination==="script"||e.request.destination==="worker"))try{let f=await u.text();f=injectScriptHeader(f);const h=new Headers(u.headers);return h.set("content-type","application/javascript; charset=UTF-8"),new Response(f,{headers:h,status:u.status,statusText:u.statusText})}catch{}return u}catch(i){return console.error("[Scramjet v2 SW] Rewriter crashed, using Epoxy bypass:",i),await emergencyBypass(e.request,o||r)}})())});async function emergencyBypass(e,r){let s;if(r.origin!==self.location.origin)s=r.href;else{s=r.pathname.slice(SCRAM_PREFIX.length)+r.search,s.startsWith("network/")&&(s=s.slice(8));try{s=decodeURIComponent(s)}catch{}s.includes("://")||(s="https://"+s)}console.log("[Scramjet v2 SW] Emergency Bypass for:",s);let c;try{const n=await getEpoxy();if(n){const l={};if(e.headers&&typeof e.headers.forEach=="function"&&e.headers.forEach((f,h)=>{const d=h.toLowerCase();d!=="host"&&d!=="origin"&&d!=="referer"&&(l[h]=f)}),s.includes("youtube.com")||s.includes("googlevideo.com")||s.includes("gstatic.com")||s.includes("googleapis.com"))l.origin="https://www.youtube.com",l.referer="https://www.youtube.com/";else try{const f=new URL(s);!l.origin&&!["GET","HEAD"].includes((e.method||"GET").toUpperCase())&&(l.origin=f.origin),l.referer||(l.referer=f.origin+"/")}catch{}const u=["GET","HEAD"].includes(e.method)?null:e.body,g=await n.request(new URL(s),e.method,u,l);c=toResponse(g)}}catch(n){console.warn("[SW] Epoxy bypass failed:",n.message)}if(!c)try{const n=await fetch(s,{mode:"no-cors",credentials:"omit"});(n.ok||n.type==="opaque")&&(c=n)}catch{}if(!c)return new Response("Proxy Error: All bypass tiers failed for "+s,{status:502});const t=c.status||200,o=NULL_BODY_STATUSES.has(t),a=o?"":c.headers.get("content-type")||"",i=new Headers(c.headers);if(sanitizeHeaders(i),o)return new Response(null,{headers:i,status:t});if(a.includes("font")||a.includes("image")||a.includes("wasm"))return new Response(c.body,{headers:i,status:t});const p=`<script>
+${e}`}async function initHandler(){if(handler)return handler;const{ScramjetFetchHandler:e,defaultConfig:r}=self.$scramjet,s=await getEpoxy(),c=s?{...s,async request(t,n,a,i,p){let o=i instanceof Headers?i:new Headers(i||{});const l=t&&t.hostname?t.hostname:"";l.includes("youtube.com")||l.includes("googleapis.com")||l.includes("googlevideo.com")||l.includes("gstatic.com")?(o.set("origin","https://www.youtube.com"),o.set("referer","https://www.youtube.com/")):t&&t.origin&&t.origin.startsWith("http")&&(!o.has("origin")&&!["GET","HEAD"].includes((n||"GET").toUpperCase())&&o.set("origin",t.origin),o.has("referer")||o.set("referer",t.origin+"/"));const u=await s.request(t,n,a,o,p);return{body:u.body||null,headers:u.headers instanceof Headers?u.headers:new Headers(u.headers||{}),status:u.status||200,statusText:u.statusText||"OK"}}}:{async init(){},async request(t,n,a,i,p){const o=(n||"GET").toUpperCase(),l=await fetch(t.toString(),{method:o,headers:i||{},body:["GET","HEAD"].includes(o)?null:a||null,signal:p||void 0});return{body:l.body,headers:l.headers,status:l.status,statusText:l.statusText}},async fetch(t,n){return fetch(t.toString(),n||{})},connect(){}};return handler=new e({transport:c,crossOriginIsolated:!1,context:{prefix:new URL(SCRAM_PREFIX,self.location.origin),cookieJar:new self.$scramjet.CookieJar,config:{...r,rewriteHtml:!0,rewriteJs:!0,rewriteCss:!0},interface:{codecEncode:t=>encodeURIComponent(t),codecDecode:t=>{try{if(!t)return new URL(ORIGIN+"/");let n=String(t);if(n.startsWith("#")&&(n=n.slice(1)),n.includes("#")&&(n=n.split("#")[0]),n.startsWith("network/")&&(n=n.slice(8)),!n)return new URL(ORIGIN+"/");try{const a=decodeURIComponent(n),i=a.includes("://")?a:"https://"+a;return new URL(i)}catch{const i=n.includes("://")?n:"https://"+n;return new URL(i)}}catch{return new URL(ORIGIN+"/")}},getInjectScripts:(t,n,a)=>[a("/worker/working.all.js")],getWorkerInjectScripts:(t,n,a)=>a("/worker/working.all.js")}},sendSetCookie:async(t,n)=>{for(const a of await self.clients.matchAll())a.postMessage({type:"scramjet-set-cookie",url:t.href,cookie:n})},fetchBlobUrl:async t=>fetch(t),fetchDataUrl:async t=>fetch(t)}),handler}self.addEventListener("install",()=>self.skipWaiting()),self.addEventListener("activate",e=>e.waitUntil(self.clients.claim())),self.addEventListener("fetch",e=>{const r=new URL(e.request.url);if(["working.all.js","working.sw.js","working.wasm.wasm","epoch/index.js"].some(i=>r.pathname.endsWith(i))||e.request.headers.has("x-scramjet-bypass"))return;const c=r.origin===self.location.origin;if(c&&(r.pathname.startsWith("/cron/")||r.pathname.startsWith("/gmt/")||r.pathname.startsWith("/unix/")||r.pathname.startsWith("/epoch/")||r.pathname.startsWith("/assets/")||r.pathname.startsWith("/dist/")||r.pathname==="/"||r.pathname==="/index.html"||r.pathname==="/games"||r.pathname==="/newsession"||r.pathname==="/favicon.ico"))return;if(!c&&e.request.mode==="navigate"){const i=new URL(SCRAM_PREFIX+"network/"+encodeURIComponent(r.href),self.location.origin);return e.respondWith(Response.redirect(i.href,307))}let n,a;if(c&&r.pathname.startsWith(SCRAM_PREFIX))n=r,a=e.request.referrer?safeURL(e.request.referrer):new URL(r.origin+"/");else if(c){const i=e.request.referrer||"",p=i.match(/\/worker\/network\/([^/?#]+)/);if(p)try{const o=decodeURIComponent(p[1]),u=new URL(o.includes("://")?o:"https://"+o).origin+r.pathname+r.search;n=new URL(SCRAM_PREFIX+"network/"+encodeURIComponent(u),self.location.origin),a=safeURL(i)}catch{return}else return}else{if(r.pathname.startsWith("/worker/network/")){const i=r.pathname.slice(16)+r.search;n=new URL(SCRAM_PREFIX+"network/"+i,self.location.origin)}else n=new URL(SCRAM_PREFIX+"network/"+encodeURIComponent(r.href),self.location.origin);a=e.request.referrer?safeURL(e.request.referrer):new URL("https://www.youtube.com/")}e.respondWith((async()=>{try{const i=await initHandler(),{ScramjetHeaders:p}=self.$scramjet,o=new p;e.request.headers.forEach((f,d)=>{try{o.set(d,f)}catch{}});const l=await i.handleFetch({rawUrl:n,rawClientUrl:a,body:["GET","HEAD"].includes(e.request.method)?null:e.request.body,method:e.request.method,initialHeaders:o,destination:e.request.destination,mode:e.request.mode,referrer:e.request.referrer,cache:e.request.cache}),u=toResponse(l),g=u.headers.get("content-type")||"";if(!NULL_BODY_STATUSES.has(u.status)&&(g.includes("javascript")||n.pathname.endsWith(".js")||e.request.destination==="script"||e.request.destination==="worker"))try{let f=await u.text();f=injectScriptHeader(f);const d=new Headers(u.headers);return d.set("content-type","application/javascript; charset=UTF-8"),new Response(f,{headers:d,status:u.status,statusText:u.statusText})}catch{}return u}catch(i){return console.error("[Scramjet v2 SW] Rewriter crashed, using Epoxy bypass:",i),await emergencyBypass(e.request,n||r)}})())});async function emergencyBypass(e,r){let s;if(r.origin!==self.location.origin)s=r.href;else{s=r.pathname.slice(SCRAM_PREFIX.length)+r.search,s.startsWith("network/")&&(s=s.slice(8));try{s=decodeURIComponent(s)}catch{}s.includes("://")||(s="https://"+s)}console.log("[Scramjet v2 SW] Emergency Bypass for:",s);let c;try{const o=await getEpoxy();if(o){const l={};if(e.headers&&typeof e.headers.forEach=="function"&&e.headers.forEach((f,d)=>{const h=d.toLowerCase();h!=="host"&&h!=="origin"&&h!=="referer"&&(l[d]=f)}),s.includes("youtube.com")||s.includes("googlevideo.com")||s.includes("gstatic.com")||s.includes("googleapis.com"))l.origin="https://www.youtube.com",l.referer="https://www.youtube.com/";else try{const f=new URL(s);!l.origin&&!["GET","HEAD"].includes((e.method||"GET").toUpperCase())&&(l.origin=f.origin),l.referer||(l.referer=f.origin+"/")}catch{}const u=["GET","HEAD"].includes(e.method)?null:e.body,g=await o.request(new URL(s),e.method,u,l);c=toResponse(g)}}catch(o){console.warn("[SW] Epoxy bypass failed:",o.message)}if(!c)try{const o=await fetch(s,{mode:"no-cors",credentials:"omit"});(o.ok||o.type==="opaque")&&(c=o)}catch{}if(!c)return new Response("Proxy Error: All bypass tiers failed for "+s,{status:502});const t=c.status||200,n=NULL_BODY_STATUSES.has(t),a=n?"":c.headers.get("content-type")||"",i=new Headers(c.headers);if(sanitizeHeaders(i),n)return new Response(null,{headers:i,status:t});if(a.includes("font")||a.includes("image")||a.includes("wasm"))return new Response(c.body,{headers:i,status:t});const p=`<script>
 (function() {
     if (globalThis.__scramjet_emergency_active) return;
     globalThis.__scramjet_emergency_active = true;
     ${GLOBAL_SHIM}
     console.log('[Scramjet SW] Emergency Runtime Active');
 })();
-<\/script>`;if(a.includes("text/html")){let n=await c.text();return n.includes("<head>")?n=n.replace("<head>","<head>"+p):n.includes("<HEAD>")&&(n=n.replace("<HEAD>","<HEAD>"+p)),i.set("content-type","text/html; charset=UTF-8"),new Response(n,{headers:i,status:t})}else if(a.includes("javascript")||s.endsWith(".js")||e.destination==="script"||e.destination==="worker"){let n=await c.text();return n=injectScriptHeader(n),i.set("content-type","application/javascript; charset=UTF-8"),new Response(n,{headers:i,status:t})}return new Response(c.body,{headers:i,status:t})}
+<\/script>`;if(a.includes("text/html")){let o=await c.text();return o.includes("<head>")?o=o.replace("<head>","<head>"+p):o.includes("<HEAD>")&&(o=o.replace("<HEAD>","<HEAD>"+p)),i.set("content-type","text/html; charset=UTF-8"),new Response(o,{headers:i,status:t})}else if(a.includes("javascript")||s.endsWith(".js")||e.destination==="script"||e.destination==="worker"){let o=await c.text();return o=injectScriptHeader(o),i.set("content-type","application/javascript; charset=UTF-8"),new Response(o,{headers:i,status:t})}return new Response(c.body,{headers:i,status:t})}
 //# sourceMappingURL=working.sw.js.map

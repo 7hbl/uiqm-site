@@ -305,27 +305,34 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 if (window._loadTimer) clearTimeout(window._loadTimer);
                 window._loadTimer = setTimeout(() => { loading.style.display = 'none'; }, 2500);
 
-                if (window._swPromise) {
+                if (!window._rhSession) {
                     try {
-                        const reg = await window._swPromise;
-                        if (reg && !reg.active) {
-                            const worker = reg.installing || reg.waiting;
-                            if (worker && worker.state !== 'activated') {
-                                await new Promise(res => {
-                                    worker.addEventListener('statechange', () => {
-                                        if (worker.state === 'activated') res();
-                                    });
-                                    setTimeout(res, 2000);
-                                });
-                            }
-                        }
+                        const r = await fetch('/newsession');
+                        const sId = await r.text();
+                        if (sId && sId.length === 32) window._rhSession = sId;
                     } catch(_) {}
                 }
-                
-                if (sjEncode) {
-                    frame.src = sjEncode(url);
-                } else if (window._rhSession) {
+
+                if (window._rhSession) {
                     frame.src = '/' + window._rhSession + '/' + url;
+                } else if (sjEncode) {
+                    if (window._swPromise) {
+                        try {
+                            const reg = await window._swPromise;
+                            if (reg && !reg.active) {
+                                const worker = reg.installing || reg.waiting;
+                                if (worker && worker.state !== 'activated') {
+                                    await new Promise(res => {
+                                        worker.addEventListener('statechange', () => {
+                                            if (worker.state === 'activated') res();
+                                        });
+                                        setTimeout(res, 2000);
+                                    });
+                                }
+                            }
+                        } catch(_) {}
+                    }
+                    frame.src = sjEncode(url);
                 } else {
                     frame.src = '/proxy/' + encodeURIComponent(url);
                 }
@@ -348,8 +355,17 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
             loading.style.display = 'none'; 
             print('Tunnel established.', 'system'); 
             try {
-                const rawUrl = frame.contentWindow.location.pathname.split('/network/')[1];
-                if (rawUrl) document.getElementById('proxy-url-display').innerText = decodeURIComponent(rawUrl);
+                const path = frame.contentWindow.location.pathname;
+                let rawUrl = '';
+                if (path.includes('/network/')) {
+                    rawUrl = path.split('/network/')[1];
+                } else {
+                    const match = path.match(/[a-z0-9]{32}\/(.+)/);
+                    if (match) rawUrl = match[1];
+                }
+                if (rawUrl && rawUrl !== 'true' && rawUrl !== 'false') {
+                    document.getElementById('proxy-url-display').innerText = decodeURIComponent(rawUrl);
+                }
             } catch(e) {}
         };
 
