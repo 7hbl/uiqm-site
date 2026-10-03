@@ -107,12 +107,12 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
             </div>
             <div class="line" style="opacity:0.6;">@uiqm on discord for help</div>
             <br>
-            <div class="line" id="status-line" style="color:yellow">Initializing Secure Channel...</div>
+            <div class="line" id="status-line" style="color:#00ff00">Secure Channel Active. System ready.</div>
             <div class="line">Type <span style="color:white">help</span> for cmds or enter a URL to start.</div>
             <div id="term-output-lines"></div>
             <form id="term-input-row" onsubmit="return false;">
                 <span class="term-prefix">root@uiqm:~$</span>
-                <input type="text" id="term-input" autofocus spellcheck="false" autocomplete="off" disabled>
+                <input type="text" id="term-input" autofocus spellcheck="false" autocomplete="off">
             </form>
         </div>
         <canvas id="matrix-canvas" style="position: fixed; top: 0; left: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 1s;"></canvas>
@@ -168,45 +168,35 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         const BARE_MUX_WORKER = '/gmt/worker.js';
         const TRANSPORT_MJS = '/unix/index.mjs', SCRAMJET_PREFIX = '/worker/network/';
 
-        let sjEncode = null;
+        let sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
         const print = (h, c = '') => { const d = document.createElement('div'); d.className = 'line ' + c; d.innerHTML = h; output.appendChild(d); terminal.scrollTop = terminal.scrollHeight; };
         const setStatus = (m, c = 'yellow') => statusLine.innerHTML = `<span style="color:${c}">${m}</span>`;
 
+        input.disabled = false;
+        input.focus();
+
         const initProxy = async () => {
+            fetch('/newsession')
+                .then(r => r.text())
+                .then(id => { if (id && id.length === 32) window._rhSession = id; })
+                .catch(() => {});
+
             try {
-                setStatus('Clearing cache...');
                 await window._proxyReady;
-                setStatus('Connecting transport...');
                 if (window.BareMux) {
                     const conn = new BareMux.BareMuxConnection(BARE_MUX_WORKER);
                     await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
                 }
-                setStatus('Registering Service Worker...');
                 if ('serviceWorker' in navigator) {
-                    await navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' });
+                    navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' })
+                        .then(() => setStatus('Secure Channel Active. System ready.', '#00ff00'))
+                        .catch(() => setStatus('Secure Channel Active. System ready.', '#00ff00'));
+                } else {
+                    setStatus('Secure Channel Active. System ready.', '#00ff00');
                 }
-                
-                setStatus('Loading proxy engine...');
-                sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
-                
-                // Pre-fetch Rammerhead session as instant reliable proxy engine
-                fetch('/newsession')
-                    .then(r => r.text())
-                    .then(id => {
-                        if (id && id.length === 32) {
-                            window._rhSession = id;
-                        }
-                    })
-                    .catch(() => {});
-                
-                setStatus('Secure Channel Active. System ready.', '#00ff00');
-                input.disabled = false; input.focus();
             } catch (e) {
-                console.error(e);
-                sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
-                fetch('/newsession').then(r => r.text()).then(id => { if (id && id.length === 32) window._rhSession = id; }).catch(()=>{});
+                console.warn('Proxy init:', e);
                 setStatus('Secure Channel Active. System ready.', '#00ff00');
-                input.disabled = false; input.focus();
             }
         };
 
