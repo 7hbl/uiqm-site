@@ -530,9 +530,34 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     if (contentType.includes('text/html') || cleanUrl.endsWith('.html')) {
       let html = await response.text();
 
+      // Sanitize unwanted loader elements (cat logo / third party tutoring branding)
+      html = html.replace(/<img[^>]*id=["']spinning-logo["'][^>]*>/gi, '');
+      html = html.replace(/<img[^>]*src=["']data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAYAAAC[^"']*["'][^>]*>/gi, '');
+      html = html.replaceAll('we ALL loves noahs tutoring hub', 'DOWNLOADING...');
+      html = html.replaceAll(/we ALL loves[^\s<]*/gi, 'DOWNLOADING...');
+      html = html.replaceAll(/Noahs Tutoring Hub/gi, 'DOWNLOADING...');
+      html = html.replaceAll(/noahs tutoring hub/gi, 'DOWNLOADING...');
+
       const clientScript = `
+<style>
+#spinning-logo { display: none !important; visibility: hidden !important; opacity: 0 !important; }
+#note { color: #ff0000 !important; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important; font-weight: 700 !important; letter-spacing: 2px !important; text-transform: uppercase !important; }
+</style>
 <script>
 (function() {
+  try {
+    var sanitizeLoader = function() {
+      var cat = document.getElementById('spinning-logo');
+      if (cat) cat.remove();
+      var note = document.getElementById('note');
+      if (note) note.textContent = 'DOWNLOADING...';
+    };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', sanitizeLoader);
+    } else {
+      sanitizeLoader();
+    }
+  } catch(_) {}
   var _getProxyOrigin = function() {
     try {
       if (typeof window !== 'undefined' && window.parent && window.parent !== window && window.parent.location && window.parent.location.origin) {

@@ -65,6 +65,8 @@
         #proxy-nav button:hover { color: #fff; text-shadow: 0 0 10px #ff0000; transform: scale(1.1); }
         #proxy-nav button:active { transform: scale(0.9); }
         #proxy-url-display { color: #ff0000; font-size: 12px; font-family: monospace; opacity: 0.8; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 1px solid #ff0000; padding-left: 15px; }
+        .nav-engine-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 2px 7px; font-size: 10px; font-weight: 700; border-radius: 4px; cursor: pointer; font-family: monospace; transition: all 0.2s; }
+        .nav-engine-btn:hover { border-color: #ff0000; color: #ff0000; background: rgba(255,0,0,0.15); }
         
         a { color: inherit; text-decoration: underline; font-weight: bold; }
         a:hover { filter: brightness(1.5); }
@@ -78,10 +80,15 @@
         <button id="back-btn" onclick="closeProxy()">RETURN TO TERMINAL</button>
         <div id="proxy-shell">
             <div id="proxy-nav">
-                <button onclick="document.getElementById('proxy-frame').contentWindow.history.back()" title="Back"><i class="fas fa-arrow-left"></i></button>
-                <button onclick="document.getElementById('proxy-frame').contentWindow.history.forward()" title="Forward"><i class="fas fa-arrow-right"></i></button>
-                <button onclick="document.getElementById('proxy-frame').contentWindow.location.reload()" title="Reload"><i class="fas fa-redo-alt"></i></button>
+                <button onclick="try { document.getElementById('proxy-frame').contentWindow.history.back(); } catch(_) {}" title="Back"><i class="fas fa-arrow-left"></i></button>
+                <button onclick="try { document.getElementById('proxy-frame').contentWindow.history.forward(); } catch(_) {}" title="Forward"><i class="fas fa-arrow-right"></i></button>
+                <button onclick="try { document.getElementById('proxy-frame').contentWindow.location.reload(); } catch(_) { const f = document.getElementById('proxy-frame'); f.src = f.src; }" title="Reload"><i class="fas fa-redo-alt"></i></button>
                 <span id="proxy-url-display">Connecting...</span>
+                <div style="margin-left: 10px; display: flex; gap: 5px; align-items: center;">
+                    <button class="nav-engine-btn" onclick="switchEngine('rh')" title="Switch to Rammerhead Engine">RH</button>
+                    <button class="nav-engine-btn" onclick="switchEngine('sj')" title="Switch to Scramjet Engine">SCRAM</button>
+                    <button class="nav-engine-btn" onclick="switchEngine('direct')" title="Switch to Direct Proxy Engine">DIRECT</button>
+                </div>
             </div>
             <iframe id="proxy-frame" title="UIQM Proxy Frame" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe>
             <div id="proxy-loading"><pre>   CONNECTING TO TUNNEL...</pre></div>
@@ -210,6 +217,25 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
             raw = raw.trim(); if (!raw) return;
             print(`<span class="term-prefix">root@uiqm:~$</span> ${raw}`);
             const [base, ...args] = raw.split(' ');
+
+            window.switchEngine = (engine) => {
+                if (!window._currentProxyUrl) return;
+                const f = document.getElementById('proxy-frame');
+                const ld = document.getElementById('proxy-loading');
+                ld.style.display = 'flex';
+                if (window._loadTimer) clearTimeout(window._loadTimer);
+                window._loadTimer = setTimeout(() => { ld.style.display = 'none'; }, 2500);
+
+                const u = window._currentProxyUrl;
+                if (engine === 'rh' && window._rhSession) {
+                    f.src = '/' + window._rhSession + '/' + u;
+                } else if (engine === 'sj') {
+                    f.src = '/worker/network/' + encodeURIComponent(u);
+                } else {
+                    f.src = '/proxy/' + encodeURIComponent(u);
+                }
+            };
+
             const launchProxyUrl = async targetUrl => {
                 let url = targetUrl.trim();
                 if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -219,11 +245,25 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                         url = 'https://duckduckgo.com/?q=' + encodeURIComponent(url);
                     }
                 }
+                window._currentProxyUrl = url;
                 proxyShell.style.display = 'block'; loading.style.display = 'flex';
                 backBtn.style.display = 'block';
                 try { document.getElementById('proxy-url-display').innerText = url; } catch(_) {}
                 if (window._loadTimer) clearTimeout(window._loadTimer);
-                window._loadTimer = setTimeout(() => { loading.style.display = 'none'; }, 2500);
+                window._loadTimer = setTimeout(() => { loading.style.display = 'none'; }, 3000);
+
+                frame.onload = () => {
+                    loading.style.display = 'none';
+                };
+
+                if (window._preferredEngine === 'sj' && sjEncode) {
+                    frame.src = sjEncode(url);
+                    return;
+                }
+                if (window._preferredEngine === 'direct') {
+                    frame.src = '/proxy/' + encodeURIComponent(url);
+                    return;
+                }
 
                 if (!window._rhSession) {
                     try {
@@ -258,8 +298,24 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 }
             };
 
+            if (base === 'engine') {
+                const eng = (args[0] || '').toLowerCase();
+                if (['rh', 'rammerhead'].includes(eng)) {
+                    window._preferredEngine = 'rh';
+                    print('Default proxy engine set to: <span style="color:#00ff00">Rammerhead</span>', 'system');
+                } else if (['sj', 'scram', 'scramjet'].includes(eng)) {
+                    window._preferredEngine = 'sj';
+                    print('Default proxy engine set to: <span style="color:#00ff00">Scramjet</span>', 'system');
+                } else if (['direct', 'proxy'].includes(eng)) {
+                    window._preferredEngine = 'direct';
+                    print('Default proxy engine set to: <span style="color:#00ff00">Direct Proxy</span>', 'system');
+                } else {
+                    print('Available engines: <span style="color:white">rh</span> (Rammerhead) &nbsp; <span style="color:white">scram</span> (Scramjet) &nbsp; <span style="color:white">direct</span> (Direct Server)', 'system');
+                }
+                return;
+            }
             if (base === 'help') {
-                print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">cloak</span> &nbsp; <span style="color:white">aboutblank</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">fix</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
+                print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">engine [rh|scram|direct]</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">cloak</span> &nbsp; <span style="color:white">aboutblank</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">fix</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
                 return;
             }
             if (base === 'fix') {
