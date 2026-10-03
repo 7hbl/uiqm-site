@@ -642,28 +642,6 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     }
   } catch(_) {}
 
-  document.addEventListener('click', function(e) {
-    var a = e.target.closest('a');
-    if (!a || !a.href) return;
-    try {
-      if (a.href.startsWith('http://') || a.href.startsWith('https://')) {
-        if (!a.href.includes('/worker/network/')) {
-          e.preventDefault();
-          window.location.href = _wrapUrl(a.href);
-        }
-      }
-    } catch(_) {}
-  }, true);
-
-  document.addEventListener('submit', function(e) {
-    var form = e.target;
-    if (!form || !form.action) return;
-    try {
-      if (!form.action.includes('/worker/network/')) {
-        form.action = _wrapUrl(form.action);
-      }
-    } catch(_) {}
-  }, true);
 })();
 </script>`;
 

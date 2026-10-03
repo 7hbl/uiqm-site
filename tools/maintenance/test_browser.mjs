@@ -41,6 +41,14 @@ import puppeteer from 'puppeteer';
     await page.goto('https://uiqm.lol', { waitUntil: 'networkidle2', timeout: 30000 });
 
     await page.waitForSelector('#term-input', { timeout: 10000 });
+    console.log('Waiting for ServiceWorker to be ready...');
+    await page.evaluate(async () => {
+      if ('serviceWorker' in navigator) {
+        await navigator.serviceWorker.ready;
+      }
+    });
+    console.log('ServiceWorker ready! Waiting 1s...');
+    await new Promise(r => setTimeout(r, 1000));
     
     await page.type('#term-input', 'https://www.youtube.com');
     await page.keyboard.press('Enter');
@@ -68,10 +76,15 @@ import puppeteer from 'puppeteer';
               externalScripts: scripts.filter(s => s.src).map(s => s.src),
               scriptIds: scripts.filter(s => s.id).map(s => s.id),
               ytInitialData: typeof window.ytInitialData !== 'undefined',
-              ytcfg: typeof window.ytcfg !== 'undefined' ? Object.keys(window.ytcfg.data_ || {}) : null
+              ytcfg: typeof window.ytcfg !== 'undefined' ? Object.keys(window.ytcfg.data_ || {}) : null,
+              customElementYtdApp: typeof customElements !== 'undefined' ? !!customElements.get('ytd-app') : false,
+              customElementYtdMasthead: typeof customElements !== 'undefined' ? !!customElements.get('ytd-masthead') : false,
+              ytdAppChildren: Array.from(document.querySelector('ytd-app')?.children || []).map(c => c.tagName.toLowerCase()),
+              bodyClasses: document.body ? document.body.className : '',
+              hasConsentDialog: !!document.querySelector('tp-yt-paper-dialog, ytd-consent-bump-v2-lightbox, form[action*="consent"]')
             };
           });
-          console.log('YouTube Frame Scripts:', JSON.stringify(evalResult, null, 2));
+          console.log('YouTube Frame DOM Inspection:', JSON.stringify(evalResult, null, 2));
         } catch (e) {
           console.log('Could not evaluate in frame:', e.message);
         }

@@ -284,7 +284,7 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 } 
             }
             else if (base === 'clear') output.innerHTML = '';
-            const launchProxyUrl = targetUrl => {
+            const launchProxyUrl = async targetUrl => {
                 let url = targetUrl.trim();
                 if (!url.startsWith('http://') && !url.startsWith('https://')) {
                     if (url.includes('.') && !url.includes(' ')) {
@@ -298,6 +298,10 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 try { document.getElementById('proxy-url-display').innerText = url; } catch(_) {}
                 if (window._loadTimer) clearTimeout(window._loadTimer);
                 window._loadTimer = setTimeout(() => { loading.style.display = 'none'; }, 2500);
+
+                if ('serviceWorker' in navigator) {
+                    try { await navigator.serviceWorker.ready; } catch(_) {}
+                }
                 
                 if (sjEncode) {
                     frame.src = sjEncode(url);
