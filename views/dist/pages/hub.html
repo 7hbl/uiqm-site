@@ -413,7 +413,7 @@
     {
         "title": "Geometry Dash",
         "desc": "Jump, fly, and flip your way through dangerous obstacles and rhythm-based action in the ultimate HTML5 Geometry Dash.",
-        "url": "https://cdn.jsdelivr.net/gh/web-dashers/web-dashers.github.io@latest/index.html",
+        "url": "https://raw.githubusercontent.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/46.html",
         "image": "/assets/img/h5g/geometrydash.webp"
     },
     {
@@ -2973,6 +2973,7 @@
         "title": "Five Nights at Epstein",
         "desc": "A secret escape game where you navigate through mysterious locations",
         "url": "https://raw.githubusercontent.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/2019.html",
+        "image": "https://raw.githubusercontent.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/428.jpg",
         "secret": true
     }
 ];
@@ -3081,29 +3082,81 @@
                         const note = doc.getElementById('note');
                         if (note) note.textContent = 'DOWNLOADING...';
                         const style = doc.createElement('style');
-                        style.textContent = '#spinning-logo { display: none !important; } #note { color: #ff0000 !important; font-family: sans-serif !important; }';
+                        style.textContent = '#spinning-logo { display: none !important; width: 0 !important; height: 0 !important; opacity: 0 !important; visibility: hidden !important; } #note { color: #ff3333 !important; font-family: monospace, sans-serif !important; font-size: 16px !important; letter-spacing: 2px !important; text-transform: uppercase !important; font-weight: bold !important; }';
                         doc.head?.appendChild(style);
                     }
                 } catch(_) {}
             };
 
             // Fast direct or proxied launch
-            if (url.startsWith('https://cdn.jsdelivr.net/gh/web-dashers') || url.startsWith('https://celesteclassic.github.io')) {
+            if (url.startsWith('https://celesteclassic.github.io')) {
+                frame.removeAttribute('srcdoc');
                 frame.src = url;
+            } else if (url.includes('Noahs-Calculus-Tutor') || url.endsWith('.html')) {
+                fetch(url)
+                    .then(r => {
+                        if (!r.ok) throw new Error('Fetch status: ' + r.status);
+                        return r.text();
+                    })
+                    .then(html => {
+                        // 1. Rewrite blocked jsdelivr mirrors to working raw.githack.com / raw.githubusercontent.com
+                        html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/$2/');
+                        html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/main/');
+                        html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/$2/');
+                        html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/main/');
+                        html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'data:application/javascript,//mobile.js');
+
+                        // 2. Strip any legacy tutoring branding & cat image
+                        html = html.replace(/<div\s+id=["']spinning-logo["'][^>]*>[\s\S]*?<\/div>/gi, '');
+                        html = html.replace(/<img[^>]*id=["']spinning-logo["'][^>]*>/gi, '');
+                        html = html.replace(/<img[^>]*src=["']data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAYAAAC[^"']*["'][^>]*>/gi, '');
+                        html = html.replace(/#spinning-logo\s*\{[^}]*\}/gi, '#spinning-logo { display: none !important; width: 0 !important; height: 0 !important; opacity: 0 !important; visibility: hidden !important; }');
+                        html = html.replace(/url\(\s*['"]?data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAYAAAC[^'")]*['"]?\s*\)/gi, 'none');
+                        html = html.replace(/<div\s+id=["']note["'][^>]*>[\s\S]*?<\/div>/gi, '<div id="note">DOWNLOADING...</div>');
+                        html = html.replaceAll('we ALL loves noahs tutoring hub', 'DOWNLOADING...');
+                        html = html.replaceAll(/we ALL loves[^\s<]*/gi, 'DOWNLOADING...');
+                        html = html.replaceAll(/Noahs Tutoring Hub/gi, 'DOWNLOADING...');
+                        html = html.replaceAll(/noahs tutoring hub/gi, 'DOWNLOADING...');
+
+                        // Inject override style
+                        const cleanCss = `<style>
+#spinning-logo { display: none !important; width: 0 !important; height: 0 !important; opacity: 0 !important; visibility: hidden !important; }
+#note { color: #ff3333 !important; font-family: monospace, sans-serif !important; font-size: 16px !important; letter-spacing: 2px !important; text-transform: uppercase !important; font-weight: bold !important; }
+</style>`;
+                        if (html.includes('</head>')) {
+                            html = html.replace('</head>', cleanCss + '</head>');
+                        } else {
+                            html = cleanCss + html;
+                        }
+
+                        frame.removeAttribute('src');
+                        frame.srcdoc = html;
+                    })
+                    .catch(err => {
+                        console.warn('Direct game load fallback to proxy:', err);
+                        frame.removeAttribute('srcdoc');
+                        if (sjEncode) frame.src = sjEncode(url);
+                        else frame.src = '/proxy/' + encodeURIComponent(url);
+                    });
             } else if (sjEncode) {
+                frame.removeAttribute('srcdoc');
                 frame.src = sjEncode(url);
             } else if (window._rhSession) {
+                frame.removeAttribute('srcdoc');
                 frame.src = '/' + window._rhSession + '/' + url;
             } else {
+                frame.removeAttribute('srcdoc');
                 frame.src = '/proxy/' + encodeURIComponent(url);
             }
         };
+        window.launchGame = launchGame;
 
         const closeGame = () => {
             overlay.style.display = 'none';
             const gl = document.getElementById('game-loader');
             if (gl) gl.style.display = 'none';
             if (window._gameLoadTimer) clearTimeout(window._gameLoadTimer);
+            frame.removeAttribute('srcdoc');
             frame.src = 'about:blank';
         };
 

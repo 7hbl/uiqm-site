@@ -10,17 +10,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <script>
         window._proxyReady = (async () => {
-            const clearDB = (name) => new Promise(res => {
-                const r = indexedDB.deleteDatabase(name);
-                r.onsuccess = r.onerror = r.onblocked = () => res();
-            });
-            try {
-                await clearDB('__sj'); await clearDB('sj');
-                if (indexedDB.databases) {
-                    const dbs = await indexedDB.databases();
-                    await Promise.all(dbs.map(db => clearDB(db.name)));
-                }
-            } catch (_) {}
             await new Promise((resolve, reject) => {
                 const s = document.createElement('script');
                 s.src = '/worker/working.all.js';
@@ -83,11 +72,13 @@
                 <button onclick="try { document.getElementById('proxy-frame').contentWindow.history.back(); } catch(_) {}" title="Back"><i class="fas fa-arrow-left"></i></button>
                 <button onclick="try { document.getElementById('proxy-frame').contentWindow.history.forward(); } catch(_) {}" title="Forward"><i class="fas fa-arrow-right"></i></button>
                 <button onclick="try { document.getElementById('proxy-frame').contentWindow.location.reload(); } catch(_) { const f = document.getElementById('proxy-frame'); f.src = f.src; }" title="Reload"><i class="fas fa-redo-alt"></i></button>
-                <span id="proxy-url-display">Connecting...</span>
-                <div style="margin-left: 10px; display: flex; gap: 5px; align-items: center;">
-                    <button class="nav-engine-btn" onclick="switchEngine('rh')" title="Switch to Rammerhead Engine">RH</button>
-                    <button class="nav-engine-btn" onclick="switchEngine('sj')" title="Switch to Scramjet Engine">SCRAM</button>
-                    <button class="nav-engine-btn" onclick="switchEngine('direct')" title="Switch to Direct Proxy Engine">DIRECT</button>
+                <form id="proxy-nav-form" onsubmit="window.navigateProxyNav(); return false;" style="display:flex;align-items:center;">
+                    <input id="proxy-nav-input" type="text" placeholder="Search or enter URL..." autocomplete="off" spellcheck="false" style="background:#111;border:1px solid #ff0000;border-radius:15px;color:#fff;padding:4px 12px;font-size:12px;width:240px;outline:none;font-family:inherit;">
+                </form>
+                <div style="margin-left: 5px; display: flex; gap: 5px; align-items: center;">
+                    <button id="btn-engine-sj" class="nav-engine-btn active" onclick="switchEngine('sj')" title="Scramjet (Fastest / Recommended)">SCRAM</button>
+                    <button id="btn-engine-direct" class="nav-engine-btn" onclick="switchEngine('direct')" title="Direct Server Proxy">DIRECT</button>
+                    <button id="btn-engine-rh" class="nav-engine-btn" onclick="switchEngine('rh')" title="Rammerhead Proxy">RH</button>
                 </div>
             </div>
             <iframe id="proxy-frame" title="UIQM Proxy Frame" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe>
@@ -173,8 +164,9 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
 
         const WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
         const BARE_MUX_WORKER = '/gmt/worker.js';
-        const TRANSPORT_MJS = '/unix/index.mjs', SCRAMJET_PREFIX = '/worker/network/';
+        const TRANSPORT_MJS = '/epoch/index.mjs', SCRAMJET_PREFIX = '/worker/network/';
 
+        window._preferredEngine = 'sj';
         let sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
         const print = (h, c = '') => { const d = document.createElement('div'); d.className = 'line ' + c; d.innerHTML = h; output.appendChild(d); terminal.scrollTop = terminal.scrollHeight; };
         const setStatus = (m, c = 'yellow') => statusLine.innerHTML = `<span style="color:${c}">${m}</span>`;
@@ -213,90 +205,80 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
             }
         };
 
+        window.navigateProxyNav = () => {
+            const inp = document.getElementById('proxy-nav-input');
+            if (inp && inp.value.trim()) {
+                launchProxyUrl(inp.value.trim());
+            }
+        };
+
+        window.switchEngine = (engine) => {
+            window._preferredEngine = engine;
+            ['sj', 'direct', 'rh'].forEach(e => {
+                const btn = document.getElementById('btn-engine-' + e);
+                if (btn) btn.classList.toggle('active', e === engine);
+            });
+            if (!window._currentProxyUrl) return;
+            const f = document.getElementById('proxy-frame');
+            const ld = document.getElementById('proxy-loading');
+            ld.style.display = 'flex';
+            if (window._loadTimer) clearTimeout(window._loadTimer);
+            window._loadTimer = setTimeout(() => { ld.style.display = 'none'; }, 2500);
+
+            const u = window._currentProxyUrl;
+            f.removeAttribute('srcdoc');
+            if (engine === 'rh' && window._rhSession) {
+                f.src = '/' + window._rhSession + '/' + u;
+            } else if (engine === 'sj') {
+                f.src = '/worker/network/' + encodeURIComponent(u);
+            } else {
+                f.src = '/proxy/' + encodeURIComponent(u);
+            }
+        };
+
+        const launchProxyUrl = async targetUrl => {
+            let url = targetUrl.trim();
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                if (url.includes('.') && !url.includes(' ')) {
+                    url = 'https://' + url;
+                } else {
+                    url = 'https://duckduckgo.com/?q=' + encodeURIComponent(url);
+                }
+            }
+            window._currentProxyUrl = url;
+            proxyShell.style.display = 'block'; loading.style.display = 'flex';
+            backBtn.style.display = 'block';
+            const navInput = document.getElementById('proxy-nav-input');
+            if (navInput) navInput.value = url;
+            if (window._loadTimer) clearTimeout(window._loadTimer);
+            window._loadTimer = setTimeout(() => { loading.style.display = 'none'; }, 3000);
+
+            frame.onload = () => {
+                loading.style.display = 'none';
+            };
+
+            const engine = window._preferredEngine || 'sj';
+            if (engine === 'sj' && window._swPromise) {
+                try { await window._swPromise; } catch(_) {}
+            }
+            frame.removeAttribute('srcdoc');
+            if (engine === 'sj' && sjEncode) {
+                frame.src = sjEncode(url);
+            } else if (engine === 'direct') {
+                frame.src = '/proxy/' + encodeURIComponent(url);
+            } else if (engine === 'rh' && window._rhSession) {
+                frame.src = '/' + window._rhSession + '/' + url;
+            } else if (sjEncode) {
+                frame.src = sjEncode(url);
+            } else {
+                frame.src = '/proxy/' + encodeURIComponent(url);
+            }
+        };
+
         const runCommand = raw => {
             raw = raw.trim(); if (!raw) return;
             print(`<span class="term-prefix">root@uiqm:~$</span> ${raw}`);
             const [base, ...args] = raw.split(' ');
-
-            window.switchEngine = (engine) => {
-                if (!window._currentProxyUrl) return;
-                const f = document.getElementById('proxy-frame');
-                const ld = document.getElementById('proxy-loading');
-                ld.style.display = 'flex';
-                if (window._loadTimer) clearTimeout(window._loadTimer);
-                window._loadTimer = setTimeout(() => { ld.style.display = 'none'; }, 2500);
-
-                const u = window._currentProxyUrl;
-                if (engine === 'rh' && window._rhSession) {
-                    f.src = '/' + window._rhSession + '/' + u;
-                } else if (engine === 'sj') {
-                    f.src = '/worker/network/' + encodeURIComponent(u);
-                } else {
-                    f.src = '/proxy/' + encodeURIComponent(u);
-                }
-            };
-
-            const launchProxyUrl = async targetUrl => {
-                let url = targetUrl.trim();
-                if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                    if (url.includes('.') && !url.includes(' ')) {
-                        url = 'https://' + url;
-                    } else {
-                        url = 'https://duckduckgo.com/?q=' + encodeURIComponent(url);
-                    }
-                }
-                window._currentProxyUrl = url;
-                proxyShell.style.display = 'block'; loading.style.display = 'flex';
-                backBtn.style.display = 'block';
-                try { document.getElementById('proxy-url-display').innerText = url; } catch(_) {}
-                if (window._loadTimer) clearTimeout(window._loadTimer);
-                window._loadTimer = setTimeout(() => { loading.style.display = 'none'; }, 3000);
-
-                frame.onload = () => {
-                    loading.style.display = 'none';
-                };
-
-                if (window._preferredEngine === 'sj' && sjEncode) {
-                    frame.src = sjEncode(url);
-                    return;
-                }
-                if (window._preferredEngine === 'direct') {
-                    frame.src = '/proxy/' + encodeURIComponent(url);
-                    return;
-                }
-
-                if (!window._rhSession) {
-                    try {
-                        const r = await fetch('/newsession');
-                        const sId = await r.text();
-                        if (sId && sId.length === 32) window._rhSession = sId;
-                    } catch(_) {}
-                }
-
-                if (window._rhSession) {
-                    frame.src = '/' + window._rhSession + '/' + url;
-                } else if (sjEncode) {
-                    if (window._swPromise) {
-                        try {
-                            const reg = await window._swPromise;
-                            if (reg && !reg.active) {
-                                const worker = reg.installing || reg.waiting;
-                                if (worker && worker.state !== 'activated') {
-                                    await new Promise(res => {
-                                        worker.addEventListener('statechange', () => {
-                                            if (worker.state === 'activated') res();
-                                        });
-                                        setTimeout(res, 2000);
-                                    });
-                                }
-                            }
-                        } catch(_) {}
-                    }
-                    frame.src = sjEncode(url);
-                } else {
-                    frame.src = '/proxy/' + encodeURIComponent(url);
-                }
-            };
 
             if (base === 'engine') {
                 const eng = (args[0] || '').toLowerCase();

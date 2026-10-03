@@ -874,6 +874,13 @@ self.addEventListener('fetch', event => {
 
     event.respondWith((async () => {
         try {
+            if (rawUrl && rawUrl.href.includes('cdn.jsdelivr.net/gh/genizy/')) {
+                const fixedHref = rawUrl.href
+                    .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/@]+)@([^/]+)\//, 'https://raw.githack.com/genizy/$1/$2/')
+                    .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/]+)\//, 'https://raw.githack.com/genizy/$1/main/');
+                rawUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(fixedHref), self.location.origin);
+            }
+
             const h = await initHandler();
             const { ScramjetHeaders } = self.$scramjet;
             const sjHeaders = new ScramjetHeaders();
@@ -924,6 +931,17 @@ async function emergencyBypass(request, urlObj) {
         if (!targetUrl.includes('://')) targetUrl = 'https://' + targetUrl;
     }
 
+    if (targetUrl.includes('cdn.jsdelivr.net/gh/genizy/')) {
+        targetUrl = targetUrl
+            .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/@]+)@([^/]+)\//, 'https://raw.githack.com/genizy/$1/$2/')
+            .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/]+)\//, 'https://raw.githack.com/genizy/$1/main/');
+    }
+    if (targetUrl.includes('cdn.jsdelivr.net/gh/mysticful/')) {
+        targetUrl = targetUrl
+            .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/@]+)@([^/]+)\//, 'https://raw.githack.com/mysticful/$1/$2/')
+            .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/]+)\//, 'https://raw.githack.com/mysticful/$1/main/');
+    }
+
     console.log('[Scramjet v2 SW] Emergency Bypass for:', targetUrl);
 
     let response;
@@ -956,6 +974,19 @@ async function emergencyBypass(request, urlObj) {
             response = toResponse(res);
         }
     } catch(e) { console.warn('[SW] Epoxy bypass failed:', e.message); }
+
+    if (!response) {
+        try {
+            const serverProxy = await fetch('/proxy/' + encodeURIComponent(targetUrl), {
+                method: request.method,
+                headers: request.headers,
+                body: ['GET', 'HEAD'].includes(request.method) ? null : await request.blob()
+            });
+            if (serverProxy.ok || serverProxy.status < 500) {
+                response = serverProxy;
+            }
+        } catch(_) {}
+    }
 
     if (!response) {
         try {

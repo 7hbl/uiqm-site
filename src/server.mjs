@@ -370,20 +370,57 @@ app.get(serverUrl.pathname + 'github/:redirect', (req, reply) => {
 });
 
 if (serverUrl.pathname === '/') {
-  // setNotFoundHandler is a last-resort fallback for proxy paths not caught
-  // by the onRequest hook (e.g. requests from older cached service workers).
-  // proxyPrefixes is defined at module scope above.
   app.setNotFoundHandler(async (request, reply) => {
-    const reqPath = new URL(request.url, serverUrl).pathname;
+    const reqUrl = new URL(request.url, serverUrl);
+    const reqPath = reqUrl.pathname;
     const cleanPath = reqPath.startsWith(serverUrl.pathname)
       ? reqPath.slice(serverUrl.pathname.length - 1)
       : reqPath;
 
     for (const item of proxyPrefixes) {
       if (cleanPath.startsWith(item.prefix)) {
-        const wildcard = cleanPath.slice(item.prefix.length) + (new URL(request.url, serverUrl).search || '');
+        const wildcard = cleanPath.slice(item.prefix.length) + (reqUrl.search || '');
         return handleProxyRequest(request, reply, item.engine, wildcard);
       }
+    }
+
+    // Subresource proxy fallback: if a proxied site/app requests root-relative assets
+    // (e.g. /s/player/..., /youtubei/..., /static/..., etc.), deduce the upstream target from the Referer header.
+    const referer = request.headers.referer;
+    if (referer) {
+      try {
+        const refUrl = new URL(referer);
+        let upstreamOrigin = null;
+
+        if (refUrl.pathname.includes('/worker/network/')) {
+          const enc = refUrl.pathname.split('/worker/network/')[1];
+          const dec = decodeURIComponent(enc);
+          upstreamOrigin = new URL(dec.includes('://') ? dec : 'https://' + dec).origin;
+        } else if (refUrl.pathname.includes('/network/service/')) {
+          const enc = refUrl.pathname.split('/network/service/')[1];
+          const dec = uvXorDecode(enc);
+          upstreamOrigin = new URL(dec.includes('://') ? dec : 'https://' + dec).origin;
+        } else if (refUrl.pathname.startsWith('/proxy/')) {
+          const enc = refUrl.pathname.slice(7);
+          const dec = decodeURIComponent(enc);
+          upstreamOrigin = new URL(dec.includes('://') ? dec : 'https://' + dec).origin;
+        } else {
+          const m = refUrl.pathname.match(/^\/[a-z0-9]{32}(?:![a-z0-9*_-]+)?\/(https?:\/\/[^\/?#]+)/i);
+          if (m) {
+            upstreamOrigin = m[1];
+          } else {
+            const m2 = refUrl.pathname.match(/^\/[a-z0-9]{32}(?:![a-z0-9*_-]+)?\/([^\/?#]+)/i);
+            if (m2 && m2[1].includes('.')) {
+              upstreamOrigin = 'https://' + m2[1];
+            }
+          }
+        }
+
+        if (upstreamOrigin) {
+          const fullUpstreamUrl = upstreamOrigin + cleanPath + (reqUrl.search || '');
+          return handleProxyRequest(request, reply, 'direct', fullUpstreamUrl);
+        }
+      } catch (_) {}
     }
 
     reply.code(404).type(supportedTypes.default).send(preloaded404);
@@ -449,8 +486,16 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       targetUrlStr = 'https://' + targetUrlStr;
     }
 
+    // Auto-fix blocked jsdelivr accounts to reliable mirrors
+    if (targetUrlStr.includes('cdn.jsdelivr.net/gh/genizy/')) {
+      targetUrlStr = targetUrlStr.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/@]+)@([^/]+)\//i, 'https://raw.githubusercontent.com/genizy/$1/$2/');
+      targetUrlStr = targetUrlStr.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/]+)\//i, 'https://raw.githubusercontent.com/genizy/$1/main/');
+    }
+    if (targetUrlStr.includes('cdn.jsdelivr.net/gh/mysticful/')) {
+      targetUrlStr = targetUrlStr.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/@]+)@([^/]+)\//i, 'https://raw.githubusercontent.com/mysticful/$1/$2/');
+      targetUrlStr = targetUrlStr.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/]+)\//i, 'https://raw.githubusercontent.com/mysticful/$1/main/');
+    }
 
-    
     console.log(`[Proxy Server Fallback] Fetching upstream: ${targetUrlStr}`);
     
     let parsedTarget;
@@ -508,8 +553,10 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     const cleanUrl = targetUrlStr.split('?')[0].toLowerCase();
     const ext = cleanUrl.split('.').pop();
     
-    if (ext === 'js' || cleanUrl.includes('/js/')) {
+    if (ext === 'js' || cleanUrl.includes('/js/') || cleanUrl.endsWith('.js')) {
       contentType = 'application/javascript; charset=UTF-8';
+    } else if (ext === 'wasm' || cleanUrl.includes('.wasm')) {
+      contentType = 'application/wasm';
     } else if (ext === 'css') {
       contentType = 'text/css; charset=UTF-8';
     } else if (ext === 'woff2') {
@@ -530,9 +577,20 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     if (contentType.includes('text/html') || cleanUrl.endsWith('.html')) {
       let html = await response.text();
 
+      // Rewrite blocked CDNs to working mirrors in HTML
+      html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/$2/');
+      html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/main/');
+      html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/$2/');
+      html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/main/');
+      html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'data:application/javascript,//mobile.js');
+
       // Sanitize unwanted loader elements (cat logo / third party tutoring branding)
+      html = html.replace(/<div\s+id=["']spinning-logo["'][^>]*>[\s\S]*?<\/div>/gi, '');
       html = html.replace(/<img[^>]*id=["']spinning-logo["'][^>]*>/gi, '');
       html = html.replace(/<img[^>]*src=["']data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAYAAAC[^"']*["'][^>]*>/gi, '');
+      html = html.replace(/#spinning-logo\s*\{[^}]*\}/gi, '#spinning-logo { display: none !important; width: 0 !important; height: 0 !important; opacity: 0 !important; visibility: hidden !important; }');
+      html = html.replace(/url\(\s*['"]?data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAYAAAC[^'")]*['"]?\s*\)/gi, 'none');
+      html = html.replace(/<div\s+id=["']note["'][^>]*>[\s\S]*?<\/div>/gi, '<div id="note">DOWNLOADING...</div>');
       html = html.replaceAll('we ALL loves noahs tutoring hub', 'DOWNLOADING...');
       html = html.replaceAll(/we ALL loves[^\s<]*/gi, 'DOWNLOADING...');
       html = html.replaceAll(/Noahs Tutoring Hub/gi, 'DOWNLOADING...');
@@ -540,8 +598,8 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
 
       const clientScript = `
 <style>
-#spinning-logo { display: none !important; visibility: hidden !important; opacity: 0 !important; }
-#note { color: #ff0000 !important; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important; font-weight: 700 !important; letter-spacing: 2px !important; text-transform: uppercase !important; }
+#spinning-logo { display: none !important; width: 0 !important; height: 0 !important; visibility: hidden !important; opacity: 0 !important; }
+#note { color: #ff3333 !important; font-family: monospace, sans-serif !important; font-size: 16px !important; letter-spacing: 2px !important; text-transform: uppercase !important; font-weight: bold !important; }
 </style>
 <script>
 (function() {
@@ -582,12 +640,17 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
 
     var proxyOrigin = _getProxyOrigin();
     var full = s;
-    if (full.startsWith('//')) {
-      full = 'https:' + full;
-    } else if (full.startsWith('/')) {
-      full = _targetOrigin + full;
-    } else if (!full.includes('://')) {
-      full = _targetOrigin + '/' + full;
+    try {
+      var base = (typeof document !== 'undefined' && document.baseURI) ? document.baseURI : _targetOrigin;
+      full = new URL(s, base).href;
+    } catch (_) {
+      if (full.startsWith('//')) {
+        full = 'https:' + full;
+      } else if (full.startsWith('/')) {
+        full = _targetOrigin + full;
+      } else if (!full.includes('://')) {
+        full = _targetOrigin + '/' + full;
+      }
     }
 
     return (proxyOrigin || '') + '/worker/network/' + encodeURIComponent(full);
