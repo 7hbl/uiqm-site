@@ -254,6 +254,8 @@ const GLOBAL_SHIM = `
 
 const SCRIPT_HEADER = `if (typeof globalThis.$scramjet$initialized === 'undefined') {
     globalThis.$scramjet$initialized = true;
+    globalThis.$scramerr = globalThis.$scramerr || ((e) => {});
+    globalThis.$scramdbg = globalThis.$scramdbg || ((i, e) => e);
     globalThis.$scramjet$prop = (p) => p;
     globalThis.$scramjet$wrap = (o) => o;
     globalThis.$scramjet$get = (o, p) => { try { return o[p]; } catch(_) { return undefined; } };
@@ -264,6 +266,8 @@ const SCRIPT_HEADER = `if (typeof globalThis.$scramjet$initialized === 'undefine
     globalThis.$scramjet$tryset = (o, p, v) => { try { o[p] = v; } catch(_) {} return v; };
     globalThis.$scramjet$pushsourcemap = () => {};
 }
+var $scramerr = globalThis.$scramerr || ((e) => {});
+var $scramdbg = globalThis.$scramdbg || ((i, e) => e);
 var $scramjet$wrap = globalThis.$scramjet$wrap || ((o) => o);
 var $scramjet$prop = globalThis.$scramjet$prop || ((p) => p);
 var $scramjet$get = globalThis.$scramjet$get || ((o, p) => { try { return o[p]; } catch(_) { return undefined; } });
@@ -273,6 +277,50 @@ var $scramjet$set = globalThis.$scramjet$set || ((o, p, v) => { try { if (o && p
 var $scramjet$clean = globalThis.$scramjet$clean || ((...a) => a);
 var $scramjet$tryset = globalThis.$scramjet$tryset || ((o, p, v) => { try { o[p] = v; } catch(_) {} return v; });
 var $scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});
+if (typeof Object !== 'undefined' && Object.prototype) {
+    if (!('$scramjet__eval' in Object.prototype)) {
+        try {
+            Object.defineProperty(Object.prototype, '$scramjet__eval', {
+                value: function(...a) {
+                    var fn = (this && this.eval) || globalThis.eval;
+                    return typeof fn === 'function' ? fn.apply(this, a) : undefined;
+                },
+                writable: true,
+                configurable: true,
+                enumerable: false
+            });
+        } catch(_) {}
+    }
+    if (!('$scramjet__location' in Object.prototype)) {
+        try {
+            Object.defineProperty(Object.prototype, '$scramjet__location', {
+                get: function() { return (this && this.location) || globalThis.location; },
+                set: function(v) { if (this && 'location' in this) this.location = v; else globalThis.location = v; },
+                configurable: true,
+                enumerable: false
+            });
+        } catch(_) {}
+    }
+    if (!('$scramjet__parent' in Object.prototype)) {
+        try {
+            Object.defineProperty(Object.prototype, '$scramjet__parent', {
+                get: function() { return (this && this.parent) || globalThis.parent; },
+                configurable: true,
+                enumerable: false
+            });
+        } catch(_) {}
+    }
+    if (!('$scramjet__top' in Object.prototype)) {
+        try {
+            Object.defineProperty(Object.prototype, '$scramjet__top', {
+                get: function() { return (this && this.top) || globalThis.top; },
+                configurable: true,
+                enumerable: false
+            });
+        } catch(_) {}
+    }
+}
+
 (function() {
     if (globalThis.__sj_fetch_wrapped) return;
     globalThis.__sj_fetch_wrapped = true;
