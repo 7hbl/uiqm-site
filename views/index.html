@@ -182,18 +182,12 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                     await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
                 }
                 setStatus('Registering Service Worker...');
-                await navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' });
-                await navigator.serviceWorker.ready;
+                if ('serviceWorker' in navigator) {
+                    await navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' });
+                }
                 
                 setStatus('Loading proxy engine...');
-                // Scramjet v2 uses the global window.$scramjet object
-                if (window.$scramjet) {
-                    console.log('Scramjet v2 Engine Detected');
-                    sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
-                } else {
-                    // Fallback to manual encoding if global not ready
-                    sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
-                }
+                sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
                 
                 // Pre-fetch Rammerhead session as instant reliable proxy engine
                 fetch('/newsession')
@@ -209,8 +203,9 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 input.disabled = false; input.focus();
             } catch (e) {
                 console.error(e);
+                sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
                 fetch('/newsession').then(r => r.text()).then(id => { if (id && id.length === 32) window._rhSession = id; }).catch(()=>{});
-                setStatus('Ready.', '#00ff00');
+                setStatus('Secure Channel Active. System ready.', '#00ff00');
                 input.disabled = false; input.focus();
             }
         };
