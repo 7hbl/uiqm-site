@@ -18,7 +18,22 @@ import puppeteer from 'puppeteer';
     console.log(`[Browser Uncaught Error]`, err.message, err.stack);
   });
   page.on('requestfailed', req => {
-    console.log(`[Request Failed] ${req.url()} (${req.failure()?.errorText})`);
+    console.log(`[Request Failed] ${req.method()} ${req.url()} (${req.failure()?.errorText}) initiator:`, JSON.stringify(req.initiator()));
+  });
+  page.on('response', res => {
+    const u = res.url();
+    if (res.status() >= 400 || u.includes('youtubei') || u.includes('browse') || u.includes('player') || u.includes('desktop') || u.includes('googlevideo')) {
+      console.log(`[Response ${res.status()}] ${res.request().method()} ${u.slice(0, 100)} initiator:`, JSON.stringify(res.request().initiator()));
+    }
+  });
+
+  await page.evaluateOnNewDocument(() => {
+    window.addEventListener('error', e => {
+      console.log('[Frame Global Error]', e.message, 'at', e.filename, ':', e.lineno, ':', e.colno, e.error ? e.error.stack : '');
+    });
+    window.addEventListener('unhandledrejection', e => {
+      console.log('[Frame Global UnhandledRejection]', e.reason ? (e.reason.stack || e.reason.message || String(e.reason)) : e);
+    });
   });
 
   try {
@@ -30,8 +45,8 @@ import puppeteer from 'puppeteer';
     await page.type('#term-input', 'https://www.youtube.com');
     await page.keyboard.press('Enter');
 
-    console.log('Waiting 10 seconds for YouTube iframe...');
-    await new Promise(r => setTimeout(r, 10000));
+    console.log('Waiting 15 seconds for YouTube iframe...');
+    await new Promise(r => setTimeout(r, 15000));
     
     const frames = page.frames();
     console.log('Total frames:', frames.length);
@@ -40,22 +55,23 @@ import puppeteer from 'puppeteer';
       if (f.url().includes('youtube.com')) {
         try {
           const evalResult = await f.evaluate(() => {
+            const scripts = Array.from(document.querySelectorAll('script')).map(s => ({
+              src: s.src,
+              type: s.type,
+              async: s.async,
+              defer: s.defer,
+              id: s.id,
+              textLen: s.textContent.length
+            }));
             return {
-              hasWindow: typeof window !== 'undefined',
-              hasGlobalThis: typeof globalThis !== 'undefined',
-              windowMath: typeof window !== 'undefined' ? typeof window.Math : 'no',
-              globalThisMath: typeof globalThis !== 'undefined' ? typeof globalThis.Math : 'no',
-              mathEquals: typeof window !== 'undefined' ? (window.Math === Math) : 'no',
-              undefinedWritable: typeof window !== 'undefined' ? Object.getOwnPropertyDescriptor(window, 'undefined') : null,
-              scriptsCount: document.querySelectorAll('script').length,
-              title: document.title,
-              hasYtdApp: !!document.querySelector('ytd-app'),
-              hasMasthead: !!document.querySelector('#masthead'),
-              hasButtons: document.querySelectorAll('button').length,
-              bodyHtmlLength: document.body ? document.body.innerHTML.length : 0
+              scriptsCount: scripts.length,
+              externalScripts: scripts.filter(s => s.src).map(s => s.src),
+              scriptIds: scripts.filter(s => s.id).map(s => s.id),
+              ytInitialData: typeof window.ytInitialData !== 'undefined',
+              ytcfg: typeof window.ytcfg !== 'undefined' ? Object.keys(window.ytcfg.data_ || {}) : null
             };
           });
-          console.log('YouTube Frame Diagnosis:', JSON.stringify(evalResult, null, 2));
+          console.log('YouTube Frame Scripts:', JSON.stringify(evalResult, null, 2));
         } catch (e) {
           console.log('Could not evaluate in frame:', e.message);
         }

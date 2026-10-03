@@ -156,67 +156,128 @@ const GLOBAL_SHIM = `
     wrapProto(String.prototype, ['endsWith','includes','matchAll','startsWith','split','match','replace','replaceAll','slice','trim']);
     wrapProto(Number.prototype, ['toExponential','toFixed','toPrecision']);
 
-    // Proxy intercept for fetch/XHR
-    const PROXY_ROOT = '/worker/network/';
-    let targetOrigin = '';
+    // Universal Proxy Intercept for fetch/XHR
+    var _getProxyOrigin = function() {
+        try {
+            if (typeof window !== 'undefined' && window.parent && window.parent !== window && window.parent.location && window.parent.location.origin) {
+                var po = window.parent.location.origin;
+                if (po && !po.includes('youtube') && !po.includes('google')) return po;
+            }
+        } catch(_) {}
+        try {
+            var lo = (typeof location !== 'undefined' ? location.origin : '') || (typeof self !== 'undefined' && self.location ? self.location.origin : '');
+            if (lo && !lo.includes('youtube') && !lo.includes('google')) return lo;
+        } catch(_) {}
+        return 'https://uiqm.lol';
+    };
+
+    var _wrapUrl = function(u) {
+        if (!u) return u;
+        var s = typeof u === 'string' ? u : (u.href ? u.href : (u.url ? u.url : ''));
+        if (!s || typeof s !== 'string') return u;
+        if (s.indexOf('/worker/network/') !== -1) return s;
+        if (s.indexOf('/cron/') !== -1 || s.indexOf('/gmt/') !== -1 || s.indexOf('/unix/') !== -1 || s.indexOf('/epoch/') !== -1 || s.indexOf('/assets/') !== -1) return s;
+        if (s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('javascript:')) return s;
+
+        var proxyOrigin = _getProxyOrigin();
+        var targetOrigin = 'https://www.youtube.com';
+        try {
+            var loc = typeof location !== 'undefined' ? location : (typeof self !== 'undefined' ? self.location : null);
+            if (loc) {
+                var m = loc.pathname.match(/\/worker\/network\/([^/?#]+)/);
+                if (m) {
+                    var d = decodeURIComponent(m[1]);
+                    var p = new URL(d.includes('://') ? d : 'https://' + d);
+                    targetOrigin = p.origin;
+                }
+            }
+        } catch(_) {}
+
+        var full = s;
+        if (full.startsWith('//')) {
+            full = 'https:' + full;
+        } else if (full.startsWith('/')) {
+            full = targetOrigin + full;
+        } else if (!full.includes('://')) {
+            full = targetOrigin + '/' + full;
+        }
+
+        return proxyOrigin + '/worker/network/' + encodeURIComponent(full);
+    };
+
     try {
-        const loc = typeof location !== 'undefined' ? location : (typeof self !== 'undefined' ? self.location : null);
-        if (loc) {
-            const match = loc.pathname.match(/\/worker\/network\/([^/?#]+)/);
-            if (match) {
-                const decoded = decodeURIComponent(match[1]);
-                const parsed = new URL(decoded.includes('://') ? decoded : 'https://' + decoded);
-                targetOrigin = parsed.origin;
+        var rootGlobal = typeof window !== 'undefined' ? window : globalThis;
+        var _realFetch = rootGlobal.fetch;
+        if (_realFetch) {
+            var _createWrappedFetch = function(origFetch) {
+                return function(resource, init) {
+                    try {
+                        if (typeof resource === 'string') {
+                            resource = _wrapUrl(resource);
+                        } else if (resource instanceof URL) {
+                            resource = _wrapUrl(resource.href);
+                        } else if (resource && typeof resource === 'object' && resource.url) {
+                            var nw = _wrapUrl(resource.url);
+                            if (nw !== resource.url) {
+                                try {
+                                    resource = new Request(nw, resource);
+                                } catch(_) {
+                                    try {
+                                        resource = new Request(nw, {
+                                            method: resource.method,
+                                            headers: resource.headers,
+                                            credentials: resource.credentials,
+                                            cache: resource.cache,
+                                            redirect: resource.redirect
+                                        });
+                                    } catch(__) {
+                                        resource = nw;
+                                    }
+                                }
+                            }
+                        }
+                    } catch(_) {}
+                    return origFetch.call(this, resource, init);
+                };
+            };
+            var _currentFetch = _createWrappedFetch(_realFetch);
+            try {
+                Object.defineProperty(rootGlobal, 'fetch', {
+                    get: function() { return _currentFetch; },
+                    set: function(fn) {
+                        if (typeof fn === 'function' && fn !== _currentFetch) {
+                            _realFetch = fn;
+                            _currentFetch = _createWrappedFetch(fn);
+                        }
+                    },
+                    configurable: true,
+                    enumerable: true
+                });
+            } catch(_) {
+                rootGlobal.fetch = _currentFetch;
             }
         }
     } catch(_) {}
 
-    const isExternal = u => {
-        if (typeof u !== 'string') return false;
-        const myOrigin = (typeof location !== 'undefined' && location.origin) || (typeof self !== 'undefined' && self.location && self.location.origin) || '';
-        return u.includes('://') && (!myOrigin || !u.startsWith(myOrigin));
-    };
-
-    const wrapUrl = u => {
-        if (!u) return u;
-        let str = typeof u === 'string' ? u : (u.href ? u.href : (u.url ? u.url : String(u)));
-        if (!str || typeof str !== 'string') return u;
-        if (isExternal(str)) return PROXY_ROOT + encodeURIComponent(str);
-        if (str.startsWith('/') && !str.startsWith('/worker/') && !str.startsWith('/cron/') && !str.startsWith('/gmt/') && !str.startsWith('/epoch/') && targetOrigin) {
-            return PROXY_ROOT + encodeURIComponent(targetOrigin + str);
-        }
-        return str;
-    };
-
     try {
-        const rootGlobal = typeof window !== 'undefined' ? window : globalThis;
-        const origFetch = rootGlobal.fetch;
-        if (origFetch) {
-            rootGlobal.fetch = function(resource, init) {
-                try {
-                    if (typeof resource === 'string') {
-                        resource = wrapUrl(resource);
-                    } else if (resource instanceof URL) {
-                        resource = wrapUrl(resource.href);
-                    } else if (resource && typeof resource === 'object' && 'url' in resource) {
-                        const newUrl = wrapUrl(resource.url);
-                        if (newUrl !== resource.url) {
-                            resource = new Request(newUrl, resource);
-                        }
-                    }
-                } catch(_) {}
-                return origFetch.call(this, resource, init);
+        var rootGlobal = typeof window !== 'undefined' ? window : globalThis;
+        if (rootGlobal.XMLHttpRequest && rootGlobal.XMLHttpRequest.prototype) {
+            var _origOpen = rootGlobal.XMLHttpRequest.prototype.open;
+            rootGlobal.XMLHttpRequest.prototype.open = function(method, url) {
+                try { arguments[1] = _wrapUrl(url); } catch(_) {}
+                var rest = Array.prototype.slice.call(arguments, 2);
+                return _origOpen.apply(this, [method, arguments[1]].concat(rest));
             };
         }
     } catch(_) {}
 
     try {
-        const rootGlobal = typeof window !== 'undefined' ? window : globalThis;
-        if (rootGlobal.XMLHttpRequest && rootGlobal.XMLHttpRequest.prototype) {
-            const origOpen = rootGlobal.XMLHttpRequest.prototype.open;
-            rootGlobal.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-                try { url = wrapUrl(url); } catch(_) {}
-                return origOpen.call(this, method, url, ...rest);
+        var rootGlobal = typeof window !== 'undefined' ? window : globalThis;
+        if (rootGlobal.navigator && rootGlobal.navigator.sendBeacon) {
+            var _origBeacon = rootGlobal.navigator.sendBeacon;
+            rootGlobal.navigator.sendBeacon = function(url, data) {
+                try { url = _wrapUrl(url); } catch(_) {}
+                return _origBeacon.call(this, url, data);
             };
         }
     } catch(_) {}
@@ -322,42 +383,127 @@ if (typeof Object !== 'undefined' && Object.prototype) {
 }
 
 (function() {
-    if (globalThis.__sj_fetch_wrapped) return;
-    globalThis.__sj_fetch_wrapped = true;
-    var _P = '/worker/network/';
-    var _wrap = function(u) {
+    var _getProxyOrigin = function() {
+        try {
+            if (typeof window !== 'undefined' && window.parent && window.parent !== window && window.parent.location && window.parent.location.origin) {
+                var po = window.parent.location.origin;
+                if (po && !po.includes('youtube') && !po.includes('google')) return po;
+            }
+        } catch(_) {}
+        try {
+            var lo = (typeof location !== 'undefined' ? location.origin : '') || (typeof self !== 'undefined' && self.location ? self.location.origin : '');
+            if (lo && !lo.includes('youtube') && !lo.includes('google')) return lo;
+        } catch(_) {}
+        return 'https://uiqm.lol';
+    };
+
+    var _wrapUrl = function(u) {
         if (!u) return u;
         var s = typeof u === 'string' ? u : (u.href ? u.href : (u.url ? u.url : ''));
         if (!s || typeof s !== 'string') return u;
-        var o = (typeof location !== 'undefined' && location.origin) || (typeof self !== 'undefined' && self.location && self.location.origin) || '';
-        if (s.indexOf('://') !== -1 && (!o || s.indexOf(o) !== 0)) {
-            return _P + encodeURIComponent(s);
+        if (s.indexOf('/worker/network/') !== -1) return s;
+        if (s.indexOf('/cron/') !== -1 || s.indexOf('/gmt/') !== -1 || s.indexOf('/unix/') !== -1 || s.indexOf('/epoch/') !== -1 || s.indexOf('/assets/') !== -1) return s;
+        if (s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('javascript:')) return s;
+
+        var proxyOrigin = _getProxyOrigin();
+        var targetOrigin = 'https://www.youtube.com';
+        try {
+            var loc = typeof location !== 'undefined' ? location : (typeof self !== 'undefined' ? self.location : null);
+            if (loc) {
+                var m = loc.pathname.match(/\/worker\/network\/([^/?#]+)/);
+                if (m) {
+                    var d = decodeURIComponent(m[1]);
+                    var p = new URL(d.includes('://') ? d : 'https://' + d);
+                    targetOrigin = p.origin;
+                }
+            }
+        } catch(_) {}
+
+        var full = s;
+        if (full.startsWith('//')) {
+            full = 'https:' + full;
+        } else if (full.startsWith('/')) {
+            full = targetOrigin + full;
+        } else if (!full.includes('://')) {
+            full = targetOrigin + '/' + full;
         }
-        return s;
+
+        return proxyOrigin + '/worker/network/' + encodeURIComponent(full);
     };
+
     try {
-        var _f = globalThis.fetch;
-        if (_f) {
-            globalThis.fetch = function(r, i) {
-                try {
-                    if (typeof r === 'string') r = _wrap(r);
-                    else if (r && typeof r === 'object' && r.href) r = _wrap(r.href);
-                    else if (r && typeof r === 'object' && r.url) {
-                        var nw = _wrap(r.url);
-                        if (nw !== r.url) r = new Request(nw, r);
-                    }
-                } catch(_) {}
-                return _f.call(this, r, i);
+        var rootGlobal = typeof window !== 'undefined' ? window : globalThis;
+        var _realFetch = rootGlobal.fetch;
+        if (_realFetch) {
+            var _createWrappedFetch = function(origFetch) {
+                return function(resource, init) {
+                    try {
+                        if (typeof resource === 'string') {
+                            resource = _wrapUrl(resource);
+                        } else if (resource instanceof URL) {
+                            resource = _wrapUrl(resource.href);
+                        } else if (resource && typeof resource === 'object' && resource.url) {
+                            var nw = _wrapUrl(resource.url);
+                            if (nw !== resource.url) {
+                                try {
+                                    resource = new Request(nw, resource);
+                                } catch(_) {
+                                    try {
+                                        resource = new Request(nw, {
+                                            method: resource.method,
+                                            headers: resource.headers,
+                                            credentials: resource.credentials,
+                                            cache: resource.cache,
+                                            redirect: resource.redirect
+                                        });
+                                    } catch(__) {
+                                        resource = nw;
+                                    }
+                                }
+                            }
+                        }
+                    } catch(_) {}
+                    return origFetch.call(this, resource, init);
+                };
+            };
+            var _currentFetch = _createWrappedFetch(_realFetch);
+            try {
+                Object.defineProperty(rootGlobal, 'fetch', {
+                    get: function() { return _currentFetch; },
+                    set: function(fn) {
+                        if (typeof fn === 'function' && fn !== _currentFetch) {
+                            _realFetch = fn;
+                            _currentFetch = _createWrappedFetch(fn);
+                        }
+                    },
+                    configurable: true,
+                    enumerable: true
+                });
+            } catch(_) {
+                rootGlobal.fetch = _currentFetch;
+            }
+        }
+    } catch(_) {}
+
+    try {
+        var rootGlobal = typeof window !== 'undefined' ? window : globalThis;
+        if (rootGlobal.XMLHttpRequest && rootGlobal.XMLHttpRequest.prototype) {
+            var _origOpen = rootGlobal.XMLHttpRequest.prototype.open;
+            rootGlobal.XMLHttpRequest.prototype.open = function(method, url) {
+                try { arguments[1] = _wrapUrl(url); } catch(_) {}
+                var rest = Array.prototype.slice.call(arguments, 2);
+                return _origOpen.apply(this, [method, arguments[1]].concat(rest));
             };
         }
     } catch(_) {}
+
     try {
-        if (globalThis.XMLHttpRequest && globalThis.XMLHttpRequest.prototype) {
-            var _op = globalThis.XMLHttpRequest.prototype.open;
-            globalThis.XMLHttpRequest.prototype.open = function(m, u) {
-                try { u = _wrap(u); } catch(_) {}
-                var rest = Array.prototype.slice.call(arguments, 2);
-                return _op.apply(this, [m, u].concat(rest));
+        var rootGlobal = typeof window !== 'undefined' ? window : globalThis;
+        if (rootGlobal.navigator && rootGlobal.navigator.sendBeacon) {
+            var _origBeacon = rootGlobal.navigator.sendBeacon;
+            rootGlobal.navigator.sendBeacon = function(url, data) {
+                try { url = _wrapUrl(url); } catch(_) {}
+                return _origBeacon.call(this, url, data);
             };
         }
     } catch(_) {}
@@ -382,7 +528,13 @@ async function initHandler() {
     const transport = rawEpoxy ? {
         ...rawEpoxy,
         async request(remote, method, body, headers, signal) {
-            const res = await rawEpoxy.request(remote, method, body, headers, signal);
+            let hdrs = (headers instanceof Headers) ? headers : new Headers(headers || {});
+            const host = (remote && remote.hostname) ? remote.hostname : '';
+            if (host.includes('youtube.com') || host.includes('googleapis.com') || host.includes('googlevideo.com') || host.includes('gstatic.com')) {
+                hdrs.set('origin', 'https://www.youtube.com');
+                hdrs.set('referer', 'https://www.youtube.com/');
+            }
+            const res = await rawEpoxy.request(remote, method, body, hdrs, signal);
             return {
                 body: res.body || null,
                 headers: (res.headers instanceof Headers) ? res.headers : new Headers(res.headers || {}),
@@ -499,7 +651,12 @@ self.addEventListener('fetch', event => {
             ? safeURL(event.request.referrer)
             : new URL(url.origin + '/');
     } else if (!isSameOrigin) {
-        rawUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(url.href), self.location.origin);
+        if (url.pathname.startsWith('/worker/network/')) {
+            const innerEncoded = url.pathname.slice('/worker/network/'.length) + url.search;
+            rawUrl = new URL(SCRAM_PREFIX + 'network/' + innerEncoded, self.location.origin);
+        } else {
+            rawUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(url.href), self.location.origin);
+        }
         rawClientUrl = event.request.referrer
             ? safeURL(event.request.referrer)
             : new URL('https://www.youtube.com/');
@@ -587,7 +744,8 @@ async function emergencyBypass(request, urlObj) {
                     if (lk !== 'host' && lk !== 'origin' && lk !== 'referer') epHeaders[k] = v;
                 });
             }
-            if (targetUrl.includes('youtube.com') || targetUrl.includes('googlevideo.com') || targetUrl.includes('gstatic.com')) {
+            if (targetUrl.includes('youtube.com') || targetUrl.includes('googlevideo.com') || targetUrl.includes('gstatic.com') || targetUrl.includes('googleapis.com')) {
+                epHeaders['origin'] = 'https://www.youtube.com';
                 epHeaders['referer'] = 'https://www.youtube.com/';
             }
             const body = ['GET', 'HEAD'].includes(request.method) ? null : request.body;
