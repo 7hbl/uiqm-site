@@ -74,34 +74,22 @@ import puppeteer from 'puppeteer';
     console.log('Total frames:', frames.length);
     for (const f of frames) {
       console.log('Frame URL:', f.url());
-      if (f.url().includes('/network/https%3A%2F%2Fwww.youtube.com') || (f.url().includes('youtube.com') && !f.url().includes('accounts.google.com'))) {
+      if (f.url().includes('youtube.com') && !f.url().includes('accounts.google.com')) {
         try {
           const evalPromise = f.evaluate(() => {
-            const scripts = Array.from(document.querySelectorAll('script')).map(s => ({
-              src: s.src,
-              type: s.type,
-              async: s.async,
-              defer: s.defer,
-              id: s.id,
-              textLen: s.textContent.length
-            }));
             return {
-              scriptsCount: scripts.length,
-              externalScripts: scripts.filter(s => s.src).map(s => s.src),
-              scriptIds: scripts.filter(s => s.id).map(s => s.id),
-              ytInitialData: typeof window.ytInitialData !== 'undefined',
-              ytcfg: typeof window.ytcfg !== 'undefined' ? Object.keys(window.ytcfg.data_ || {}) : null,
-              customElementYtdApp: typeof customElements !== 'undefined' ? !!customElements.get('ytd-app') : false,
-              customElementYtdMasthead: typeof customElements !== 'undefined' ? !!customElements.get('ytd-masthead') : false,
-              ytdAppChildren: Array.from(document.querySelector('ytd-app')?.children || []).map(c => c.tagName.toLowerCase()),
-              videoThumbnails: document.querySelectorAll('ytd-thumbnail, ytd-rich-item-renderer, img[src*="ytimg"]').length,
-              bodyClasses: document.body ? document.body.className : '',
-              hasConsentDialog: !!document.querySelector('tp-yt-paper-dialog, ytd-consent-bump-v2-lightbox, form[action*="consent"]')
+              title: document.title,
+              url: location.href,
+              ytdApp: !!document.querySelector('ytd-app'),
+              masthead: !!document.querySelector('#masthead, ytd-masthead'),
+              searchInput: !!document.querySelector('input#search'),
+              bodyLength: document.body ? document.body.innerHTML.length : 0,
+              videoThumbnails: document.querySelectorAll('ytd-thumbnail, ytd-rich-item-renderer, img[src*="ytimg"]').length
             };
           });
           const evalResult = await Promise.race([
             evalPromise,
-            new Promise((_, reject) => setTimeout(() => reject(new Error('evaluate timeout')), 6000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error('evaluate timeout')), 10000))
           ]);
           console.log('YouTube Frame DOM Inspection:', JSON.stringify(evalResult, null, 2));
         } catch (e) {
@@ -110,7 +98,7 @@ import puppeteer from 'puppeteer';
       }
     }
 
-    await page.screenshot({ path: 'tools/maintenance/live_test.png', timeout: 8000 }).catch(e => console.log('Screenshot err:', e.message));
+    await page.screenshot({ path: 'tools/maintenance/live_test.png', timeout: 10000 }).catch(e => console.log('Screenshot err:', e.message));
     console.log('Saved screenshot to tools/maintenance/live_test.png');
   } catch (err) {
     console.error('Test error:', err.message);
