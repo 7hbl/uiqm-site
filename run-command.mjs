@@ -253,8 +253,17 @@ commands: for (let i = 2; i < process.argv.length; i++)
         // Final catch-all for .length in loops
         content = content.replace(/([^\w$])([a-zA-Z])\.length(?!\s*=)/g, '$1($2?.length||0)');
 
-        // INJECT $scramjet$pushsourcemap AT THE VERY TOP
-        const shim = `globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || function() {}; globalThis.$scramjet$initialized = true;`;
+        // INJECT GLOBAL_SHIM AT THE VERY TOP OF working.all.js
+        let extractedShim = '';
+        try {
+          const swSource = readFileSync(join(rootPath, 'views/scram/scramjet.sw.js'), 'utf8').replace(/\r\n/g, '\n');
+          const startIdx = swSource.indexOf('const GLOBAL_SHIM = `') + 'const GLOBAL_SHIM = `'.length;
+          const endIdx = swSource.indexOf('`;\n\nasync function initHandler()');
+          if (startIdx !== -1 && endIdx !== -1) {
+            extractedShim = swSource.slice(startIdx, endIdx);
+          }
+        } catch(_) {}
+        const shim = extractedShim || `globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || function() {}; globalThis.$scramjet$initialized = true;`;
         content = shim + "\n" + content;
         
         writeFileSync(scramjetBundle, content);

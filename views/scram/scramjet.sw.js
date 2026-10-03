@@ -285,8 +285,7 @@ async function initHandler() {
                     }
                 },
                 getInjectScripts: (_m, _h, script) => [
-                    script('/worker/working.all.js'),
-                    { type: 'script', content: GLOBAL_SHIM }
+                    script('/worker/working.all.js')
                 ]
             }
         },
@@ -468,14 +467,13 @@ async function emergencyBypass(request, urlObj) {
 
     if (contentType.includes('text/html')) {
         let text = await response.text();
-        text = runtimeScript + text;
+        if (text.includes('<head>')) {
+            text = text.replace('<head>', '<head>' + runtimeScript);
+        } else if (text.includes('<HEAD>')) {
+            text = text.replace('<HEAD>', '<HEAD>' + runtimeScript);
+        }
         bypassHeaders.set('content-type', 'text/html; charset=UTF-8');
         return new Response(text, { headers: bypassHeaders, status: bypassStatus });
-    } else if (contentType.includes('javascript') || targetUrl.endsWith('.js')) {
-        let text = await response.text();
-        const inlineShim = `(function(){if(globalThis.__scramjet_emergency_active)return;globalThis.__scramjet_emergency_active=true;${GLOBAL_SHIM}})();\n`;
-        bypassHeaders.set('content-type', 'application/javascript; charset=UTF-8');
-        return new Response(inlineShim + text, { headers: bypassHeaders, status: bypassStatus });
     }
 
     return new Response(response.body, { headers: bypassHeaders, status: bypassStatus });
