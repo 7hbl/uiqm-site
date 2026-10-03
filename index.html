@@ -295,6 +295,9 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 }
                 proxyShell.style.display = 'block'; loading.style.display = 'flex';
                 backBtn.style.display = 'block';
+                try { document.getElementById('proxy-url-display').innerText = url; } catch(_) {}
+                if (window._loadTimer) clearTimeout(window._loadTimer);
+                window._loadTimer = setTimeout(() => { loading.style.display = 'none'; }, 2500);
                 
                 if (sjEncode) {
                     frame.src = sjEncode(url);
@@ -318,6 +321,7 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runCommand(input.value); input.value = ''; } });
         document.addEventListener('click', () => { if (!input.disabled) input.focus(); });
         frame.onload = () => { 
+            if (window._loadTimer) clearTimeout(window._loadTimer);
             loading.style.display = 'none'; 
             print('Tunnel established.', 'system'); 
             try {
@@ -325,6 +329,7 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 if (rawUrl) document.getElementById('proxy-url-display').innerText = decodeURIComponent(rawUrl);
             } catch(e) {}
         };
+
         
         const updateUsers = () => {
             const count = Math.floor(Math.random() * (3 - 1) + 1);
