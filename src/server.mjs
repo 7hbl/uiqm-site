@@ -549,9 +549,9 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
 
   var _targetOrigin = '${targetOrigin}';
   var _wrapUrl = function(u) {
-    if (!u) return u;
+    if (!u || typeof u === 'boolean') return u;
     var s = typeof u === 'string' ? u : (u.href ? u.href : (u.url ? u.url : ''));
-    if (!s || typeof s !== 'string') return u;
+    if (!s || typeof s !== 'string' || s === 'true' || s === 'false' || s === 'null' || s === 'undefined') return u;
     if (s.indexOf('/worker/network/') !== -1 || s.indexOf('/cron/') !== -1 || s.indexOf('/gmt/') !== -1 || s.indexOf('/unix/') !== -1 || s.indexOf('/epoch/') !== -1) return s;
     if (s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('javascript:')) return s;
 

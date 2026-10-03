@@ -135,10 +135,84 @@ const GLOBAL_SHIM = `
     globalThis.$scramjet$clean = (...a) => a;
     globalThis.$scramjet$tryset = (o, p, v) => { try { o[p] = v; } catch(_) {} return v; };
     globalThis.$scramjet$pushsourcemap = () => {};
+    globalThis.$scramjet$wrappostmessage = globalThis.$scramjet$wrappostmessage || ((t) => t);
+    globalThis.$scramjet$wrapfunction = globalThis.$scramjet$wrapfunction || ((fn) => fn);
+    globalThis.$scramjet$wrapworker = globalThis.$scramjet$wrapworker || ((w) => w);
+    globalThis.$scramjet$wrapwindow = globalThis.$scramjet$wrapwindow || ((w) => w);
+    globalThis.$scramjet$wrapelement = globalThis.$scramjet$wrapelement || ((el) => el);
     var $scramjet$prop = globalThis.$scramjet$prop;
     var $scramjet$wrap = globalThis.$scramjet$wrap;
     var $scramjet$clean = globalThis.$scramjet$clean;
     var $scramjet$tryset = globalThis.$scramjet$tryset;
+    var $scramjet$wrappostmessage = globalThis.$scramjet$wrappostmessage;
+    var $scramjet$wrapfunction = globalThis.$scramjet$wrapfunction;
+    var $scramjet$wrapworker = globalThis.$scramjet$wrapworker;
+    var $scramjet$wrapwindow = globalThis.$scramjet$wrapwindow;
+    var $scramjet$wrapelement = globalThis.$scramjet$wrapelement;
+
+    if (typeof Object !== 'undefined' && Object.prototype) {
+        if (!('$scramjet__eval' in Object.prototype)) {
+            try {
+                Object.defineProperty(Object.prototype, '$scramjet__eval', {
+                    value: function(...a) {
+                        var fn = (this && this.eval) || globalThis.eval;
+                        return typeof fn === 'function' ? fn.apply(this, a) : undefined;
+                    },
+                    writable: true,
+                    configurable: true,
+                    enumerable: false
+                });
+            } catch(_) {}
+        }
+        if (!('$scramjet__location' in Object.prototype)) {
+            try {
+                Object.defineProperty(Object.prototype, '$scramjet__location', {
+                    get: function() { return (this && this.location) || globalThis.location; },
+                    set: function(v) {
+                        if (this === globalThis || (typeof window !== 'undefined' && this === window) || (typeof document !== 'undefined' && this === document)) {
+                            globalThis.location = v;
+                        } else if (this) {
+                            try { Object.defineProperty(this, '$scramjet__location', { value: v, writable: true, configurable: true, enumerable: true }); } catch(_) { this['$scramjet__location'] = v; }
+                        }
+                    },
+                    configurable: true,
+                    enumerable: false
+                });
+            } catch(_) {}
+        }
+        if (!('$scramjet__parent' in Object.prototype)) {
+            try {
+                Object.defineProperty(Object.prototype, '$scramjet__parent', {
+                    get: function() { return (this && this.parent) || globalThis.parent; },
+                    set: function(v) {
+                        if (this === globalThis || (typeof window !== 'undefined' && this === window)) {
+                            globalThis.parent = v;
+                        } else if (this) {
+                            try { Object.defineProperty(this, '$scramjet__parent', { value: v, writable: true, configurable: true, enumerable: true }); } catch(_) { this['$scramjet__parent'] = v; }
+                        }
+                    },
+                    configurable: true,
+                    enumerable: false
+                });
+            } catch(_) {}
+        }
+        if (!('$scramjet__top' in Object.prototype)) {
+            try {
+                Object.defineProperty(Object.prototype, '$scramjet__top', {
+                    get: function() { return (this && this.top) || globalThis.top; },
+                    set: function(v) {
+                        if (this === globalThis || (typeof window !== 'undefined' && this === window)) {
+                            globalThis.top = v;
+                        } else if (this) {
+                            try { Object.defineProperty(this, '$scramjet__top', { value: v, writable: true, configurable: true, enumerable: true }); } catch(_) { this['$scramjet__top'] = v; }
+                        }
+                    },
+                    configurable: true,
+                    enumerable: false
+                });
+            } catch(_) {}
+        }
+    }
 
     // Array/String/Number Guard — stops "called on null" crashes without corrupting returns
     const wrapProto = (proto, methods) => {
@@ -172,9 +246,9 @@ const GLOBAL_SHIM = `
     };
 
     var _wrapUrl = function(u) {
-        if (!u) return u;
+        if (!u || typeof u === 'boolean') return u;
         var s = typeof u === 'string' ? u : (u.href ? u.href : (u.url ? u.url : ''));
-        if (!s || typeof s !== 'string') return u;
+        if (!s || typeof s !== 'string' || s === 'true' || s === 'false' || s === 'null' || s === 'undefined') return u;
         if (s.indexOf('/worker/network/') !== -1) return s;
         if (s.indexOf('/cron/') !== -1 || s.indexOf('/gmt/') !== -1 || s.indexOf('/unix/') !== -1 || s.indexOf('/epoch/') !== -1 || s.indexOf('/assets/') !== -1) return s;
         if (s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('javascript:')) return s;
@@ -348,6 +422,11 @@ var $scramjet$set = globalThis.$scramjet$set || ((o, p, v) => { try { if (o && p
 var $scramjet$clean = globalThis.$scramjet$clean || ((...a) => a);
 var $scramjet$tryset = globalThis.$scramjet$tryset || ((o, p, v) => { try { o[p] = v; } catch(_) {} return v; });
 var $scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});
+var $scramjet$wrappostmessage = globalThis.$scramjet$wrappostmessage || ((t) => t);
+var $scramjet$wrapfunction = globalThis.$scramjet$wrapfunction || ((fn) => fn);
+var $scramjet$wrapworker = globalThis.$scramjet$wrapworker || ((w) => w);
+var $scramjet$wrapwindow = globalThis.$scramjet$wrapwindow || ((w) => w);
+var $scramjet$wrapelement = globalThis.$scramjet$wrapelement || ((el) => el);
 if (typeof Object !== 'undefined' && Object.prototype) {
     if (!('$scramjet__eval' in Object.prototype)) {
         try {
@@ -366,7 +445,13 @@ if (typeof Object !== 'undefined' && Object.prototype) {
         try {
             Object.defineProperty(Object.prototype, '$scramjet__location', {
                 get: function() { return (this && this.location) || globalThis.location; },
-                set: function(v) { if (this && 'location' in this) this.location = v; else globalThis.location = v; },
+                set: function(v) {
+                    if (this === globalThis || (typeof window !== 'undefined' && this === window) || (typeof document !== 'undefined' && this === document)) {
+                        globalThis.location = v;
+                    } else if (this) {
+                        try { Object.defineProperty(this, '$scramjet__location', { value: v, writable: true, configurable: true, enumerable: true }); } catch(_) { this['$scramjet__location'] = v; }
+                    }
+                },
                 configurable: true,
                 enumerable: false
             });
@@ -376,6 +461,13 @@ if (typeof Object !== 'undefined' && Object.prototype) {
         try {
             Object.defineProperty(Object.prototype, '$scramjet__parent', {
                 get: function() { return (this && this.parent) || globalThis.parent; },
+                set: function(v) {
+                    if (this === globalThis || (typeof window !== 'undefined' && this === window)) {
+                        globalThis.parent = v;
+                    } else if (this) {
+                        try { Object.defineProperty(this, '$scramjet__parent', { value: v, writable: true, configurable: true, enumerable: true }); } catch(_) { this['$scramjet__parent'] = v; }
+                    }
+                },
                 configurable: true,
                 enumerable: false
             });
@@ -385,6 +477,13 @@ if (typeof Object !== 'undefined' && Object.prototype) {
         try {
             Object.defineProperty(Object.prototype, '$scramjet__top', {
                 get: function() { return (this && this.top) || globalThis.top; },
+                set: function(v) {
+                    if (this === globalThis || (typeof window !== 'undefined' && this === window)) {
+                        globalThis.top = v;
+                    } else if (this) {
+                        try { Object.defineProperty(this, '$scramjet__top', { value: v, writable: true, configurable: true, enumerable: true }); } catch(_) { this['$scramjet__top'] = v; }
+                    }
+                },
                 configurable: true,
                 enumerable: false
             });
@@ -408,9 +507,9 @@ if (typeof Object !== 'undefined' && Object.prototype) {
     };
 
     var _wrapUrl = function(u) {
-        if (!u) return u;
+        if (!u || typeof u === 'boolean') return u;
         var s = typeof u === 'string' ? u : (u.href ? u.href : (u.url ? u.url : ''));
-        if (!s || typeof s !== 'string') return u;
+        if (!s || typeof s !== 'string' || s === 'true' || s === 'false' || s === 'null' || s === 'undefined') return u;
         if (s.indexOf('/worker/network/') !== -1) return s;
         if (s.indexOf('/cron/') !== -1 || s.indexOf('/gmt/') !== -1 || s.indexOf('/unix/') !== -1 || s.indexOf('/epoch/') !== -1 || s.indexOf('/assets/') !== -1) return s;
         if (s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('javascript:')) return s;
