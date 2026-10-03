@@ -462,7 +462,7 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     const targetOrigin = parsedTarget.origin;
 
     const forwardHeaders = {};
-    const headersToCopy = ['user-agent', 'accept', 'accept-language', 'referer'];
+    const headersToCopy = ['user-agent', 'accept', 'accept-language', 'content-type', 'authorization'];
     for (const h of headersToCopy) {
       if (request.headers[h]) {
         forwardHeaders[h] = request.headers[h];
@@ -471,6 +471,7 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     if (!forwardHeaders['user-agent']) {
       forwardHeaders['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
     }
+    forwardHeaders['origin'] = targetOrigin;
     forwardHeaders['referer'] = targetOrigin + '/';
     
     const response = await fetch(targetUrlStr, {
@@ -528,78 +529,150 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     // HTML Rewriting for seamless in-iframe browsing
     if (contentType.includes('text/html') || cleanUrl.endsWith('.html')) {
       let html = await response.text();
-      const proxyPrefix = request.url.startsWith('/worker/network/')
-        ? '/worker/network/'
-        : (request.url.startsWith('/network/service/') ? '/network/service/' : '/proxy/');
 
-      const baseTag = `<base href="${targetOrigin}/">`;
       const clientScript = `
 <script>
 (function() {
-  const PROXY_ROOT = '${proxyPrefix}';
-  try { Object.defineProperty(window, 'top', { get: () => window }); } catch(e) {}
-  try { Object.defineProperty(window, 'parent', { get: () => window }); } catch(e) {}
-  
-  // Intercept fetch
-  try {
-    const origFetch = window.fetch;
-    window.fetch = function(input, init) {
-      if (typeof input === 'string') {
-        try {
-          const u = new URL(input, window.location.href);
-          if (u.origin === window.location.origin && !u.pathname.startsWith(PROXY_ROOT)) {
-            input = PROXY_ROOT + encodeURIComponent('${targetOrigin}' + u.pathname + u.search);
-          }
-        } catch (_) {}
+  var _getProxyOrigin = function() {
+    try {
+      if (typeof window !== 'undefined' && window.parent && window.parent !== window && window.parent.location && window.parent.location.origin) {
+        var po = window.parent.location.origin;
+        if (po && !po.includes('youtube') && !po.includes('google')) return po;
       }
-      return origFetch.call(this, input, init);
-    };
+    } catch(_) {}
+    try {
+      var lo = (typeof location !== 'undefined' ? location.origin : '');
+      if (lo && !lo.includes('youtube') && !lo.includes('google')) return lo;
+    } catch(_) {}
+    return '';
+  };
+
+  var _targetOrigin = '${targetOrigin}';
+  var _wrapUrl = function(u) {
+    if (!u) return u;
+    var s = typeof u === 'string' ? u : (u.href ? u.href : (u.url ? u.url : ''));
+    if (!s || typeof s !== 'string') return u;
+    if (s.indexOf('/worker/network/') !== -1 || s.indexOf('/cron/') !== -1 || s.indexOf('/gmt/') !== -1 || s.indexOf('/unix/') !== -1 || s.indexOf('/epoch/') !== -1) return s;
+    if (s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('javascript:')) return s;
+
+    var proxyOrigin = _getProxyOrigin();
+    var full = s;
+    if (full.startsWith('//')) {
+      full = 'https:' + full;
+    } else if (full.startsWith('/')) {
+      full = _targetOrigin + full;
+    } else if (!full.includes('://')) {
+      full = _targetOrigin + '/' + full;
+    }
+
+    return (proxyOrigin || '') + '/worker/network/' + encodeURIComponent(full);
+  };
+
+  try {
+    var _realFetch = window.fetch;
+    if (_realFetch) {
+      var _createWrapped = function(origFetch) {
+        return function(resource, init) {
+          try {
+            if (typeof resource === 'string') {
+              resource = _wrapUrl(resource);
+            } else if (resource instanceof URL) {
+              resource = _wrapUrl(resource.href);
+            } else if (resource && typeof resource === 'object' && resource.url) {
+              var nw = _wrapUrl(resource.url);
+              if (nw !== resource.url) {
+                try {
+                  resource = new Request(nw, resource);
+                } catch(_) {
+                  try {
+                    resource = new Request(nw, {
+                      method: resource.method,
+                      headers: resource.headers,
+                      credentials: resource.credentials,
+                      cache: resource.cache,
+                      redirect: resource.redirect
+                    });
+                  } catch(__) {
+                    resource = nw;
+                  }
+                }
+              }
+            }
+          } catch(_) {}
+          return origFetch.call(this, resource, init);
+        };
+      };
+      var _currentFetch = _createWrapped(_realFetch);
+      try {
+        Object.defineProperty(window, 'fetch', {
+          get: function() { return _currentFetch; },
+          set: function(fn) {
+            if (typeof fn === 'function' && fn !== _currentFetch) {
+              _realFetch = fn;
+              _currentFetch = _createWrapped(fn);
+            }
+          },
+          configurable: true,
+          enumerable: true
+        });
+      } catch(_) {
+        window.fetch = _currentFetch;
+      }
+    }
   } catch(_) {}
 
-  // Intercept XHR
   try {
-    const origOpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url, ...args) {
-      if (typeof url === 'string') {
-        try {
-          const u = new URL(url, window.location.href);
-          if (u.origin === window.location.origin && !u.pathname.startsWith(PROXY_ROOT)) {
-            url = PROXY_ROOT + encodeURIComponent('${targetOrigin}' + u.pathname + u.search);
-          }
-        } catch (_) {}
-      }
-      return origOpen.call(this, method, url, ...args);
-    };
+    if (window.XMLHttpRequest && window.XMLHttpRequest.prototype) {
+      var _origOpen = window.XMLHttpRequest.prototype.open;
+      window.XMLHttpRequest.prototype.open = function(method, url) {
+        try { arguments[1] = _wrapUrl(url); } catch(_) {}
+        var rest = Array.prototype.slice.call(arguments, 2);
+        return _origOpen.apply(this, [method, arguments[1]].concat(rest));
+      };
+    }
+  } catch(_) {}
+
+  try {
+    if (window.navigator && window.navigator.sendBeacon) {
+      var _origBeacon = window.navigator.sendBeacon;
+      window.navigator.sendBeacon = function(url, data) {
+        try { url = _wrapUrl(url); } catch(_) {}
+        return _origBeacon.call(this, url, data);
+      };
+    }
   } catch(_) {}
 
   document.addEventListener('click', function(e) {
-    const a = e.target.closest('a');
+    var a = e.target.closest('a');
     if (!a || !a.href) return;
     try {
-      const u = new URL(a.href, window.location.href);
-      if (u.protocol === 'http:' || u.protocol === 'https:') {
-        e.preventDefault();
-        window.location.href = PROXY_ROOT + encodeURIComponent(u.href);
+      if (a.href.startsWith('http://') || a.href.startsWith('https://')) {
+        if (!a.href.includes('/worker/network/')) {
+          e.preventDefault();
+          window.location.href = _wrapUrl(a.href);
+        }
       }
     } catch(_) {}
   }, true);
+
   document.addEventListener('submit', function(e) {
-    const form = e.target;
+    var form = e.target;
     if (!form || !form.action) return;
     try {
-      const u = new URL(form.action, window.location.href);
-      form.action = PROXY_ROOT + encodeURIComponent(u.href);
+      if (!form.action.includes('/worker/network/')) {
+        form.action = _wrapUrl(form.action);
+      }
     } catch(_) {}
   }, true);
 })();
 </script>`;
 
       if (html.includes('<head>')) {
-        html = html.replace('<head>', '<head>' + baseTag + clientScript);
+        html = html.replace('<head>', '<head>' + clientScript);
       } else if (html.includes('<HEAD>')) {
-        html = html.replace('<HEAD>', '<HEAD>' + baseTag + clientScript);
+        html = html.replace('<HEAD>', '<HEAD>' + clientScript);
       } else {
-        html = baseTag + clientScript + html;
+        html = clientScript + html;
       }
 
       responseHeaders['content-type'] = 'text/html; charset=UTF-8';
