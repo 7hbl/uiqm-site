@@ -187,11 +187,17 @@ const GLOBAL_SHIM = `
                 if (loc.origin && !loc.origin.includes('uiqm.lol') && loc.origin.startsWith('http')) {
                     targetOrigin = loc.origin;
                 } else {
-                    var m = (loc.pathname || '').match(/\/worker\/network\/([^/?#]+)/);
-                    if (m) {
-                        var d = decodeURIComponent(m[1]);
-                        var p = new URL(d.includes('://') ? d : 'https://' + d);
-                        targetOrigin = p.origin;
+                    var idx = (loc.pathname || '').indexOf('/worker/network/');
+                    if (idx !== -1) {
+                        var rest = (loc.pathname || '').slice(idx + 16);
+                        var rawPart = rest.split('?')[0].split('#')[0];
+                        if (rawPart) {
+                            try {
+                                var d = decodeURIComponent(rawPart);
+                                var p = new URL(d.includes('://') ? d : 'https://' + d);
+                                targetOrigin = p.origin;
+                            } catch(_) {}
+                        }
                     }
                 }
             }
@@ -417,11 +423,17 @@ if (typeof Object !== 'undefined' && Object.prototype) {
                 if (loc.origin && !loc.origin.includes('uiqm.lol') && loc.origin.startsWith('http')) {
                     targetOrigin = loc.origin;
                 } else {
-                    var m = (loc.pathname || '').match(/\/worker\/network\/([^/?#]+)/);
-                    if (m) {
-                        var d = decodeURIComponent(m[1]);
-                        var p = new URL(d.includes('://') ? d : 'https://' + d);
-                        targetOrigin = p.origin;
+                    var idx = (loc.pathname || '').indexOf('/worker/network/');
+                    if (idx !== -1) {
+                        var rest = (loc.pathname || '').slice(idx + 16);
+                        var rawPart = rest.split('?')[0].split('#')[0];
+                        if (rawPart) {
+                            try {
+                                var d = decodeURIComponent(rawPart);
+                                var p = new URL(d.includes('://') ? d : 'https://' + d);
+                                targetOrigin = p.origin;
+                            } catch(_) {}
+                        }
                     }
                 }
             }
