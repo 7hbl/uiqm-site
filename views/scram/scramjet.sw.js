@@ -1,4 +1,4 @@
-// Scramjet v2 Service Worker - v2.6.0 (High Compatibility & Resilience)
+// Scramjet v2 Service Worker - v2.6.2 (High Compatibility & Resilience)
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
@@ -106,7 +106,10 @@ function extractTargetFromScram(s) {
 
 function fixBlockedMirrors(urlStr) {
     if (!urlStr || typeof urlStr !== 'string') return urlStr;
-    return urlStr
+    let s = urlStr;
+    try { s = decodeURIComponent(s); } catch(_) {}
+    try { s = decodeURIComponent(s); } catch(_) {}
+    return s
         .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/$2/')
         .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/main/')
         .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/$2/')
@@ -155,6 +158,69 @@ const GLOBAL_SHIM = `
     globalThis.$scramjet$wrapworker = globalThis.$scramjet$wrapworker || ((w) => w);
     globalThis.$scramjet$wrapwindow = globalThis.$scramjet$wrapwindow || ((w) => w);
     globalThis.$scramjet$wrapelement = globalThis.$scramjet$wrapelement || ((el) => el);
+
+    // YouTube Kevlar / Closure & Polymer DOM compatibility shims
+    if (typeof window !== 'undefined') {
+        try {
+            var _decodeTargetUrl = function(val) {
+                if (typeof val === 'string' && val.includes('/worker/network/')) {
+                    try {
+                        var idx = val.indexOf('/worker/network/');
+                        var target = val.slice(idx + 16);
+                        target = decodeURIComponent(target);
+                        if (!target.includes('://')) target = 'https://' + target;
+                        return target;
+                    } catch(_) {}
+                }
+                return val;
+            };
+
+            if (typeof HTMLScriptElement !== 'undefined') {
+                var scriptDesc = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
+                if (scriptDesc && scriptDesc.get) {
+                    var origScriptGet = scriptDesc.get;
+                    Object.defineProperty(HTMLScriptElement.prototype, 'src', {
+                        get: function() {
+                            return _decodeTargetUrl(origScriptGet.call(this));
+                        },
+                        set: function(v) {
+                            return scriptDesc.set.call(this, v);
+                        },
+                        configurable: true,
+                        enumerable: true
+                    });
+                }
+            }
+
+            if (typeof HTMLLinkElement !== 'undefined') {
+                var linkDesc = Object.getOwnPropertyDescriptor(HTMLLinkElement.prototype, 'href');
+                if (linkDesc && linkDesc.get) {
+                    var origLinkGet = linkDesc.get;
+                    Object.defineProperty(HTMLLinkElement.prototype, 'href', {
+                        get: function() {
+                            return _decodeTargetUrl(origLinkGet.call(this));
+                        },
+                        set: function(v) {
+                            return linkDesc.set.call(this, v);
+                        },
+                        configurable: true,
+                        enumerable: true
+                    });
+                }
+            }
+
+            if (typeof Element !== 'undefined' && Element.prototype && Element.prototype.getAttribute) {
+                var origGetAttr = Element.prototype.getAttribute;
+                Element.prototype.getAttribute = function(name) {
+                    var val = origGetAttr.call(this, name);
+                    if ((name === 'src' || name === 'href') && typeof val === 'string') {
+                        return _decodeTargetUrl(val);
+                    }
+                    return val;
+                };
+            }
+        } catch(_) {}
+    }
 })();`;
 
 const SCRIPT_HEADER = GLOBAL_SHIM;
@@ -177,19 +243,26 @@ async function initHandler() {
         ...rawEpoxy,
         async request(remote, method, body, headers, signal) {
             let hdrs = (headers instanceof Headers) ? headers : new Headers(headers || {});
-            const host = (remote && remote.hostname) ? remote.hostname : '';
+            let targetRemote = remote;
+            if (targetRemote && targetRemote.href) {
+                const fixed = fixBlockedMirrors(targetRemote.href);
+                if (fixed !== targetRemote.href) {
+                    try { targetRemote = new URL(fixed); } catch(_) {}
+                }
+            }
+            const host = (targetRemote && targetRemote.hostname) ? targetRemote.hostname : '';
             if (host.includes('youtube.com') || host.includes('googleapis.com') || host.includes('googlevideo.com') || host.includes('gstatic.com')) {
                 hdrs.set('origin', 'https://www.youtube.com');
                 hdrs.set('referer', 'https://www.youtube.com/');
-            } else if (remote && remote.origin && remote.origin.startsWith('http')) {
+            } else if (targetRemote && targetRemote.origin && targetRemote.origin.startsWith('http')) {
                 if (!hdrs.has('origin') && !['GET', 'HEAD'].includes((method || 'GET').toUpperCase())) {
-                    hdrs.set('origin', remote.origin);
+                    hdrs.set('origin', targetRemote.origin);
                 }
                 if (!hdrs.has('referer')) {
-                    hdrs.set('referer', remote.origin + '/');
+                    hdrs.set('referer', targetRemote.origin + '/');
                 }
             }
-            const res = await rawEpoxy.request(remote, method, body, hdrs, signal);
+            const res = await rawEpoxy.request(targetRemote, method, body, hdrs, signal);
             return {
                 body: res.body || null,
                 headers: (res.headers instanceof Headers) ? res.headers : new Headers(res.headers || {}),
@@ -200,8 +273,10 @@ async function initHandler() {
     } : {
         async init() {},
         async request(remote, method, body, headers, signal) {
+            let u = remote ? remote.toString() : '';
+            u = fixBlockedMirrors(u);
             const m = (method || 'GET').toUpperCase();
-            const r = await fetch(remote.toString(), {
+            const r = await fetch(u, {
                 method: m,
                 headers: headers || {},
                 body: ['GET','HEAD'].includes(m) ? null : (body || null),
@@ -209,7 +284,11 @@ async function initHandler() {
             });
             return { body: r.body, headers: r.headers, status: r.status, statusText: r.statusText };
         },
-        async fetch(url, init) { return fetch(url.toString(), init || {}); },
+        async fetch(url, init) {
+            let u = url ? url.toString() : '';
+            u = fixBlockedMirrors(u);
+            return fetch(u, init || {});
+        },
         connect() {}
     };
 
@@ -391,7 +470,48 @@ self.addEventListener('fetch', event => {
                 cache: event.request.cache
             });
 
-            return toResponse(response);
+            let resp = toResponse(response);
+            const ct = resp.headers.get('content-type') || '';
+            if (ct.includes('text/html')) {
+                let html = await resp.text();
+                // 1. Rewrite blocked CDN mirrors inside the HTML
+                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/$2/');
+                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/main/');
+                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/$2/');
+                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/main/');
+                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'https://raw.githack.com/genizy/google-class/main/mobile.js');
+
+                // 2. Strip tutoring branding & cat image
+                html = html.replace(/<div\s+id=["']spinning-logo["'][^>]*>[\s\S]*?<\/div>/gi, '');
+                html = html.replace(/<img[^>]*id=["']spinning-logo["'][^>]*>/gi, '');
+                html = html.replace(/<img[^>]*src=["']data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAYAAAC[^"']*["'][^>]*>/gi, '');
+                html = html.replace(/#spinning-logo\s*\{[^}]*\}/gi, '#spinning-logo { display: none !important; width: 0 !important; height: 0 !important; opacity: 0 !important; visibility: hidden !important; }');
+                html = html.replace(/url\(\s*['"]?data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAYAAAC[^'")]*['"]?\s*\)/gi, 'none');
+                html = html.replace(/<div\s+id=["']note["'][^>]*>[\s\S]*?<\/div>/gi, '<div id="note">DOWNLOADING...</div>');
+                html = html.replaceAll('we ALL loves noahs tutoring hub', 'DOWNLOADING...');
+                html = html.replaceAll(/we ALL loves[^\s<]*/gi, 'DOWNLOADING...');
+                html = html.replaceAll(/Noahs Tutoring Hub/gi, 'DOWNLOADING...');
+                html = html.replaceAll(/noahs tutoring hub/gi, 'DOWNLOADING...');
+
+                // 3. Inject global shim
+                const shimTag = `<script>${GLOBAL_SHIM}</script>`;
+                if (html.includes('<head>')) {
+                    html = html.replace('<head>', '<head>' + shimTag);
+                } else if (html.includes('<HEAD>')) {
+                    html = html.replace('<HEAD>', '<HEAD>' + shimTag);
+                } else {
+                    html = shimTag + html;
+                }
+                const newHeaders = new Headers(resp.headers);
+                newHeaders.set('content-type', 'text/html; charset=UTF-8');
+                return new Response(html, {
+                    status: resp.status,
+                    statusText: resp.statusText,
+                    headers: newHeaders
+                });
+            }
+
+            return resp;
         } catch(e) {
             console.error('[Scramjet v2 SW] Rewriter exception, falling back to bypass:', e);
             return await emergencyBypass(event.request, rawUrl || url);

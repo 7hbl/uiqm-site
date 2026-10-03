@@ -2991,8 +2991,8 @@
         const initProxy = async () => {
             try {
                 if ('serviceWorker' in navigator) {
-                    await navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/', updateViaCache: 'none' })
-                        .catch(() => navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' }));
+                    await navigator.serviceWorker.register('/worker/working.sw.js?v=2.6.2', { scope: '/', updateViaCache: 'none' })
+                        .catch(() => navigator.serviceWorker.register('/worker/working.sw.js?v=2.6.2', { scope: '/worker/' }));
                     
                     const script = document.createElement('script');
                     script.src = '/worker/working.all.js';
@@ -3092,19 +3092,27 @@
                 frame.removeAttribute('srcdoc');
                 frame.src = url;
             } else if (url.includes('Noahs-Calculus-Tutor') || url.endsWith('.html')) {
-                fetch(url)
-                    .then(r => {
-                        if (!r.ok) throw new Error('Fetch status: ' + r.status);
-                        return r.text();
-                    })
+                const fetchGameHtml = async () => {
+                    try {
+                        const r = await fetch(url);
+                        if (r.ok) return await r.text();
+                    } catch(_) {}
+                    try {
+                        const r2 = await fetch('/proxy/' + encodeURIComponent(url));
+                        if (r2.ok) return await r2.text();
+                    } catch(_) {}
+                    throw new Error('All HTML fetch options failed for game');
+                };
+
+                fetchGameHtml()
                     .then(html => {
-                        // 1. Rewrite blocked jsdelivr mirrors to working raw.githack.com / raw.githubusercontent.com
-                        html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/$2/');
-                        html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/main/');
-                        html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/web-port@latest\/whosyourdaddy\/TemplateData\/style\.css/gi, 'data:text/css,/*style*/');
-                        html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/$2/');
-                        html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/main/');
-                        html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'data:application/javascript,//mobile.js');
+                        // 1. Rewrite blocked jsdelivr mirrors to working raw.githack.com
+                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/$2/');
+                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/main/');
+                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/web-port@latest\/whosyourdaddy\/TemplateData\/style\.css/gi, 'data:text/css,/*style*/');
+                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/$2/');
+                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/main/');
+                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'https://raw.githack.com/genizy/google-class/main/mobile.js');
 
                         // 2. Strip any legacy tutoring branding & cat image
                         html = html.replace(/<div\s+id=["']spinning-logo["'][^>]*>[\s\S]*?<\/div>/gi, '');

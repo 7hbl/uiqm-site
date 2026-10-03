@@ -187,8 +187,8 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                     await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
                 }
                 if ('serviceWorker' in navigator) {
-                    window._swPromise = navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/', updateViaCache: 'none' })
-                        .catch(() => navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' }))
+                    window._swPromise = navigator.serviceWorker.register('/worker/working.sw.js?v=2.6.2', { scope: '/', updateViaCache: 'none' })
+                        .catch(() => navigator.serviceWorker.register('/worker/working.sw.js?v=2.6.2', { scope: '/worker/' }))
                         .then(reg => {
                             setStatus('Secure Channel Active. System ready.', '#00ff00');
                             return reg;
