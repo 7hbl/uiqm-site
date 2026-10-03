@@ -258,10 +258,12 @@ commands: for (let i = 2; i < process.argv.length; i++)
         try {
           const swSource = readFileSync(join(rootPath, 'views/scram/scramjet.sw.js'), 'utf8').replace(/\r\n/g, '\n');
           const startIdx = swSource.indexOf('const GLOBAL_SHIM = `') + 'const GLOBAL_SHIM = `'.length;
-          const endIdx = swSource.indexOf('`;\n\nasync function initHandler()');
+          let endIdx = swSource.indexOf('`;\n\nconst SCRIPT_HEADER', startIdx);
+          if (endIdx === -1) endIdx = swSource.indexOf('`;\n\nasync function initHandler()', startIdx);
           if (startIdx !== -1 && endIdx !== -1) {
             extractedShim = swSource.slice(startIdx, endIdx);
           }
+
         } catch(_) {}
         const shim = extractedShim || `globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || function() {}; globalThis.$scramjet$initialized = true;`;
         content = shim + "\n" + content;

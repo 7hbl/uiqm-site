@@ -1,4 +1,4 @@
-importScripts("/worker/working.all.js"),importScripts("/epoch/index.js");const SCRAM_PREFIX="/worker/",WISP_URL=(self.location.protocol==="https:"?"wss":"ws")+"://"+self.location.host+"/cron/",ORIGIN=self.location.origin;let handler,epoxy=null;globalThis.$scramjet$pushsourcemap=globalThis.$scramjet$pushsourcemap||(()=>{});async function getEpoxy(){if(epoxy&&epoxy.ready)return epoxy;try{const e=self.EpoxyTransport||self.EpxMod&&(self.EpxMod.default||self.EpxMod.EpoxyTransport||self.EpxMod);if(e&&(typeof e=="function"||typeof e.prototype?.init=="function")){const r=new e({wisp:WISP_URL});return await r.init(),epoxy=r,epoxy}}catch(e){console.warn("[SW] Epoxy init failed:",e)}return null}const BLOCKED_HEADERS=["x-frame-options","content-security-policy","content-security-policy-report-only","cross-origin-opener-policy","cross-origin-embedder-policy","cross-origin-resource-policy","x-content-type-options"];function sanitizeHeaders(e){return BLOCKED_HEADERS.forEach(r=>e.delete(r)),e.set("access-control-allow-origin","*"),e.set("access-control-allow-methods","GET, POST, OPTIONS, PUT, DELETE"),e.set("access-control-allow-headers","*"),e}const NULL_BODY_STATUSES=new Set([101,204,205,304]);function toResponse(e){const r=e.status||200,o=NULL_BODY_STATUSES.has(r);if(e instanceof Response){const s=new Headers(e.headers);return sanitizeHeaders(s),new Response(o?null:e.body,{status:r,statusText:e.statusText,headers:s})}const i=new Headers;try{const s=e.headers;if(s)if(typeof s.forEach=="function")s.forEach((t,a)=>i.set(a,t));else if(typeof s.entries=="function")for(const[t,a]of s.entries())i.set(t,a);else if(typeof s[Symbol.iterator]=="function")for(const[t,a]of s)i.set(t,a);else for(const t in s)i.set(t,String(s[t]))}catch{}return!o&&!i.has("content-type")&&i.set("content-type","text/html; charset=UTF-8"),sanitizeHeaders(i),new Response(o?null:e.body||null,{status:r,statusText:e.statusText||"OK",headers:i})}function safeURL(e,r){if(e instanceof URL)return e;if(!e||typeof e!="string")return new URL(r||ORIGIN+"/");try{return new URL(e)}catch{}try{return new URL(e,r||ORIGIN)}catch{}return new URL(ORIGIN+"/")}const GLOBAL_SHIM=`
+importScripts("/worker/working.all.js"),importScripts("/epoch/index.js");const SCRAM_PREFIX="/worker/",WISP_URL=(self.location.protocol==="https:"?"wss":"ws")+"://"+self.location.host+"/cron/",ORIGIN=self.location.origin;let handler,epoxy=null;globalThis.$scramjet$pushsourcemap=globalThis.$scramjet$pushsourcemap||(()=>{});async function getEpoxy(){if(epoxy&&epoxy.ready)return epoxy;try{const e=self.EpoxyTransport||self.EpxMod&&(self.EpxMod.default||self.EpxMod.EpoxyTransport||self.EpxMod);if(e&&(typeof e=="function"||typeof e.prototype?.init=="function")){const t=new e({wisp:WISP_URL});return await t.init(),epoxy=t,epoxy}}catch(e){console.warn("[SW] Epoxy init failed:",e)}return null}const BLOCKED_HEADERS=["x-frame-options","content-security-policy","content-security-policy-report-only","cross-origin-opener-policy","cross-origin-embedder-policy","cross-origin-resource-policy","x-content-type-options"];function sanitizeHeaders(e){return BLOCKED_HEADERS.forEach(t=>e.delete(t)),e.set("access-control-allow-origin","*"),e.set("access-control-allow-methods","GET, POST, OPTIONS, PUT, DELETE"),e.set("access-control-allow-headers","*"),e}const NULL_BODY_STATUSES=new Set([101,204,205,304]);function toResponse(e){const t=e.status||200,a=NULL_BODY_STATUSES.has(t);if(e instanceof Response){const s=new Headers(e.headers);return sanitizeHeaders(s),new Response(a?null:e.body,{status:t,statusText:e.statusText,headers:s})}const i=new Headers;try{const s=e.headers;if(s)if(typeof s.forEach=="function")s.forEach((r,n)=>i.set(n,r));else if(typeof s.entries=="function")for(const[r,n]of s.entries())i.set(r,n);else if(typeof s[Symbol.iterator]=="function")for(const[r,n]of s)i.set(r,n);else for(const r in s)i.set(r,String(s[r]))}catch{}return!a&&!i.has("content-type")&&i.set("content-type","text/html; charset=UTF-8"),sanitizeHeaders(i),new Response(a?null:e.body||null,{status:t,statusText:e.statusText||"OK",headers:i})}function safeURL(e,t){if(e instanceof URL)return e;if(!e||typeof e!="string")return new URL(t||ORIGIN+"/");try{return new URL(e)}catch{}try{return new URL(e,t||ORIGIN)}catch{}return new URL(ORIGIN+"/")}const GLOBAL_SHIM=`
 (function() {
     if (globalThis.$scramjet$initialized) return;
     const createSafe = () => {
@@ -28,7 +28,9 @@ importScripts("/worker/working.all.js"),importScripts("/epoch/index.js");const S
     globalThis.$scramerr = globalThis.$scramerr || ((e) => {});
     globalThis.$scramjet$get = globalThis.$scramjet$get || ((o, p) => {
         if (!o) return undefined;
-        if (p === 'location' && (o === window || o === document)) return window.location;
+        if (p === 'location' && (o === (typeof window !== 'undefined' ? window : null) || o === (typeof document !== 'undefined' ? document : null))) {
+            return typeof window !== 'undefined' ? window.location : (typeof self !== 'undefined' ? self.location : undefined);
+        }
         try { return o[p]; } catch(_) { return undefined; }
     });
     globalThis.$scramjet$call = globalThis.$scramjet$call || ((o, p, a) => {
@@ -48,6 +50,7 @@ importScripts("/worker/working.all.js"),importScripts("/epoch/index.js");const S
 
     // Array/String/Number Guard \u2014 stops "called on null" crashes without corrupting returns
     const wrapProto = (proto, methods) => {
+        if (!proto) return;
         methods.forEach(m => {
             const orig = proto[m];
             if (!orig) return;
@@ -65,38 +68,65 @@ importScripts("/worker/working.all.js"),importScripts("/epoch/index.js");const S
     const PROXY_ROOT = '/worker/network/';
     let targetOrigin = '';
     try {
-        const match = location.pathname.match(//worker/network/([^/?#]+)/);
-        if (match) {
-            const decoded = decodeURIComponent(match[1]);
-            const parsed = new URL(decoded.includes('://') ? decoded : 'https://' + decoded);
-            targetOrigin = parsed.origin;
+        const loc = typeof location !== 'undefined' ? location : (typeof self !== 'undefined' ? self.location : null);
+        if (loc) {
+            const match = loc.pathname.match(//worker/network/([^/?#]+)/);
+            if (match) {
+                const decoded = decodeURIComponent(match[1]);
+                const parsed = new URL(decoded.includes('://') ? decoded : 'https://' + decoded);
+                targetOrigin = parsed.origin;
+            }
         }
     } catch(_) {}
 
-    const isExternal = u => typeof u === 'string' && u.includes('://') && !u.startsWith(location.origin);
+    const isExternal = u => {
+        if (typeof u !== 'string') return false;
+        const myOrigin = (typeof location !== 'undefined' && location.origin) || (typeof self !== 'undefined' && self.location && self.location.origin) || '';
+        return u.includes('://') && (!myOrigin || !u.startsWith(myOrigin));
+    };
+
     const wrapUrl = u => {
-        if (!u || typeof u !== 'string') return u;
-        if (isExternal(u)) return PROXY_ROOT + encodeURIComponent(u);
-        if (u.startsWith('/') && !u.startsWith('/worker/') && !u.startsWith('/cron/') && !u.startsWith('/gmt/') && !u.startsWith('/epoch/') && targetOrigin) {
-            return PROXY_ROOT + encodeURIComponent(targetOrigin + u);
+        if (!u) return u;
+        let str = typeof u === 'string' ? u : (u.href ? u.href : (u.url ? u.url : String(u)));
+        if (!str || typeof str !== 'string') return u;
+        if (isExternal(str)) return PROXY_ROOT + encodeURIComponent(str);
+        if (str.startsWith('/') && !str.startsWith('/worker/') && !str.startsWith('/cron/') && !str.startsWith('/gmt/') && !str.startsWith('/epoch/') && targetOrigin) {
+            return PROXY_ROOT + encodeURIComponent(targetOrigin + str);
         }
-        return u;
+        return str;
     };
 
     try {
-        const origFetch = window.fetch;
-        window.fetch = function(resource, init) {
-            try { if (typeof resource === 'string') resource = wrapUrl(resource); } catch(_) {}
-            return origFetch.call(this, resource, init);
-        };
+        const rootGlobal = typeof window !== 'undefined' ? window : globalThis;
+        const origFetch = rootGlobal.fetch;
+        if (origFetch) {
+            rootGlobal.fetch = function(resource, init) {
+                try {
+                    if (typeof resource === 'string') {
+                        resource = wrapUrl(resource);
+                    } else if (resource instanceof URL) {
+                        resource = wrapUrl(resource.href);
+                    } else if (resource && typeof resource === 'object' && 'url' in resource) {
+                        const newUrl = wrapUrl(resource.url);
+                        if (newUrl !== resource.url) {
+                            resource = new Request(newUrl, resource);
+                        }
+                    }
+                } catch(_) {}
+                return origFetch.call(this, resource, init);
+            };
+        }
     } catch(_) {}
 
     try {
-        const origOpen = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-            try { url = wrapUrl(url); } catch(_) {}
-            return origOpen.call(this, method, url, ...rest);
-        };
+        const rootGlobal = typeof window !== 'undefined' ? window : globalThis;
+        if (rootGlobal.XMLHttpRequest && rootGlobal.XMLHttpRequest.prototype) {
+            const origOpen = rootGlobal.XMLHttpRequest.prototype.open;
+            rootGlobal.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+                try { url = wrapUrl(url); } catch(_) {}
+                return origOpen.call(this, method, url, ...rest);
+            };
+        }
     } catch(_) {}
 
     // Stub out commonly missing globals that crash Roblox/React apps
@@ -108,30 +138,52 @@ importScripts("/worker/working.all.js"),importScripts("/epoch/index.js");const S
     });
 
     // Suppress known harmless errors
-    globalThis.addEventListener('error', e => {
-        if (!e.message) return;
-        const msg = e.message;
-        if (msg.includes('is not defined') || msg.includes('not a function') ||
-            msg.includes('$scramjet') || msg.includes('Cannot read properties of null') ||
-            msg.includes('Cannot read properties of undefined') ||
-            msg.includes('$scramerr') || msg.includes('Bootstrap') ||
-            msg.includes('jQuery') || msg.includes('Unsafe legacy')) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-        }
-    }, true);
+    if (typeof globalThis.addEventListener === 'function') {
+        globalThis.addEventListener('error', e => {
+            if (!e.message) return;
+            const msg = e.message;
+            if (msg.includes('is not defined') || msg.includes('not a function') ||
+                msg.includes('$scramjet') || msg.includes('Cannot read properties of null') ||
+                msg.includes('Cannot read properties of undefined') ||
+                msg.includes('$scramerr') || msg.includes('Bootstrap') ||
+                msg.includes('jQuery') || msg.includes('Unsafe legacy')) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+            }
+        }, true);
 
-    globalThis.addEventListener('unhandledrejection', e => {
-        if (e.reason && (String(e.reason).includes('$scramjet') || String(e.reason).includes('is not defined'))) {
-            e.preventDefault();
-        }
-    });
-})();`;async function initHandler(){if(handler)return handler;const{ScramjetFetchHandler:e,defaultConfig:r}=self.$scramjet,o=await getEpoxy(),i=o?{...o,async request(s,t,a,c,l){const n=await o.request(s,t,a,c,l);return{body:n.body||null,headers:n.headers instanceof Headers?n.headers:new Headers(n.headers||{}),status:n.status||200,statusText:n.statusText||"OK"}}}:{async init(){},async request(s,t,a,c,l){const n=(t||"GET").toUpperCase(),u=await fetch(s.toString(),{method:n,headers:c||{},body:["GET","HEAD"].includes(n)?null:a||null,signal:l||void 0});return{body:u.body,headers:u.headers,status:u.status,statusText:u.statusText}},async fetch(s,t){return fetch(s.toString(),t||{})},connect(){}};return handler=new e({transport:i,crossOriginIsolated:!1,context:{prefix:new URL(SCRAM_PREFIX,self.location.origin),cookieJar:new self.$scramjet.CookieJar,config:{...r,rewriteHtml:!0,rewriteJs:!0,rewriteCss:!0},interface:{codecEncode:s=>encodeURIComponent(s),codecDecode:s=>{try{if(!s)return new URL(ORIGIN+"/");let t=String(s);if(t.startsWith("#")&&(t=t.slice(1)),t.includes("#")&&(t=t.split("#")[0]),t.startsWith("network/")&&(t=t.slice(8)),!t)return new URL(ORIGIN+"/");try{const a=decodeURIComponent(t),c=a.includes("://")?a:"https://"+a;return new URL(c)}catch{const c=t.includes("://")?t:"https://"+t;return new URL(c)}}catch{return new URL(ORIGIN+"/")}},getInjectScripts:(s,t,a)=>[a("/worker/working.all.js")]}},sendSetCookie:async(s,t)=>{for(const a of await self.clients.matchAll())a.postMessage({type:"scramjet-set-cookie",url:s.href,cookie:t})},fetchBlobUrl:async s=>fetch(s),fetchDataUrl:async s=>fetch(s)}),handler}self.addEventListener("install",()=>self.skipWaiting()),self.addEventListener("activate",e=>e.waitUntil(self.clients.claim())),self.addEventListener("fetch",e=>{const r=new URL(e.request.url);if(["working.all.js","working.sw.js","working.wasm.wasm","epoch/index.js"].some(c=>r.pathname.endsWith(c))||e.request.headers.has("x-scramjet-bypass"))return;const i=r.origin===self.location.origin;if(i&&(r.pathname.startsWith("/cron/")||r.pathname.startsWith("/gmt/")||r.pathname.startsWith("/unix/")||r.pathname.startsWith("/epoch/")||r.pathname.startsWith("/assets/")||r.pathname.startsWith("/dist/")||r.pathname==="/"||r.pathname==="/index.html"||r.pathname==="/games"||r.pathname==="/newsession"||r.pathname==="/favicon.ico"))return;if(!i&&e.request.mode==="navigate"){const c=new URL(SCRAM_PREFIX+"network/"+encodeURIComponent(r.href),self.location.origin);return e.respondWith(Response.redirect(c.href,307))}let t,a;if(i&&r.pathname.startsWith(SCRAM_PREFIX))t=r,a=e.request.referrer?safeURL(e.request.referrer):new URL(r.origin+"/");else if(!i)t=new URL(SCRAM_PREFIX+"network/"+encodeURIComponent(r.href),self.location.origin),a=e.request.referrer?safeURL(e.request.referrer):new URL("https://www.youtube.com/");else{const c=e.request.referrer||"",l=c.match(/\/worker\/network\/([^/?#]+)/);if(l)try{const n=decodeURIComponent(l[1]),p=new URL(n.includes("://")?n:"https://"+n).origin+r.pathname+r.search;t=new URL(SCRAM_PREFIX+"network/"+encodeURIComponent(p),self.location.origin),a=safeURL(c)}catch{return}else return}e.respondWith((async()=>{try{const c=await initHandler(),{ScramjetHeaders:l}=self.$scramjet,n=new l;e.request.headers.forEach((f,d)=>{try{n.set(d,f)}catch{}});const u=await c.handleFetch({rawUrl:t,rawClientUrl:a,body:["GET","HEAD"].includes(e.request.method)?null:e.request.body,method:e.request.method,initialHeaders:n,destination:e.request.destination,mode:e.request.mode,referrer:e.request.referrer,cache:e.request.cache}),p=toResponse(u),m=p.headers.get("content-type")||"";return p}catch(c){return console.error("[Scramjet v2 SW] Rewriter crashed, using Epoxy bypass:",c),await emergencyBypass(e.request,t||r)}})())});async function emergencyBypass(e,r){let o;if(r.origin!==self.location.origin)o=r.href;else{o=r.pathname.slice(SCRAM_PREFIX.length)+r.search,o.startsWith("network/")&&(o=o.slice(8));try{o=decodeURIComponent(o)}catch{}o.includes("://")||(o="https://"+o)}console.log("[Scramjet v2 SW] Emergency Bypass for:",o);let i;try{const n=await getEpoxy();if(n){const u={};e.headers&&typeof e.headers.forEach=="function"&&e.headers.forEach((f,d)=>{const h=d.toLowerCase();h!=="host"&&h!=="origin"&&h!=="referer"&&(u[d]=f)}),(o.includes("youtube.com")||o.includes("googlevideo.com")||o.includes("gstatic.com"))&&(u.referer="https://www.youtube.com/");const p=["GET","HEAD"].includes(e.method)?null:e.body,m=await n.request(new URL(o),e.method,p,u);i=toResponse(m)}}catch(n){console.warn("[SW] Epoxy bypass failed:",n.message)}if(!i)try{const n=await fetch(o,{mode:"no-cors",credentials:"omit"});(n.ok||n.type==="opaque")&&(i=n)}catch{}if(!i)return new Response("Proxy Error: All bypass tiers failed for "+o,{status:502});const s=i.status||200,t=NULL_BODY_STATUSES.has(s),a=t?"":i.headers.get("content-type")||"",c=new Headers(i.headers);if(sanitizeHeaders(c),t)return new Response(null,{headers:c,status:s});if(a.includes("font")||a.includes("image")||a.includes("wasm"))return new Response(i.body,{headers:c,status:s});const l=`<script>
+        globalThis.addEventListener('unhandledrejection', e => {
+            if (e.reason && (String(e.reason).includes('$scramjet') || String(e.reason).includes('is not defined'))) {
+                e.preventDefault();
+            }
+        });
+    }
+})();`,SCRIPT_HEADER=`if (typeof globalThis.$scramjet$initialized === 'undefined') {
+    globalThis.$scramjet$initialized = true;
+    globalThis.$scramjet$prop = (p) => p;
+    globalThis.$scramjet$wrap = (o) => o;
+    globalThis.$scramjet$get = (o, p) => { try { return o[p]; } catch(_) { return undefined; } };
+    globalThis.$scramjet$call = (o, p, a) => { try { const fn = o && o[p]; return typeof fn === 'function' ? fn.apply(o, a) : undefined; } catch(_) { return undefined; } };
+    globalThis.$scramjet$apply = (o, p, a) => (globalThis.$scramjet$call ? globalThis.$scramjet$call(o, p, a) : undefined);
+    globalThis.$scramjet$set = (o, p, v) => { try { if (o && p !== 'undefined') o[p] = v; } catch(_) {} return v; };
+    globalThis.$scramjet$clean = (...a) => a;
+    globalThis.$scramjet$tryset = (o, p, v) => { try { o[p] = v; } catch(_) {} return v; };
+    globalThis.$scramjet$pushsourcemap = () => {};
+}
+var $scramjet$wrap = globalThis.$scramjet$wrap || ((o) => o);
+var $scramjet$prop = globalThis.$scramjet$prop || ((p) => p);
+var $scramjet$get = globalThis.$scramjet$get || ((o, p) => { try { return o[p]; } catch(_) { return undefined; } });
+var $scramjet$call = globalThis.$scramjet$call || ((o, p, a) => { try { const fn = o && o[p]; return typeof fn === 'function' ? fn.apply(o, a) : undefined; } catch(_) { return undefined; } });
+var $scramjet$apply = globalThis.$scramjet$apply || ((o, p, a) => (globalThis.$scramjet$call ? globalThis.$scramjet$call(o, p, a) : undefined));
+var $scramjet$set = globalThis.$scramjet$set || ((o, p, v) => { try { if (o && p !== 'undefined') o[p] = v; } catch(_) {} return v; });
+var $scramjet$clean = globalThis.$scramjet$clean || ((...a) => a);
+var $scramjet$tryset = globalThis.$scramjet$tryset || ((o, p, v) => { try { o[p] = v; } catch(_) {} return v; });
+var $scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});`;function injectScriptHeader(e){if(typeof e!="string")return e;const t=e.match(/^\\s*(['"])use strict\\1;?/);return t?t[0]+"\\n"+SCRIPT_HEADER+"\\n"+e.slice(t[0].length):SCRIPT_HEADER+"\\n"+e}async function initHandler(){if(handler)return handler;const{ScramjetFetchHandler:e,defaultConfig:t}=self.$scramjet,a=await getEpoxy(),i=a?{...a,async request(s,r,n,c,l){const o=await a.request(s,r,n,c,l);return{body:o.body||null,headers:o.headers instanceof Headers?o.headers:new Headers(o.headers||{}),status:o.status||200,statusText:o.statusText||"OK"}}}:{async init(){},async request(s,r,n,c,l){const o=(r||"GET").toUpperCase(),u=await fetch(s.toString(),{method:o,headers:c||{},body:["GET","HEAD"].includes(o)?null:n||null,signal:l||void 0});return{body:u.body,headers:u.headers,status:u.status,statusText:u.statusText}},async fetch(s,r){return fetch(s.toString(),r||{})},connect(){}};return handler=new e({transport:i,crossOriginIsolated:!1,context:{prefix:new URL(SCRAM_PREFIX,self.location.origin),cookieJar:new self.$scramjet.CookieJar,config:{...t,rewriteHtml:!0,rewriteJs:!0,rewriteCss:!0},interface:{codecEncode:s=>encodeURIComponent(s),codecDecode:s=>{try{if(!s)return new URL(ORIGIN+"/");let r=String(s);if(r.startsWith("#")&&(r=r.slice(1)),r.includes("#")&&(r=r.split("#")[0]),r.startsWith("network/")&&(r=r.slice(8)),!r)return new URL(ORIGIN+"/");try{const n=decodeURIComponent(r),c=n.includes("://")?n:"https://"+n;return new URL(c)}catch{const c=r.includes("://")?r:"https://"+r;return new URL(c)}}catch{return new URL(ORIGIN+"/")}},getInjectScripts:(s,r,n)=>[n("/worker/working.all.js")],getWorkerInjectScripts:(s,r,n)=>n("/worker/working.all.js")}},sendSetCookie:async(s,r)=>{for(const n of await self.clients.matchAll())n.postMessage({type:"scramjet-set-cookie",url:s.href,cookie:r})},fetchBlobUrl:async s=>fetch(s),fetchDataUrl:async s=>fetch(s)}),handler}self.addEventListener("install",()=>self.skipWaiting()),self.addEventListener("activate",e=>e.waitUntil(self.clients.claim())),self.addEventListener("fetch",e=>{const t=new URL(e.request.url);if(["working.all.js","working.sw.js","working.wasm.wasm","epoch/index.js"].some(c=>t.pathname.endsWith(c))||e.request.headers.has("x-scramjet-bypass"))return;const i=t.origin===self.location.origin;if(i&&(t.pathname.startsWith("/cron/")||t.pathname.startsWith("/gmt/")||t.pathname.startsWith("/unix/")||t.pathname.startsWith("/epoch/")||t.pathname.startsWith("/assets/")||t.pathname.startsWith("/dist/")||t.pathname==="/"||t.pathname==="/index.html"||t.pathname==="/games"||t.pathname==="/newsession"||t.pathname==="/favicon.ico"))return;if(!i&&e.request.mode==="navigate"){const c=new URL(SCRAM_PREFIX+"network/"+encodeURIComponent(t.href),self.location.origin);return e.respondWith(Response.redirect(c.href,307))}let r,n;if(i&&t.pathname.startsWith(SCRAM_PREFIX))r=t,n=e.request.referrer?safeURL(e.request.referrer):new URL(t.origin+"/");else if(!i)r=new URL(SCRAM_PREFIX+"network/"+encodeURIComponent(t.href),self.location.origin),n=e.request.referrer?safeURL(e.request.referrer):new URL("https://www.youtube.com/");else{const c=e.request.referrer||"",l=c.match(/\/worker\/network\/([^/?#]+)/);if(l)try{const o=decodeURIComponent(l[1]),p=new URL(o.includes("://")?o:"https://"+o).origin+t.pathname+t.search;r=new URL(SCRAM_PREFIX+"network/"+encodeURIComponent(p),self.location.origin),n=safeURL(c)}catch{return}else return}e.respondWith((async()=>{try{const c=await initHandler(),{ScramjetHeaders:l}=self.$scramjet,o=new l;e.request.headers.forEach((f,d)=>{try{o.set(d,f)}catch{}});const u=await c.handleFetch({rawUrl:r,rawClientUrl:n,body:["GET","HEAD"].includes(e.request.method)?null:e.request.body,method:e.request.method,initialHeaders:o,destination:e.request.destination,mode:e.request.mode,referrer:e.request.referrer,cache:e.request.cache}),p=toResponse(u),m=p.headers.get("content-type")||"";if(!NULL_BODY_STATUSES.has(p.status)&&(m.includes("javascript")||r.pathname.endsWith(".js")||e.request.destination==="script"||e.request.destination==="worker"))try{let f=await p.text();f=injectScriptHeader(f);const d=new Headers(p.headers);return d.set("content-type","application/javascript; charset=UTF-8"),new Response(f,{headers:d,status:p.status,statusText:p.statusText})}catch{}return p}catch(c){return console.error("[Scramjet v2 SW] Rewriter crashed, using Epoxy bypass:",c),await emergencyBypass(e.request,r||t)}})())});async function emergencyBypass(e,t){let a;if(t.origin!==self.location.origin)a=t.href;else{a=t.pathname.slice(SCRAM_PREFIX.length)+t.search,a.startsWith("network/")&&(a=a.slice(8));try{a=decodeURIComponent(a)}catch{}a.includes("://")||(a="https://"+a)}console.log("[Scramjet v2 SW] Emergency Bypass for:",a);let i;try{const o=await getEpoxy();if(o){const u={};e.headers&&typeof e.headers.forEach=="function"&&e.headers.forEach((f,d)=>{const h=d.toLowerCase();h!=="host"&&h!=="origin"&&h!=="referer"&&(u[d]=f)}),(a.includes("youtube.com")||a.includes("googlevideo.com")||a.includes("gstatic.com"))&&(u.referer="https://www.youtube.com/");const p=["GET","HEAD"].includes(e.method)?null:e.body,m=await o.request(new URL(a),e.method,p,u);i=toResponse(m)}}catch(o){console.warn("[SW] Epoxy bypass failed:",o.message)}if(!i)try{const o=await fetch(a,{mode:"no-cors",credentials:"omit"});(o.ok||o.type==="opaque")&&(i=o)}catch{}if(!i)return new Response("Proxy Error: All bypass tiers failed for "+a,{status:502});const s=i.status||200,r=NULL_BODY_STATUSES.has(s),n=r?"":i.headers.get("content-type")||"",c=new Headers(i.headers);if(sanitizeHeaders(c),r)return new Response(null,{headers:c,status:s});if(n.includes("font")||n.includes("image")||n.includes("wasm"))return new Response(i.body,{headers:c,status:s});const l=`<script>
 (function() {
     if (globalThis.__scramjet_emergency_active) return;
     globalThis.__scramjet_emergency_active = true;
     ${GLOBAL_SHIM}
     console.log('[Scramjet SW] Emergency Runtime Active');
 })();
-<\/script>`;if(a.includes("text/html")){let n=await i.text();return n.includes("<head>")?n=n.replace("<head>","<head>"+l):n.includes("<HEAD>")&&(n=n.replace("<HEAD>","<HEAD>"+l)),c.set("content-type","text/html; charset=UTF-8"),new Response(n,{headers:c,status:s})}return new Response(i.body,{headers:c,status:s})}
+<\/script>`;if(n.includes("text/html")){let o=await i.text();return o.includes("<head>")?o=o.replace("<head>","<head>"+l):o.includes("<HEAD>")&&(o=o.replace("<HEAD>","<HEAD>"+l)),c.set("content-type","text/html; charset=UTF-8"),new Response(o,{headers:c,status:s})}else if(n.includes("javascript")||a.endsWith(".js")||e.destination==="script"||e.destination==="worker"){let o=await i.text();return o=injectScriptHeader(o),c.set("content-type","application/javascript; charset=UTF-8"),new Response(o,{headers:c,status:s})}return new Response(i.body,{headers:c,status:s})}
 //# sourceMappingURL=working.sw.js.map

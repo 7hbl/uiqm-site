@@ -120,7 +120,9 @@ const GLOBAL_SHIM = `
     globalThis.$scramerr = globalThis.$scramerr || ((e) => {});
     globalThis.$scramjet$get = globalThis.$scramjet$get || ((o, p) => {
         if (!o) return undefined;
-        if (p === 'location' && (o === window || o === document)) return window.location;
+        if (p === 'location' && (o === (typeof window !== 'undefined' ? window : null) || o === (typeof document !== 'undefined' ? document : null))) {
+            return typeof window !== 'undefined' ? window.location : (typeof self !== 'undefined' ? self.location : undefined);
+        }
         try { return o[p]; } catch(_) { return undefined; }
     });
     globalThis.$scramjet$call = globalThis.$scramjet$call || ((o, p, a) => {
@@ -140,6 +142,7 @@ const GLOBAL_SHIM = `
 
     // Array/String/Number Guard — stops "called on null" crashes without corrupting returns
     const wrapProto = (proto, methods) => {
+        if (!proto) return;
         methods.forEach(m => {
             const orig = proto[m];
             if (!orig) return;
@@ -157,38 +160,65 @@ const GLOBAL_SHIM = `
     const PROXY_ROOT = '/worker/network/';
     let targetOrigin = '';
     try {
-        const match = location.pathname.match(/\/worker\/network\/([^/?#]+)/);
-        if (match) {
-            const decoded = decodeURIComponent(match[1]);
-            const parsed = new URL(decoded.includes('://') ? decoded : 'https://' + decoded);
-            targetOrigin = parsed.origin;
+        const loc = typeof location !== 'undefined' ? location : (typeof self !== 'undefined' ? self.location : null);
+        if (loc) {
+            const match = loc.pathname.match(/\/worker\/network\/([^/?#]+)/);
+            if (match) {
+                const decoded = decodeURIComponent(match[1]);
+                const parsed = new URL(decoded.includes('://') ? decoded : 'https://' + decoded);
+                targetOrigin = parsed.origin;
+            }
         }
     } catch(_) {}
 
-    const isExternal = u => typeof u === 'string' && u.includes('://') && !u.startsWith(location.origin);
+    const isExternal = u => {
+        if (typeof u !== 'string') return false;
+        const myOrigin = (typeof location !== 'undefined' && location.origin) || (typeof self !== 'undefined' && self.location && self.location.origin) || '';
+        return u.includes('://') && (!myOrigin || !u.startsWith(myOrigin));
+    };
+
     const wrapUrl = u => {
-        if (!u || typeof u !== 'string') return u;
-        if (isExternal(u)) return PROXY_ROOT + encodeURIComponent(u);
-        if (u.startsWith('/') && !u.startsWith('/worker/') && !u.startsWith('/cron/') && !u.startsWith('/gmt/') && !u.startsWith('/epoch/') && targetOrigin) {
-            return PROXY_ROOT + encodeURIComponent(targetOrigin + u);
+        if (!u) return u;
+        let str = typeof u === 'string' ? u : (u.href ? u.href : (u.url ? u.url : String(u)));
+        if (!str || typeof str !== 'string') return u;
+        if (isExternal(str)) return PROXY_ROOT + encodeURIComponent(str);
+        if (str.startsWith('/') && !str.startsWith('/worker/') && !str.startsWith('/cron/') && !str.startsWith('/gmt/') && !str.startsWith('/epoch/') && targetOrigin) {
+            return PROXY_ROOT + encodeURIComponent(targetOrigin + str);
         }
-        return u;
+        return str;
     };
 
     try {
-        const origFetch = window.fetch;
-        window.fetch = function(resource, init) {
-            try { if (typeof resource === 'string') resource = wrapUrl(resource); } catch(_) {}
-            return origFetch.call(this, resource, init);
-        };
+        const rootGlobal = typeof window !== 'undefined' ? window : globalThis;
+        const origFetch = rootGlobal.fetch;
+        if (origFetch) {
+            rootGlobal.fetch = function(resource, init) {
+                try {
+                    if (typeof resource === 'string') {
+                        resource = wrapUrl(resource);
+                    } else if (resource instanceof URL) {
+                        resource = wrapUrl(resource.href);
+                    } else if (resource && typeof resource === 'object' && 'url' in resource) {
+                        const newUrl = wrapUrl(resource.url);
+                        if (newUrl !== resource.url) {
+                            resource = new Request(newUrl, resource);
+                        }
+                    }
+                } catch(_) {}
+                return origFetch.call(this, resource, init);
+            };
+        }
     } catch(_) {}
 
     try {
-        const origOpen = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-            try { url = wrapUrl(url); } catch(_) {}
-            return origOpen.call(this, method, url, ...rest);
-        };
+        const rootGlobal = typeof window !== 'undefined' ? window : globalThis;
+        if (rootGlobal.XMLHttpRequest && rootGlobal.XMLHttpRequest.prototype) {
+            const origOpen = rootGlobal.XMLHttpRequest.prototype.open;
+            rootGlobal.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+                try { url = wrapUrl(url); } catch(_) {}
+                return origOpen.call(this, method, url, ...rest);
+            };
+        }
     } catch(_) {}
 
     // Stub out commonly missing globals that crash Roblox/React apps
@@ -200,25 +230,59 @@ const GLOBAL_SHIM = `
     });
 
     // Suppress known harmless errors
-    globalThis.addEventListener('error', e => {
-        if (!e.message) return;
-        const msg = e.message;
-        if (msg.includes('is not defined') || msg.includes('not a function') ||
-            msg.includes('$scramjet') || msg.includes('Cannot read properties of null') ||
-            msg.includes('Cannot read properties of undefined') ||
-            msg.includes('$scramerr') || msg.includes('Bootstrap') ||
-            msg.includes('jQuery') || msg.includes('Unsafe legacy')) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-        }
-    }, true);
+    if (typeof globalThis.addEventListener === 'function') {
+        globalThis.addEventListener('error', e => {
+            if (!e.message) return;
+            const msg = e.message;
+            if (msg.includes('is not defined') || msg.includes('not a function') ||
+                msg.includes('$scramjet') || msg.includes('Cannot read properties of null') ||
+                msg.includes('Cannot read properties of undefined') ||
+                msg.includes('$scramerr') || msg.includes('Bootstrap') ||
+                msg.includes('jQuery') || msg.includes('Unsafe legacy')) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+            }
+        }, true);
 
-    globalThis.addEventListener('unhandledrejection', e => {
-        if (e.reason && (String(e.reason).includes('$scramjet') || String(e.reason).includes('is not defined'))) {
-            e.preventDefault();
-        }
-    });
+        globalThis.addEventListener('unhandledrejection', e => {
+            if (e.reason && (String(e.reason).includes('$scramjet') || String(e.reason).includes('is not defined'))) {
+                e.preventDefault();
+            }
+        });
+    }
 })();`;
+
+const SCRIPT_HEADER = `if (typeof globalThis.$scramjet$initialized === 'undefined') {
+    globalThis.$scramjet$initialized = true;
+    globalThis.$scramjet$prop = (p) => p;
+    globalThis.$scramjet$wrap = (o) => o;
+    globalThis.$scramjet$get = (o, p) => { try { return o[p]; } catch(_) { return undefined; } };
+    globalThis.$scramjet$call = (o, p, a) => { try { const fn = o && o[p]; return typeof fn === 'function' ? fn.apply(o, a) : undefined; } catch(_) { return undefined; } };
+    globalThis.$scramjet$apply = (o, p, a) => (globalThis.$scramjet$call ? globalThis.$scramjet$call(o, p, a) : undefined);
+    globalThis.$scramjet$set = (o, p, v) => { try { if (o && p !== 'undefined') o[p] = v; } catch(_) {} return v; };
+    globalThis.$scramjet$clean = (...a) => a;
+    globalThis.$scramjet$tryset = (o, p, v) => { try { o[p] = v; } catch(_) {} return v; };
+    globalThis.$scramjet$pushsourcemap = () => {};
+}
+var $scramjet$wrap = globalThis.$scramjet$wrap || ((o) => o);
+var $scramjet$prop = globalThis.$scramjet$prop || ((p) => p);
+var $scramjet$get = globalThis.$scramjet$get || ((o, p) => { try { return o[p]; } catch(_) { return undefined; } });
+var $scramjet$call = globalThis.$scramjet$call || ((o, p, a) => { try { const fn = o && o[p]; return typeof fn === 'function' ? fn.apply(o, a) : undefined; } catch(_) { return undefined; } });
+var $scramjet$apply = globalThis.$scramjet$apply || ((o, p, a) => (globalThis.$scramjet$call ? globalThis.$scramjet$call(o, p, a) : undefined));
+var $scramjet$set = globalThis.$scramjet$set || ((o, p, v) => { try { if (o && p !== 'undefined') o[p] = v; } catch(_) {} return v; });
+var $scramjet$clean = globalThis.$scramjet$clean || ((...a) => a);
+var $scramjet$tryset = globalThis.$scramjet$tryset || ((o, p, v) => { try { o[p] = v; } catch(_) {} return v; });
+var $scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});`;
+
+function injectScriptHeader(code) {
+    if (typeof code !== 'string') return code;
+    const strictMatch = code.match(/^\\s*(['"])use strict\\1;?/);
+    if (strictMatch) {
+        return strictMatch[0] + '\\n' + SCRIPT_HEADER + '\\n' + code.slice(strictMatch[0].length);
+    }
+    return SCRIPT_HEADER + '\\n' + code;
+}
+
 
 async function initHandler() {
     if (handler) return handler;
@@ -286,8 +350,10 @@ async function initHandler() {
                 },
                 getInjectScripts: (_m, _h, script) => [
                     script('/worker/working.all.js')
-                ]
+                ],
+                getWorkerInjectScripts: (_m, _t, script) => script('/worker/working.all.js')
             }
+
         },
         // NOTE: The installed @mercuryworkshop/scramjet npm package (v2.0.2-alpha)
         // calls sendSetCookie(url, cookie) — old 2-arg signature — NOT the array format
@@ -388,11 +454,22 @@ self.addEventListener('fetch', event => {
             const res = toResponse(response);
             const contentType = res.headers.get('content-type') || '';
 
+            if (!NULL_BODY_STATUSES.has(res.status) && (contentType.includes('javascript') || rawUrl.pathname.endsWith('.js') || event.request.destination === 'script' || event.request.destination === 'worker')) {
+                try {
+                    let jsText = await res.text();
+                    jsText = injectScriptHeader(jsText);
+                    const jsHeaders = new Headers(res.headers);
+                    jsHeaders.set('content-type', 'application/javascript; charset=UTF-8');
+                    return new Response(jsText, { headers: jsHeaders, status: res.status, statusText: res.statusText });
+                } catch(_) {}
+            }
+
             return res;
         } catch(e) {
             console.error('[Scramjet v2 SW] Rewriter crashed, using Epoxy bypass:', e);
             return await emergencyBypass(event.request, rawUrl || url);
         }
+
     })());
 });
 
@@ -474,7 +551,13 @@ async function emergencyBypass(request, urlObj) {
         }
         bypassHeaders.set('content-type', 'text/html; charset=UTF-8');
         return new Response(text, { headers: bypassHeaders, status: bypassStatus });
+    } else if (contentType.includes('javascript') || targetUrl.endsWith('.js') || request.destination === 'script' || request.destination === 'worker') {
+        let text = await response.text();
+        text = injectScriptHeader(text);
+        bypassHeaders.set('content-type', 'application/javascript; charset=UTF-8');
+        return new Response(text, { headers: bypassHeaders, status: bypassStatus });
     }
 
     return new Response(response.body, { headers: bypassHeaders, status: bypassStatus });
 }
+

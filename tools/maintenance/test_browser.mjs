@@ -7,7 +7,9 @@ import puppeteer from 'puppeteer';
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
-  const page = await browser.newPage();
+  const context = await browser.createBrowserContext();
+  const page = await context.newPage();
+  await page.setViewport({ width: 1280, height: 800 });
   
   page.on('console', msg => {
     console.log(`[Browser Console ${msg.type().toUpperCase()}]`, msg.text());
@@ -20,7 +22,9 @@ import puppeteer from 'puppeteer';
   });
 
   try {
+    console.log('Navigating to https://uiqm.lol in Incognito context...');
     await page.goto('https://uiqm.lol', { waitUntil: 'networkidle2', timeout: 30000 });
+
     await page.waitForSelector('#term-input', { timeout: 10000 });
     
     await page.type('#term-input', 'https://www.youtube.com');
