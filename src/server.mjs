@@ -51,6 +51,7 @@ wisp.options.hostname_blacklist = [];
 // The shutdown script in run-command.js will temporarily produce this file.
 const shutdown = fileURLToPath(new URL('./.shutdown', import.meta.url));
 
+const lastUpstreamByIp = new Map();
 const rh = createRammerhead();
 const rammerheadScopes = [
   '/rammerhead.js',
@@ -183,10 +184,18 @@ app.register(fastifyHelmet, {
 });
 
 // Assign server file paths to different paths, for serving content on the website.
+const swHeaderHook = (res, path) => {
+  if (path.endsWith('.sw.js') || path.endsWith('sw.js') || path.endsWith('.all.js')) {
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+};
+
 app.register(fastifyStatic, {
   root: fileURLToPath(new URL('../views/dist/pages', import.meta.url)),
   prefix: serverUrl.pathname,
   decorateReply: false,
+  setHeaders: swHeaderHook,
 });
 
 // All entries in the dist folder are created with source rewrites.
@@ -205,6 +214,7 @@ app.register(fastifyStatic, {
     root: fileURLToPath(new URL('../views/dist/' + prefix, import.meta.url)),
     prefix: getAltPrefix(prefix, serverUrl.pathname),
     decorateReply: false,
+    setHeaders: swHeaderHook,
   });
 });
 
@@ -348,9 +358,48 @@ app.get(serverUrl.pathname + ':path', (req, reply) => {
     process.exitCode = 0;
   }
 
-  // Return the error page if the query is not found in routes.mjs.
-  if (reqPath && !(reqPath in pages))
+  // Return the error page if the query is not found in routes.mjs,
+  // or proxy it to upstream if it is a subresource from an active session.
+  if (reqPath && !(reqPath in pages)) {
+    let upstreamOrigin = null;
+    const referer = req.headers.referer;
+    if (referer) {
+      try {
+        const refUrl = new URL(referer);
+        if (refUrl.pathname.includes('/worker/network/')) {
+          const enc = refUrl.pathname.split('/worker/network/')[1];
+          const dec = decodeURIComponent(enc);
+          upstreamOrigin = new URL(dec.includes('://') ? dec : 'https://' + dec).origin;
+        } else if (refUrl.pathname.includes('/network/service/')) {
+          const enc = refUrl.pathname.split('/network/service/')[1];
+          const dec = uvXorDecode(enc);
+          upstreamOrigin = new URL(dec.includes('://') ? dec : 'https://' + dec).origin;
+        } else if (refUrl.pathname.startsWith('/proxy/')) {
+          const enc = refUrl.pathname.slice(7);
+          const dec = decodeURIComponent(enc);
+          upstreamOrigin = new URL(dec.includes('://') ? dec : 'https://' + dec).origin;
+        }
+      } catch (_) {}
+    }
+    if (!upstreamOrigin && req.headers.cookie) {
+      const matchCookie = req.headers.cookie.match(/__active_proxy_origin=([^;]+)/);
+      if (matchCookie) {
+        try { upstreamOrigin = decodeURIComponent(matchCookie[1]); } catch (_) {}
+      }
+    }
+    if (!upstreamOrigin) {
+      const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress;
+      const cached = lastUpstreamByIp.get(clientIp);
+      if (cached && (Date.now() - cached.timestamp < 3600000)) {
+        upstreamOrigin = cached.origin;
+      }
+    }
+    if (upstreamOrigin) {
+      const fullUpstreamUrl = upstreamOrigin + '/' + reqPath + (req.raw.url.includes('?') ? '?' + req.raw.url.split('?')[1] : '');
+      return handleProxyRequest(req, reply, 'direct', fullUpstreamUrl);
+    }
     return reply.code(404).type(supportedTypes.default).send(preloaded404);
+  }
 
   // Serve the default page if the path is the default path.
   const fileName = reqPath ? pages[reqPath] : pages[pages.default],
@@ -421,6 +470,26 @@ if (serverUrl.pathname === '/') {
           return handleProxyRequest(request, reply, 'direct', fullUpstreamUrl);
         }
       } catch (_) {}
+    }
+
+    // Fallback: check __active_proxy_origin cookie or lastUpstreamByIp
+    let fallbackOrigin = null;
+    if (request.headers.cookie) {
+      const matchCookie = request.headers.cookie.match(/__active_proxy_origin=([^;]+)/);
+      if (matchCookie) {
+        try { fallbackOrigin = decodeURIComponent(matchCookie[1]); } catch (_) {}
+      }
+    }
+    if (!fallbackOrigin) {
+      const clientIp = (request.headers['x-forwarded-for'] || '').split(',')[0].trim() || request.socket?.remoteAddress;
+      const cached = lastUpstreamByIp.get(clientIp);
+      if (cached && (Date.now() - cached.timestamp < 3600000)) {
+        fallbackOrigin = cached.origin;
+      }
+    }
+    if (fallbackOrigin) {
+      const fullUpstreamUrl = fallbackOrigin + cleanPath + (reqUrl.search || '');
+      return handleProxyRequest(request, reply, 'direct', fullUpstreamUrl);
     }
 
     reply.code(404).type(supportedTypes.default).send(preloaded404);
@@ -505,6 +574,11 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       parsedTarget = new URL('https://' + targetUrlStr);
     }
     const targetOrigin = parsedTarget.origin;
+    try {
+      const clientIp = (request.headers['x-forwarded-for'] || '').split(',')[0].trim() || request.socket?.remoteAddress;
+      lastUpstreamByIp.set(clientIp, { origin: targetOrigin, timestamp: Date.now() });
+      reply.header('Set-Cookie', `__active_proxy_origin=${encodeURIComponent(targetOrigin)}; Path=/; SameSite=Lax`);
+    } catch (_) {}
 
     const forwardHeaders = {};
     const headersToCopy = ['user-agent', 'accept', 'accept-language', 'content-type', 'authorization'];

@@ -84,10 +84,9 @@
           console.log('Scramjet v2 Engine Loaded');
       };
 
-      const sjReg = await navigator.serviceWorker.register(
-        swRoutes.sj[readStorage('HideAds') !== false ? 1 : 0],
-        { scope: '{{route /scram/}}', updateViaCache: 'none' }
-      );
+      const sjTarget = swRoutes.sj[readStorage('HideAds') !== false ? 1 : 0];
+      const sjReg = await navigator.serviceWorker.register(sjTarget, { scope: '/', updateViaCache: 'none' })
+        .catch(() => navigator.serviceWorker.register(sjTarget, { scope: '{{route /scram/}}', updateViaCache: 'none' }));
       // Force the browser to immediately check for a newer SW version
       sjReg.update().catch(() => {});
     } catch (err) {

@@ -2991,9 +2991,8 @@
         const initProxy = async () => {
             try {
                 if ('serviceWorker' in navigator) {
-                    await navigator.serviceWorker.register('/worker/working.sw.js', {
-                        scope: '/worker/'
-                    });
+                    await navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/', updateViaCache: 'none' })
+                        .catch(() => navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' }));
                     
                     const script = document.createElement('script');
                     script.src = '/worker/working.all.js';
@@ -3102,6 +3101,7 @@
                         // 1. Rewrite blocked jsdelivr mirrors to working raw.githack.com / raw.githubusercontent.com
                         html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/$2/');
                         html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/main/');
+                        html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/web-port@latest\/whosyourdaddy\/TemplateData\/style\.css/gi, 'data:text/css,/*style*/');
                         html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/$2/');
                         html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/main/');
                         html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'data:application/javascript,//mobile.js');
@@ -3118,15 +3118,18 @@
                         html = html.replaceAll(/Noahs Tutoring Hub/gi, 'DOWNLOADING...');
                         html = html.replaceAll(/noahs tutoring hub/gi, 'DOWNLOADING...');
 
-                        // Inject override style
+                        // Inject base tag and clean css
+                        const baseTag = html.includes('<base ') ? '' : `<base href="${url}">`;
                         const cleanCss = `<style>
 #spinning-logo { display: none !important; width: 0 !important; height: 0 !important; opacity: 0 !important; visibility: hidden !important; }
 #note { color: #ff3333 !important; font-family: monospace, sans-serif !important; font-size: 16px !important; letter-spacing: 2px !important; text-transform: uppercase !important; font-weight: bold !important; }
 </style>`;
-                        if (html.includes('</head>')) {
-                            html = html.replace('</head>', cleanCss + '</head>');
+                        if (html.includes('<head>')) {
+                            html = html.replace('<head>', '<head>' + baseTag + cleanCss);
+                        } else if (html.includes('<HEAD>')) {
+                            html = html.replace('<HEAD>', '<HEAD>' + baseTag + cleanCss);
                         } else {
-                            html = cleanCss + html;
+                            html = baseTag + cleanCss + html;
                         }
 
                         frame.removeAttribute('src');

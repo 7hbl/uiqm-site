@@ -187,7 +187,8 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                     await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
                 }
                 if ('serviceWorker' in navigator) {
-                    window._swPromise = navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' })
+                    window._swPromise = navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/', updateViaCache: 'none' })
+                        .catch(() => navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' }))
                         .then(reg => {
                             setStatus('Secure Channel Active. System ready.', '#00ff00');
                             return reg;
@@ -246,6 +247,10 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 }
             }
             window._currentProxyUrl = url;
+            try {
+                const targetOrigin = new URL(url).origin;
+                document.cookie = '__active_proxy_origin=' + encodeURIComponent(targetOrigin) + '; Path=/; SameSite=Lax';
+            } catch(_) {}
             proxyShell.style.display = 'block'; loading.style.display = 'flex';
             backBtn.style.display = 'block';
             const navInput = document.getElementById('proxy-nav-input');
