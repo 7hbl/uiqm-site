@@ -74,9 +74,9 @@ import puppeteer from 'puppeteer';
     console.log('Total frames:', frames.length);
     for (const f of frames) {
       console.log('Frame URL:', f.url());
-      if (f.url().includes('youtube.com')) {
+      if (f.url().includes('/network/https%3A%2F%2Fwww.youtube.com') || (f.url().includes('youtube.com') && !f.url().includes('accounts.google.com'))) {
         try {
-          const evalResult = await f.evaluate(() => {
+          const evalPromise = f.evaluate(() => {
             const scripts = Array.from(document.querySelectorAll('script')).map(s => ({
               src: s.src,
               type: s.type,
@@ -94,10 +94,15 @@ import puppeteer from 'puppeteer';
               customElementYtdApp: typeof customElements !== 'undefined' ? !!customElements.get('ytd-app') : false,
               customElementYtdMasthead: typeof customElements !== 'undefined' ? !!customElements.get('ytd-masthead') : false,
               ytdAppChildren: Array.from(document.querySelector('ytd-app')?.children || []).map(c => c.tagName.toLowerCase()),
+              videoThumbnails: document.querySelectorAll('ytd-thumbnail, ytd-rich-item-renderer, img[src*="ytimg"]').length,
               bodyClasses: document.body ? document.body.className : '',
               hasConsentDialog: !!document.querySelector('tp-yt-paper-dialog, ytd-consent-bump-v2-lightbox, form[action*="consent"]')
             };
           });
+          const evalResult = await Promise.race([
+            evalPromise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('evaluate timeout')), 6000))
+          ]);
           console.log('YouTube Frame DOM Inspection:', JSON.stringify(evalResult, null, 2));
         } catch (e) {
           console.log('Could not evaluate in frame:', e.message);
@@ -105,7 +110,7 @@ import puppeteer from 'puppeteer';
       }
     }
 
-    await page.screenshot({ path: 'tools/maintenance/live_test.png' });
+    await page.screenshot({ path: 'tools/maintenance/live_test.png', timeout: 8000 }).catch(e => console.log('Screenshot err:', e.message));
     console.log('Saved screenshot to tools/maintenance/live_test.png');
   } catch (err) {
     console.error('Test error:', err.message);

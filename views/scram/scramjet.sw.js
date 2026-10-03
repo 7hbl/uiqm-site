@@ -135,7 +135,23 @@ const GLOBAL_SHIM = `
     globalThis.$scramjet$clean = (...a) => a;
     globalThis.$scramjet$tryset = (o, p, v) => { try { o[p] = v; } catch(_) {} return v; };
     globalThis.$scramjet$pushsourcemap = () => {};
-    globalThis.$scramjet$wrappostmessage = globalThis.$scramjet$wrappostmessage || ((t) => t);
+    var _createPostMessageFn = function(target) {
+        var fn = function(message, targetOrigin, transfer) {
+            try {
+                if (target && typeof target.postMessage === 'function') {
+                    return target.postMessage(message, '*', transfer);
+                }
+            } catch(_) {}
+        };
+        fn.postMessage = fn;
+        return fn;
+    };
+    globalThis.$scramjet$wrappostmessage = function(target, message, targetOrigin, transfer) {
+        if (arguments.length > 1) {
+            return _createPostMessageFn(target)(message, targetOrigin, transfer);
+        }
+        return _createPostMessageFn(target);
+    };
     globalThis.$scramjet$wrapfunction = globalThis.$scramjet$wrapfunction || ((fn) => fn);
     globalThis.$scramjet$wrapworker = globalThis.$scramjet$wrapworker || ((w) => w);
     globalThis.$scramjet$wrapwindow = globalThis.$scramjet$wrapwindow || ((w) => w);
@@ -422,7 +438,24 @@ var $scramjet$set = globalThis.$scramjet$set || ((o, p, v) => { try { if (o && p
 var $scramjet$clean = globalThis.$scramjet$clean || ((...a) => a);
 var $scramjet$tryset = globalThis.$scramjet$tryset || ((o, p, v) => { try { o[p] = v; } catch(_) {} return v; });
 var $scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});
-var $scramjet$wrappostmessage = globalThis.$scramjet$wrappostmessage || ((t) => t);
+var _createPostMessageFn = function(target) {
+    var fn = function(message, targetOrigin, transfer) {
+        try {
+            if (target && typeof target.postMessage === 'function') {
+                return target.postMessage(message, '*', transfer);
+            }
+        } catch(_) {}
+    };
+    fn.postMessage = fn;
+    return fn;
+};
+globalThis.$scramjet$wrappostmessage = function(target, message, targetOrigin, transfer) {
+    if (arguments.length > 1) {
+        return _createPostMessageFn(target)(message, targetOrigin, transfer);
+    }
+    return _createPostMessageFn(target);
+};
+var $scramjet$wrappostmessage = globalThis.$scramjet$wrappostmessage;
 var $scramjet$wrapfunction = globalThis.$scramjet$wrapfunction || ((fn) => fn);
 var $scramjet$wrapworker = globalThis.$scramjet$wrapworker || ((w) => w);
 var $scramjet$wrapwindow = globalThis.$scramjet$wrapwindow || ((w) => w);
