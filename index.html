@@ -183,6 +183,7 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 }
                 setStatus('Registering Service Worker...');
                 await navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' });
+                await navigator.serviceWorker.ready;
                 
                 setStatus('Loading proxy engine...');
                 // Scramjet v2 uses the global window.$scramjet object
@@ -310,15 +311,10 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 proxyShell.style.display = 'block'; loading.style.display = 'flex';
                 backBtn.style.display = 'block';
                 
-                const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]+)/i);
-                if (ytMatch && ytMatch[1]) {
-                    frame.src = 'https://www.youtube-nocookie.com/embed/' + ytMatch[1] + '?autoplay=1';
-                } else if (/^https?:\/\/(?:[a-zA-Z0-9_.-]+\.)?youtube\.com(?:\/.*)?$/i.test(url)) {
-                    frame.src = '/proxy/' + encodeURIComponent(url);
+                if (sjEncode) {
+                    frame.src = sjEncode(url);
                 } else if (window._rhSession) {
                     frame.src = '/' + window._rhSession + '/' + url;
-                } else if (sjEncode) {
-                    frame.src = sjEncode(url);
                 } else {
                     frame.src = '/proxy/' + encodeURIComponent(url);
                 }

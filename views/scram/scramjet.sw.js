@@ -285,10 +285,6 @@ self.addEventListener('fetch', event => {
     if (!url.pathname.startsWith(SCRAM_PREFIX) || skip.some(s => url.pathname.endsWith(s))) return;
     if (event.request.headers.has('x-scramjet-bypass')) return;
 
-    // Don't proxy binary assets — let them pass through
-    const ext = url.pathname.split('.').pop().toLowerCase();
-    const binaryExts = ['woff','woff2','ttf','otf','eot','png','jpg','jpeg','gif','webp','svg','ico','mp4','mp3','wav','ogg'];
-    if (binaryExts.includes(ext)) return;
 
     event.respondWith((async () => {
         try {
