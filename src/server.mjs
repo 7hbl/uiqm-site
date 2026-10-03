@@ -590,10 +590,17 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     if (!forwardHeaders['user-agent']) {
       forwardHeaders['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
     }
-    forwardHeaders['origin'] = targetOrigin;
+    if (!['GET', 'HEAD'].includes(request.method)) {
+      forwardHeaders['origin'] = targetOrigin;
+    }
     forwardHeaders['referer'] = targetOrigin + '/';
+
+    let fetchTarget = targetUrlStr;
+    if (parsedTarget.pathname === '' || parsedTarget.pathname === '/') {
+      fetchTarget = parsedTarget.origin + '/' + (parsedTarget.search || '');
+    }
     
-    const response = await fetch(targetUrlStr, {
+    const response = await fetch(fetchTarget, {
       method: request.method,
       headers: forwardHeaders,
       body: ['GET', 'HEAD'].includes(request.method) ? null : request.body,
@@ -830,8 +837,9 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     return;
 
   } catch (err) {
-    console.error(`[Proxy Server Fallback Error] ${err.message} for wildcard: ${wildcard}`);
-    reply.code(500).type('text/plain').send(`Proxy Error: ${err.message}`);
+    const causeMsg = err.cause ? ` (${err.cause.message || err.cause.code || err.cause})` : '';
+    console.error(`[Proxy Server Fallback Error] ${err.message}${causeMsg} for: ${wildcard}`);
+    reply.code(502).type('text/plain').send(`Proxy Error: ${err.message}${causeMsg}`);
   }
 }
 
