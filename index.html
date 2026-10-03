@@ -414,11 +414,8 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 launchProxyUrl('https://www.google.com');
                 return;
             }
-            if (raw.includes('.') || raw.startsWith('http') || (args.length > 0 && !['theme'].includes(base))) {
-                launchProxyUrl(raw);
-                return;
-            }
-            print(`Command not found: ${base}`, 'system');
+            // Launch as direct URL or web search query
+            launchProxyUrl(raw);
         };
 
 
