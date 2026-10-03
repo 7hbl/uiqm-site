@@ -61,9 +61,15 @@ import puppeteer from 'puppeteer';
         } catch (_) {}
       }
     });
-    console.log('ServiceWorker registration confirmed! Waiting 1s...');
+    console.log('Page Title:', await page.title());
+    console.log('Testing "creds" command...');
+    await page.type('#term-input', 'creds');
+    await page.keyboard.press('Enter');
     await new Promise(r => setTimeout(r, 1000));
-    
+    const termText = await page.evaluate(() => document.getElementById('term-output-lines')?.innerText || '');
+    console.log('Terminal text after creds:', termText);
+
+    console.log('Entering https://www.youtube.com ...');
     await page.type('#term-input', 'https://www.youtube.com');
     await page.keyboard.press('Enter');
 
