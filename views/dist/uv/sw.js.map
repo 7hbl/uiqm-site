@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["sw.js"],
+  "sourcesContent": ["/*global UVServiceWorker,__uv$config*/\n/*\n * Stock service worker script.\n * Users can provide their own sw.js if they need to extend the functionality of the service worker.\n * Ideally, this will be registered under the scope in uv.config.js so it will not need to be modified.\n * However, if a user changes the location of uv.bundle.js/uv.config.js or sw.js is not relative to them, they will need to modify this script locally.\n */\nimportScripts('uv.bundle.js');\nimportScripts('uv.config.js');\nimportScripts(__uv$config.sw || 'uv.sw.js');\n\nconst uv = new UVServiceWorker();\n\nasync function handleRequest(event) {\n    if (uv.route(event)) {\n        return await uv.fetch(event);\n    }\n    \n    return await fetch(event.request)\n}\n\nself.addEventListener('fetch', (event) => {\n    event.respondWith(handleRequest(event));\n});"],
+  "mappings": "AAOA,cAAc,cAAc,EAC5B,cAAc,cAAc,EAC5B,cAAc,YAAY,IAAM,UAAU,EAE1C,MAAM,GAAK,IAAI,gBAEf,eAAe,cAAcA,EAAO,CAChC,OAAI,GAAG,MAAMA,CAAK,EACP,MAAM,GAAG,MAAMA,CAAK,EAGxB,MAAM,MAAMA,EAAM,OAAO,CACpC,CAEA,KAAK,iBAAiB,QAAUA,GAAU,CACtCA,EAAM,YAAY,cAAcA,CAAK,CAAC,CAC1C,CAAC",
+  "names": ["event"]
+}

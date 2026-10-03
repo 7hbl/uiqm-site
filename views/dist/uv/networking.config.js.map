@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["networking.config.js"],
+  "sourcesContent": ["/*global Ultraviolet*/\nself.__uv$config = {\n    prefix: '/service/',\n    encodeUrl: Ultraviolet.codec.xor.encode,\n    decodeUrl: Ultraviolet.codec.xor.decode,\n    handler: '/uv.handler.js',\n    client: '/uv.client.js',\n    bundle: '/uv.bundle.js',\n    config: '/uv.config.js',\n    sw: '/uv.sw.js',\n};\n"],
+  "mappings": "AACA,KAAK,YAAc,CACf,OAAQ,YACR,UAAW,YAAY,MAAM,IAAI,OACjC,UAAW,YAAY,MAAM,IAAI,OACjC,QAAS,iBACT,OAAQ,gBACR,OAAQ,gBACR,OAAQ,gBACR,GAAI,WACR",
+  "names": []
+}

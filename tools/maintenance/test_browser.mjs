@@ -41,13 +41,27 @@ import puppeteer from 'puppeteer';
     await page.goto('https://uiqm.lol', { waitUntil: 'networkidle2', timeout: 30000 });
 
     await page.waitForSelector('#term-input', { timeout: 10000 });
-    console.log('Waiting for ServiceWorker to be ready...');
+    console.log('Waiting for ServiceWorker registration...');
+    await page.waitForFunction(() => window._swPromise !== undefined, { timeout: 10000 }).catch(() => {});
     await page.evaluate(async () => {
-      if ('serviceWorker' in navigator) {
-        await navigator.serviceWorker.ready;
+      if (window._swPromise) {
+        try {
+          const reg = await window._swPromise;
+          if (reg && !reg.active) {
+            const worker = reg.installing || reg.waiting;
+            if (worker && worker.state !== 'activated') {
+              await new Promise(res => {
+                worker.addEventListener('statechange', () => {
+                  if (worker.state === 'activated') res();
+                });
+                setTimeout(res, 2000);
+              });
+            }
+          }
+        } catch (_) {}
       }
     });
-    console.log('ServiceWorker ready! Waiting 1s...');
+    console.log('ServiceWorker registration confirmed! Waiting 1s...');
     await new Promise(r => setTimeout(r, 1000));
     
     await page.type('#term-input', 'https://www.youtube.com');

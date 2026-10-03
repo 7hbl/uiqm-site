@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["WWError.js"],
+  "sourcesContent": ["/* -----------------------------------------------\n/* Authors: wearrrrr\n/* GNU General Public License v3.0: https://www.gnu.org/licenses/gpl-3.0.en.html\n/* Workerware Error Script\n/* ----------------------------------------------- */\n\nclass WWError extends Error {\n  constructor(message) {\n    super(message);\n    this.name = '[WorkerWare Exception]';\n  }\n}\n"],
+  "mappings": "AAMA,MAAM,gBAAgB,KAAM,CAC1B,YAAYA,EAAS,CACnB,MAAMA,CAAO,EACb,KAAK,KAAO,wBACd,CACF",
+  "names": ["message"]
+}

@@ -188,9 +188,15 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                     await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
                 }
                 if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' })
-                        .then(() => setStatus('Secure Channel Active. System ready.', '#00ff00'))
-                        .catch(() => setStatus('Secure Channel Active. System ready.', '#00ff00'));
+                    window._swPromise = navigator.serviceWorker.register('/worker/working.sw.js', { scope: '/worker/' })
+                        .then(reg => {
+                            setStatus('Secure Channel Active. System ready.', '#00ff00');
+                            return reg;
+                        })
+                        .catch(err => {
+                            setStatus('Secure Channel Active. System ready.', '#00ff00');
+                            return null;
+                        });
                 } else {
                     setStatus('Secure Channel Active. System ready.', '#00ff00');
                 }
@@ -299,8 +305,21 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 if (window._loadTimer) clearTimeout(window._loadTimer);
                 window._loadTimer = setTimeout(() => { loading.style.display = 'none'; }, 2500);
 
-                if ('serviceWorker' in navigator) {
-                    try { await navigator.serviceWorker.ready; } catch(_) {}
+                if (window._swPromise) {
+                    try {
+                        const reg = await window._swPromise;
+                        if (reg && !reg.active) {
+                            const worker = reg.installing || reg.waiting;
+                            if (worker && worker.state !== 'activated') {
+                                await new Promise(res => {
+                                    worker.addEventListener('statechange', () => {
+                                        if (worker.state === 'activated') res();
+                                    });
+                                    setTimeout(res, 2000);
+                                });
+                            }
+                        }
+                    } catch(_) {}
                 }
                 
                 if (sjEncode) {

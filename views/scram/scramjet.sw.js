@@ -184,11 +184,15 @@ const GLOBAL_SHIM = `
         try {
             var loc = typeof location !== 'undefined' ? location : (typeof self !== 'undefined' ? self.location : null);
             if (loc) {
-                var m = loc.pathname.match(/\/worker\/network\/([^/?#]+)/);
-                if (m) {
-                    var d = decodeURIComponent(m[1]);
-                    var p = new URL(d.includes('://') ? d : 'https://' + d);
-                    targetOrigin = p.origin;
+                if (loc.origin && !loc.origin.includes('uiqm.lol') && loc.origin.startsWith('http')) {
+                    targetOrigin = loc.origin;
+                } else {
+                    var m = (loc.pathname || '').match(/\/worker\/network\/([^/?#]+)/);
+                    if (m) {
+                        var d = decodeURIComponent(m[1]);
+                        var p = new URL(d.includes('://') ? d : 'https://' + d);
+                        targetOrigin = p.origin;
+                    }
                 }
             }
         } catch(_) {}
@@ -410,11 +414,15 @@ if (typeof Object !== 'undefined' && Object.prototype) {
         try {
             var loc = typeof location !== 'undefined' ? location : (typeof self !== 'undefined' ? self.location : null);
             if (loc) {
-                var m = loc.pathname.match(/\/worker\/network\/([^/?#]+)/);
-                if (m) {
-                    var d = decodeURIComponent(m[1]);
-                    var p = new URL(d.includes('://') ? d : 'https://' + d);
-                    targetOrigin = p.origin;
+                if (loc.origin && !loc.origin.includes('uiqm.lol') && loc.origin.startsWith('http')) {
+                    targetOrigin = loc.origin;
+                } else {
+                    var m = (loc.pathname || '').match(/\/worker\/network\/([^/?#]+)/);
+                    if (m) {
+                        var d = decodeURIComponent(m[1]);
+                        var p = new URL(d.includes('://') ? d : 'https://' + d);
+                        targetOrigin = p.origin;
+                    }
                 }
             }
         } catch(_) {}
@@ -533,6 +541,13 @@ async function initHandler() {
             if (host.includes('youtube.com') || host.includes('googleapis.com') || host.includes('googlevideo.com') || host.includes('gstatic.com')) {
                 hdrs.set('origin', 'https://www.youtube.com');
                 hdrs.set('referer', 'https://www.youtube.com/');
+            } else if (remote && remote.origin && remote.origin.startsWith('http')) {
+                if (!hdrs.has('origin') && !['GET', 'HEAD'].includes((method || 'GET').toUpperCase())) {
+                    hdrs.set('origin', remote.origin);
+                }
+                if (!hdrs.has('referer')) {
+                    hdrs.set('referer', remote.origin + '/');
+                }
             }
             const res = await rawEpoxy.request(remote, method, body, hdrs, signal);
             return {
@@ -747,6 +762,16 @@ async function emergencyBypass(request, urlObj) {
             if (targetUrl.includes('youtube.com') || targetUrl.includes('googlevideo.com') || targetUrl.includes('gstatic.com') || targetUrl.includes('googleapis.com')) {
                 epHeaders['origin'] = 'https://www.youtube.com';
                 epHeaders['referer'] = 'https://www.youtube.com/';
+            } else {
+                try {
+                    const u = new URL(targetUrl);
+                    if (!epHeaders['origin'] && !['GET', 'HEAD'].includes((request.method || 'GET').toUpperCase())) {
+                        epHeaders['origin'] = u.origin;
+                    }
+                    if (!epHeaders['referer']) {
+                        epHeaders['referer'] = u.origin + '/';
+                    }
+                } catch(_) {}
             }
             const body = ['GET', 'HEAD'].includes(request.method) ? null : request.body;
             const res = await ep.request(new URL(targetUrl), request.method, body, epHeaders);
