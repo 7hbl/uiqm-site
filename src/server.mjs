@@ -110,7 +110,7 @@ const serverFactory = (handler) => {
     })
     .on('upgrade', (req, socket, head) => {
       if (shouldRouteRh(req)) routeRhUpgrade(req, socket, head);
-      else if (req.url.endsWith(getAltPrefix('wisp', serverUrl.pathname)))
+      else if (req.url.includes('/cron') || req.url.includes('/wisp'))
         wisp.routeRequest(req, socket, head);
     });
 };

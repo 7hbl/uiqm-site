@@ -6130,10 +6130,10 @@
 
         const launchGame = (url) => {
             overlay.style.display = 'block';
-            if (window._rhSession) {
-                frame.src = '/' + window._rhSession + '/' + url;
-            } else if (sjEncode) {
+            if (sjEncode) {
                 frame.src = sjEncode(url);
+            } else if (window._rhSession) {
+                frame.src = '/' + window._rhSession + '/' + url;
             } else {
                 frame.src = '/proxy/' + encodeURIComponent(url);
             }

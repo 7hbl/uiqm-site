@@ -127,18 +127,25 @@ const GLOBAL_SHIM = `
         try { const fn = o && o[p]; return typeof fn === 'function' ? fn.apply(o, a) : undefined; } catch(_) { return undefined; }
     });
     globalThis.$scramjet$apply = globalThis.$scramjet$apply || ((o, p, a) => globalThis.$scramjet$call(o, p, a));
-    globalThis.$scramjet$prop = globalThis.$scramjet$prop || ((o, p) => { try { return o ? o[p] : undefined; } catch(_) { return undefined; } });
+    globalThis.$scramjet$prop = (p) => p;
     globalThis.$scramjet$set = globalThis.$scramjet$set || ((o, p, v) => { try { if(o && p !== 'undefined') o[p] = v; } catch(_) {} return v; });
-    globalThis.$scramjet$wrap = globalThis.$scramjet$wrap || ((o) => o);
-    
-    // Aggressive Array/String/Number Guard — stops "called on null" crashes
+    globalThis.$scramjet$wrap = (o) => o;
+    globalThis.$scramjet$clean = (...a) => a;
+    globalThis.$scramjet$tryset = (o, p, v) => { try { o[p] = v; } catch(_) {} return v; };
+    globalThis.$scramjet$pushsourcemap = () => {};
+    var $scramjet$prop = globalThis.$scramjet$prop;
+    var $scramjet$wrap = globalThis.$scramjet$wrap;
+    var $scramjet$clean = globalThis.$scramjet$clean;
+    var $scramjet$tryset = globalThis.$scramjet$tryset;
+
+    // Array/String/Number Guard — stops "called on null" crashes without corrupting returns
     const wrapProto = (proto, methods) => {
         methods.forEach(m => {
             const orig = proto[m];
             if (!orig) return;
             proto[m] = function(...args) {
                 if (this == null) return undefined;
-                try { return orig.apply(this, args); } catch(e) { return undefined; }
+                return orig.apply(this, args);
             };
         });
     };
@@ -148,8 +155,25 @@ const GLOBAL_SHIM = `
 
     // Proxy intercept for fetch/XHR
     const PROXY_ROOT = '/worker/network/';
+    let targetOrigin = '';
+    try {
+        const match = location.pathname.match(/\/worker\/network\/([^/?#]+)/);
+        if (match) {
+            const decoded = decodeURIComponent(match[1]);
+            const parsed = new URL(decoded.includes('://') ? decoded : 'https://' + decoded);
+            targetOrigin = parsed.origin;
+        }
+    } catch(_) {}
+
     const isExternal = u => typeof u === 'string' && u.includes('://') && !u.startsWith(location.origin);
-    const wrapUrl = u => isExternal(u) ? PROXY_ROOT + encodeURIComponent(u) : u;
+    const wrapUrl = u => {
+        if (!u || typeof u !== 'string') return u;
+        if (isExternal(u)) return PROXY_ROOT + encodeURIComponent(u);
+        if (u.startsWith('/') && !u.startsWith('/worker/') && !u.startsWith('/cron/') && !u.startsWith('/gmt/') && !u.startsWith('/epoch/') && targetOrigin) {
+            return PROXY_ROOT + encodeURIComponent(targetOrigin + u);
+        }
+        return u;
+    };
 
     try {
         const origFetch = window.fetch;
@@ -281,10 +305,64 @@ self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
-    const skip = ['working.all.js', 'working.sw.js', 'working.wasm.wasm'];
-    if (!url.pathname.startsWith(SCRAM_PREFIX) || skip.some(s => url.pathname.endsWith(s))) return;
+    const skip = ['working.all.js', 'working.sw.js', 'working.wasm.wasm', 'epoch/index.js'];
+    if (skip.some(s => url.pathname.endsWith(s))) return;
     if (event.request.headers.has('x-scramjet-bypass')) return;
 
+    const isSameOrigin = url.origin === self.location.origin;
+    const isLocalAsset = isSameOrigin && (
+        url.pathname.startsWith('/cron/') ||
+        url.pathname.startsWith('/gmt/') ||
+        url.pathname.startsWith('/unix/') ||
+        url.pathname.startsWith('/epoch/') ||
+        url.pathname.startsWith('/assets/') ||
+        url.pathname.startsWith('/dist/') ||
+        url.pathname === '/' ||
+        url.pathname === '/index.html' ||
+        url.pathname === '/games' ||
+        url.pathname === '/newsession' ||
+        url.pathname === '/favicon.ico'
+    );
+
+    if (isLocalAsset) return;
+
+    // Cross-origin top-level navigation inside frame -> redirect to Scramjet URL
+    if (!isSameOrigin && event.request.mode === 'navigate') {
+        const scramUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(url.href), self.location.origin);
+        return event.respondWith(Response.redirect(scramUrl.href, 307));
+    }
+
+    let rawUrl;
+    let rawClientUrl;
+
+    if (isSameOrigin && url.pathname.startsWith(SCRAM_PREFIX)) {
+        rawUrl = url;
+        rawClientUrl = event.request.referrer
+            ? safeURL(event.request.referrer)
+            : new URL(url.origin + '/');
+    } else if (!isSameOrigin) {
+        rawUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(url.href), self.location.origin);
+        rawClientUrl = event.request.referrer
+            ? safeURL(event.request.referrer)
+            : new URL('https://www.youtube.com/');
+    } else {
+        // Same-origin request not starting with /worker/
+        const ref = event.request.referrer || '';
+        const match = ref.match(/\/worker\/network\/([^/?#]+)/);
+        if (match) {
+            try {
+                const dec = decodeURIComponent(match[1]);
+                const baseOrigin = new URL(dec.includes('://') ? dec : 'https://' + dec).origin;
+                const fullTarget = baseOrigin + url.pathname + url.search;
+                rawUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(fullTarget), self.location.origin);
+                rawClientUrl = safeURL(ref);
+            } catch(_) {
+                return;
+            }
+        } else {
+            return;
+        }
+    }
 
     event.respondWith((async () => {
         try {
@@ -292,13 +370,6 @@ self.addEventListener('fetch', event => {
             const { ScramjetHeaders } = self.$scramjet;
             const sjHeaders = new ScramjetHeaders();
             event.request.headers.forEach((v, k) => { try { sjHeaders.set(k, v); } catch(_) {} });
-
-            // CRITICAL FIX: handleFetch requires URL *objects* not strings.
-            // rawClientUrl must be a valid URL — use the request URL as fallback when referrer is empty.
-            const rawUrl = url;
-            const rawClientUrl = event.request.referrer
-                ? safeURL(event.request.referrer)
-                : new URL(url.origin + '/');
 
             const response = await h.handleFetch({
                 rawUrl,
@@ -320,7 +391,7 @@ self.addEventListener('fetch', event => {
                 return res;
             }
 
-            if (contentType.includes('javascript') || contentType.includes('application/x-javascript') || url.pathname.endsWith('.js')) {
+            if (contentType.includes('javascript') || contentType.includes('application/x-javascript') || rawUrl.pathname.endsWith('.js')) {
                 let text = await res.text();
                 const newHeaders = new Headers(res.headers);
                 newHeaders.set('content-type', 'application/javascript; charset=UTF-8');
@@ -346,16 +417,21 @@ self.addEventListener('fetch', event => {
             return res;
         } catch(e) {
             console.error('[Scramjet v2 SW] Rewriter crashed, using Epoxy bypass:', e);
-            return await emergencyBypass(event.request, url);
+            return await emergencyBypass(event.request, rawUrl || url);
         }
     })());
 });
 
 async function emergencyBypass(request, urlObj) {
-    let targetUrl = urlObj.pathname.slice(SCRAM_PREFIX.length) + urlObj.search;
-    if (targetUrl.startsWith('network/')) targetUrl = targetUrl.slice(8);
-    try { targetUrl = decodeURIComponent(targetUrl); } catch(_) {}
-    if (!targetUrl.includes('://')) targetUrl = 'https://' + targetUrl;
+    let targetUrl;
+    if (urlObj.origin !== self.location.origin) {
+        targetUrl = urlObj.href;
+    } else {
+        targetUrl = urlObj.pathname.slice(SCRAM_PREFIX.length) + urlObj.search;
+        if (targetUrl.startsWith('network/')) targetUrl = targetUrl.slice(8);
+        try { targetUrl = decodeURIComponent(targetUrl); } catch(_) {}
+        if (!targetUrl.includes('://')) targetUrl = 'https://' + targetUrl;
+    }
 
     console.log('[Scramjet v2 SW] Emergency Bypass for:', targetUrl);
 
