@@ -3102,74 +3102,20 @@
                 } catch(_) {}
             };
 
-            // Fast direct or proxied launch
+            // Set cookie for active proxy origin
+            try {
+                const targetOrigin = new URL(url).origin;
+                document.cookie = '__active_proxy_origin=' + encodeURIComponent(targetOrigin) + '; Path=/; SameSite=Lax';
+            } catch(_) {}
+
+            frame.removeAttribute('srcdoc');
             if (url.startsWith('https://celesteclassic.github.io')) {
-                frame.removeAttribute('srcdoc');
                 frame.src = url;
-            } else if (url.includes('Noahs-Calculus-Tutor') || url.endsWith('.html')) {
-                const fetchGameHtml = async () => {
-                    try {
-                        const r = await fetch(url);
-                        if (r.ok) return await r.text();
-                    } catch(_) {}
-                    try {
-                        const r2 = await fetch('/proxy/' + encodeURIComponent(url));
-                        if (r2.ok) return await r2.text();
-                    } catch(_) {}
-                    throw new Error('All HTML fetch options failed for game');
-                };
-
-                fetchGameHtml()
-                    .then(html => {
-                        // 1. Universal rewrite: all blocked jsdelivr mirrors to working raw.githack.com
-                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/$1/$2/$3/');
-                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)\//gi, 'https://raw.githack.com/$1/$2/master/');
-                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/web-port@latest\/whosyourdaddy\/TemplateData\/style\.css/gi, 'data:text/css,/*style*/');
-                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'data:application/javascript,//mobile.js');
-
-                        // 2. Strip any legacy tutoring branding & cat image
-                        html = html.replace(/<div\s+id=["']spinning-logo["'][^>]*>[\s\S]*?<\/div>/gi, '');
-                        html = html.replace(/<img[^>]*id=["']spinning-logo["'][^>]*>/gi, '');
-                        html = html.replace(/<img[^>]*src=["']data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAYAAAC[^"']*["'][^>]*>/gi, '');
-                        html = html.replace(/#spinning-logo\s*\{[^}]*\}/gi, '#spinning-logo { display: none !important; width: 0 !important; height: 0 !important; opacity: 0 !important; visibility: hidden !important; }');
-                        html = html.replace(/url\(\s*['"]?data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAYAAAC[^'")]*['"]?\s*\)/gi, 'none');
-                        html = html.replace(/<div\s+id=["']note["'][^>]*>[\s\S]*?<\/div>/gi, '<div id="note">DOWNLOADING...</div>');
-                        html = html.replaceAll('we ALL loves noahs tutoring hub', 'DOWNLOADING...');
-                        html = html.replaceAll(/we ALL loves[^\s<]*/gi, 'DOWNLOADING...');
-                        html = html.replaceAll(/Noahs Tutoring Hub/gi, 'DOWNLOADING...');
-                        html = html.replaceAll(/noahs tutoring hub/gi, 'DOWNLOADING...');
-
-                        // Inject base tag and clean css
-                        const baseTag = html.includes('<base ') ? '' : `<base href="${url}">`;
-                        const cleanCss = `<style>
-#spinning-logo { display: none !important; width: 0 !important; height: 0 !important; opacity: 0 !important; visibility: hidden !important; }
-#note { color: #ff3333 !important; font-family: monospace, sans-serif !important; font-size: 16px !important; letter-spacing: 2px !important; text-transform: uppercase !important; font-weight: bold !important; }
-</style>`;
-                        if (html.includes('<head>')) {
-                            html = html.replace('<head>', '<head>' + baseTag + cleanCss);
-                        } else if (html.includes('<HEAD>')) {
-                            html = html.replace('<HEAD>', '<HEAD>' + baseTag + cleanCss);
-                        } else {
-                            html = baseTag + cleanCss + html;
-                        }
-
-                        frame.removeAttribute('src');
-                        frame.srcdoc = html;
-                    })
-                    .catch(err => {
-                        console.warn('Direct game load fallback to proxy:', err);
-                        frame.removeAttribute('srcdoc');
-                        if (sjEncode) frame.src = sjEncode(url);
-                        else frame.src = '/proxy/' + encodeURIComponent(url);
-                    });
             } else if (sjEncode) {
-                frame.removeAttribute('srcdoc');
                 frame.src = sjEncode(url);
             } else if (window._rhSession) {
-                frame.removeAttribute('srcdoc');
                 frame.src = '/' + window._rhSession + '/' + url;
             } else {
-                frame.removeAttribute('srcdoc');
                 frame.src = '/proxy/' + encodeURIComponent(url);
             }
         };

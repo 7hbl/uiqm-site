@@ -92,14 +92,22 @@ function safeURL(str, base) {
 }
 
 function extractTargetFromScram(s) {
-    if (!s) return null;
-    const marker = '/worker/network/';
-    const idx = s.indexOf(marker);
-    if (idx !== -1) {
-        let part = s.slice(idx + marker.length);
+    if (!s || typeof s !== 'string') return null;
+    if (s.includes('/worker/network/')) {
+        let part = s.split('/worker/network/')[1];
+        if (!part) return null;
         try { part = decodeURIComponent(part); } catch(_) {}
         if (!part.includes('://')) part = 'https://' + part;
         return part;
+    }
+    if (s.includes('/worker/')) {
+        let part = s.split('/worker/')[1];
+        if (!part) return null;
+        if (/^(?:https?%3A|https?:\/\/)/i.test(part)) {
+            try { part = decodeURIComponent(part); } catch(_) {}
+            if (!part.includes('://')) part = 'https://' + part;
+            return part;
+        }
     }
     return null;
 }
@@ -413,6 +421,10 @@ self.addEventListener('fetch', event => {
                 event.respondWith(fetch(innerTarget, { mode: 'cors' }).catch(() => emergencyBypass(event.request, innerTarget)));
                 return;
             }
+            if (innerTarget.includes('sync_mod_chunk') || innerTarget.includes('kevlar_base')) {
+                event.respondWith(emergencyBypass(event.request, innerTarget));
+                return;
+            }
             rawUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(innerTarget), self.location.origin);
         } else {
             rawUrl = url;
@@ -426,6 +438,10 @@ self.addEventListener('fetch', event => {
             return;
         }
         let targetHref = fixBlockedMirrors(url.href);
+        if (targetHref.includes('sync_mod_chunk') || targetHref.includes('kevlar_base')) {
+            event.respondWith(emergencyBypass(event.request, targetHref));
+            return;
+        }
         rawUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(targetHref), self.location.origin);
         try {
             const p = new URL(targetHref);
@@ -447,10 +463,25 @@ self.addEventListener('fetch', event => {
                 } catch(_) {}
             }
         }
+        if (!upstream && (
+            url.pathname.startsWith('/s/') ||
+            url.pathname.startsWith('/youtubei/') ||
+            url.pathname.startsWith('/static/') ||
+            url.pathname.startsWith('/videoplayback') ||
+            url.pathname.startsWith('/generate_204') ||
+            url.pathname.startsWith('/error_204') ||
+            url.pathname.startsWith('/api/stats/')
+        )) {
+            upstream = 'https://www.youtube.com';
+        }
         if (!upstream) upstream = lastUpstreamOrigin;
 
         if (upstream) {
             const fullTarget = fixBlockedMirrors(upstream + url.pathname + url.search);
+            if (fullTarget.includes('sync_mod_chunk') || fullTarget.includes('kevlar_base')) {
+                event.respondWith(emergencyBypass(event.request, fullTarget));
+                return;
+            }
             rawUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(fullTarget), self.location.origin);
             rawClientUrl = safeURL(upstream + '/');
         } else {
@@ -527,13 +558,22 @@ self.addEventListener('fetch', event => {
 
 async function emergencyBypass(request, urlObj) {
     let targetUrl;
-    if (urlObj.origin !== self.location.origin) {
+    if (typeof urlObj === 'string') {
+        targetUrl = urlObj;
+    } else if (urlObj && urlObj.origin && urlObj.origin !== self.location.origin) {
         targetUrl = urlObj.href;
+    } else if (urlObj) {
+        let extracted = extractTargetFromScram(urlObj.href || urlObj.toString());
+        if (extracted) {
+            targetUrl = extracted;
+        } else {
+            targetUrl = (urlObj.pathname || '').slice(SCRAM_PREFIX.length) + (urlObj.search || '');
+            if (targetUrl.startsWith('network/')) targetUrl = targetUrl.slice(8);
+            try { targetUrl = decodeURIComponent(targetUrl); } catch(_) {}
+            if (!targetUrl.includes('://')) targetUrl = 'https://' + targetUrl;
+        }
     } else {
-        targetUrl = urlObj.pathname.slice(SCRAM_PREFIX.length) + urlObj.search;
-        if (targetUrl.startsWith('network/')) targetUrl = targetUrl.slice(8);
-        try { targetUrl = decodeURIComponent(targetUrl); } catch(_) {}
-        if (!targetUrl.includes('://')) targetUrl = 'https://' + targetUrl;
+        return new Response('Bypass Error: Invalid target', { status: 400 });
     }
 
     targetUrl = fixBlockedMirrors(targetUrl);

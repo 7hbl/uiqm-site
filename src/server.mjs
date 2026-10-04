@@ -374,6 +374,14 @@ app.get(serverUrl.pathname + ':path', (req, reply) => {
           const enc = refUrl.pathname.split('/worker/network/')[1];
           const dec = decodeURIComponent(enc);
           upstreamOrigin = new URL(dec.includes('://') ? dec : 'https://' + dec).origin;
+        } else if (refUrl.pathname.includes('/worker/')) {
+          const enc = refUrl.pathname.split('/worker/')[1];
+          try {
+            const dec = decodeURIComponent(enc);
+            if (dec.includes('://') || dec.includes('.')) {
+              upstreamOrigin = new URL(dec.includes('://') ? dec : 'https://' + dec).origin;
+            }
+          } catch (_) {}
         } else if (refUrl.pathname.includes('/network/service/')) {
           const enc = refUrl.pathname.split('/network/service/')[1];
           const dec = uvXorDecode(enc);
@@ -397,6 +405,15 @@ app.get(serverUrl.pathname + ':path', (req, reply) => {
       if (cached && (Date.now() - cached.timestamp < 3600000)) {
         upstreamOrigin = cached.origin;
       }
+    }
+    if (!upstreamOrigin && (
+      reqPath === 'generate_204' ||
+      reqPath === 'videoplayback' ||
+      reqPath === 'error_204' ||
+      reqPath.startsWith('s/') ||
+      reqPath.startsWith('youtubei/')
+    )) {
+      upstreamOrigin = 'https://www.youtube.com';
     }
     if (upstreamOrigin) {
       const fullUpstreamUrl = upstreamOrigin + '/' + reqPath + (req.raw.url.includes('?') ? '?' + req.raw.url.split('?')[1] : '');
@@ -449,6 +466,14 @@ if (serverUrl.pathname === '/') {
           const enc = refUrl.pathname.split('/worker/network/')[1];
           const dec = decodeURIComponent(enc);
           upstreamOrigin = new URL(dec.includes('://') ? dec : 'https://' + dec).origin;
+        } else if (refUrl.pathname.includes('/worker/')) {
+          const enc = refUrl.pathname.split('/worker/')[1];
+          try {
+            const dec = decodeURIComponent(enc);
+            if (dec.includes('://') || dec.includes('.')) {
+              upstreamOrigin = new URL(dec.includes('://') ? dec : 'https://' + dec).origin;
+            }
+          } catch (_) {}
         } else if (refUrl.pathname.includes('/network/service/')) {
           const enc = refUrl.pathname.split('/network/service/')[1];
           const dec = uvXorDecode(enc);
@@ -491,7 +516,15 @@ if (serverUrl.pathname === '/') {
         fallbackOrigin = cached.origin;
       }
     }
-    if (!fallbackOrigin && (cleanPath.startsWith('/s/player/') || cleanPath.startsWith('/youtubei/') || cleanPath.startsWith('/static/'))) {
+    if (!fallbackOrigin && (
+      cleanPath.startsWith('/s/') ||
+      cleanPath.startsWith('/youtubei/') ||
+      cleanPath.startsWith('/static/') ||
+      cleanPath.startsWith('/generate_204') ||
+      cleanPath.startsWith('/videoplayback') ||
+      cleanPath.startsWith('/error_204') ||
+      cleanPath.startsWith('/api/stats/')
+    )) {
       fallbackOrigin = 'https://www.youtube.com';
     }
     if (fallbackOrigin) {
