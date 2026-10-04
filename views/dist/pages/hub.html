@@ -2979,9 +2979,7 @@
     }
 ];
 
-        const WORKER_ROOT = '/worker/';
-        const SCRAMJET_PREFIX = '/worker/network/';
-        const sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
+        const sjEncode = url => '/worker/network/' + encodeURIComponent(url);
         const grid = document.getElementById('games-grid');
         const search = document.getElementById('search-input');
         const overlay = document.getElementById('proxy-overlay');
