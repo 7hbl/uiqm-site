@@ -1,5 +1,9 @@
 import Fastify from 'fastify';
 import { createServer } from 'node:http';
+import dns from 'node:dns';
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch (_) {}
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 import createRammerhead from '../lib/rammerhead/src/server/index.js';
 import fastifyHelmet from '@fastify/helmet';
@@ -487,6 +491,9 @@ if (serverUrl.pathname === '/') {
         fallbackOrigin = cached.origin;
       }
     }
+    if (!fallbackOrigin && (cleanPath.startsWith('/s/player/') || cleanPath.startsWith('/youtubei/') || cleanPath.startsWith('/static/'))) {
+      fallbackOrigin = 'https://www.youtube.com';
+    }
     if (fallbackOrigin) {
       const fullUpstreamUrl = fallbackOrigin + cleanPath + (reqUrl.search || '');
       return handleProxyRequest(request, reply, 'direct', fullUpstreamUrl);
@@ -556,13 +563,13 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     }
 
     // Auto-fix blocked jsdelivr accounts to reliable mirrors
-    if (targetUrlStr.includes('cdn.jsdelivr.net/gh/genizy/')) {
-      targetUrlStr = targetUrlStr.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/@]+)@([^/]+)\//i, 'https://raw.githubusercontent.com/genizy/$1/$2/');
-      targetUrlStr = targetUrlStr.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/]+)\//i, 'https://raw.githubusercontent.com/genizy/$1/main/');
+    if (targetUrlStr.includes('cdn.jsdelivr.net/gh/')) {
+      targetUrlStr = targetUrlStr
+        .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/$1/$2/$3/')
+        .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)\//gi, 'https://raw.githack.com/$1/$2/master/');
     }
-    if (targetUrlStr.includes('cdn.jsdelivr.net/gh/mysticful/')) {
-      targetUrlStr = targetUrlStr.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/@]+)@([^/]+)\//i, 'https://raw.githubusercontent.com/mysticful/$1/$2/');
-      targetUrlStr = targetUrlStr.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/]+)\//i, 'https://raw.githubusercontent.com/mysticful/$1/main/');
+    if (targetUrlStr.includes('cdn.jsdelivr.net/js/mobile.js')) {
+      targetUrlStr = 'https://raw.githack.com/genizy/google-class/main/mobile.js';
     }
 
     console.log(`[Proxy Server Fallback] Fetching upstream: ${targetUrlStr}`);
@@ -659,11 +666,10 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       let html = await response.text();
 
       // Rewrite blocked CDNs to working mirrors in HTML
-      html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/$2/');
-      html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/main/');
-      html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/$2/');
-      html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/main/');
-      html = html.replace(/https:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'data:application/javascript,//mobile.js');
+      html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/$1/$2/$3/');
+      html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)\//gi, 'https://raw.githack.com/$1/$2/master/');
+      html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/web-port@latest\/whosyourdaddy\/TemplateData\/style\.css/gi, 'data:text/css,/*style*/');
+      html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'data:application/javascript,//mobile.js');
 
       // Sanitize unwanted loader elements (cat logo / third party tutoring branding)
       html = html.replace(/<div\s+id=["']spinning-logo["'][^>]*>[\s\S]*?<\/div>/gi, '');

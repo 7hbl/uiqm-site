@@ -110,11 +110,9 @@ function fixBlockedMirrors(urlStr) {
     try { s = decodeURIComponent(s); } catch(_) {}
     try { s = decodeURIComponent(s); } catch(_) {}
     return s
-        .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/$2/')
-        .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/main/')
-        .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/$2/')
-        .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/main/')
-        .replace(/https?:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'https://raw.githack.com/genizy/google-class/main/mobile.js');
+        .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/$1/$2/$3/')
+        .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)\//gi, 'https://raw.githack.com/$1/$2/master/')
+        .replace(/https?:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'data:application/javascript,//mobile.js');
 }
 
 const GLOBAL_SHIM = `
@@ -262,6 +260,8 @@ async function initHandler() {
                     hdrs.set('referer', targetRemote.origin + '/');
                 }
             }
+            hdrs.delete('accept-encoding');
+            hdrs.set('accept-encoding', 'identity');
             const res = await rawEpoxy.request(targetRemote, method, body, hdrs, signal);
             return {
                 body: res.body || null,
@@ -474,12 +474,11 @@ self.addEventListener('fetch', event => {
             const ct = resp.headers.get('content-type') || '';
             if (ct.includes('text/html')) {
                 let html = await resp.text();
-                // 1. Rewrite blocked CDN mirrors inside the HTML
-                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/$2/');
-                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/main/');
-                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/$2/');
-                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/main/');
-                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'https://raw.githack.com/genizy/google-class/main/mobile.js');
+                // 1. Universal rewrite: all blocked jsdelivr mirrors to working raw.githack.com
+                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/$1/$2/$3/');
+                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)\//gi, 'https://raw.githack.com/$1/$2/master/');
+                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/web-port@latest\/whosyourdaddy\/TemplateData\/style\.css/gi, 'data:text/css,/*style*/');
+                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'data:application/javascript,//mobile.js');
 
                 // 2. Strip tutoring branding & cat image
                 html = html.replace(/<div\s+id=["']spinning-logo["'][^>]*>[\s\S]*?<\/div>/gi, '');

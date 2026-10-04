@@ -343,7 +343,8 @@
     <div id="proxy-overlay">
         <div id="game-loader">
             <div class="game-loader-spinner"></div>
-            <div class="game-loader-text">DOWNLOADING...</div>
+            <div class="game-loader-text">DOWNLOADING ASSETS...</div>
+            <div style="font-size: 13px; color: #ff3333; margin-top: 10px; font-weight: bold; letter-spacing: 1px;">INITIALIZING ENGINE & UNPACKING DATA...</div>
         </div>
         <div class="overlay-tools">
             <button class="tool-btn" onclick="toggleFullscreen()">FULLSCREEN</button>
@@ -3064,15 +3065,29 @@
         const launchGame = (url) => {
             overlay.style.display = 'block';
             const gl = document.getElementById('game-loader');
-            if (gl) gl.style.display = 'flex';
+            if (gl) {
+                gl.style.transition = 'none';
+                gl.style.opacity = '1';
+                gl.style.display = 'flex';
+            }
 
             if (window._gameLoadTimer) clearTimeout(window._gameLoadTimer);
             window._gameLoadTimer = setTimeout(() => {
-                if (gl) gl.style.display = 'none';
-            }, 6000);
+                if (gl) {
+                    gl.style.transition = 'opacity 0.6s ease';
+                    gl.style.opacity = '0';
+                    setTimeout(() => { if (gl && gl.style.opacity === '0') gl.style.display = 'none'; }, 600);
+                }
+            }, 4000);
 
             frame.onload = () => {
-                if (gl) gl.style.display = 'none';
+                setTimeout(() => {
+                    if (gl) {
+                        gl.style.transition = 'opacity 0.6s ease';
+                        gl.style.opacity = '0';
+                        setTimeout(() => { if (gl && gl.style.opacity === '0') gl.style.display = 'none'; }, 600);
+                    }
+                }, 2000);
                 try {
                     const doc = frame.contentDocument || frame.contentWindow?.document;
                     if (doc) {
@@ -3106,13 +3121,11 @@
 
                 fetchGameHtml()
                     .then(html => {
-                        // 1. Rewrite blocked jsdelivr mirrors to working raw.githack.com
-                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/$2/');
-                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/genizy\/([^/]+)\//gi, 'https://raw.githack.com/genizy/$1/main/');
+                        // 1. Universal rewrite: all blocked jsdelivr mirrors to working raw.githack.com
+                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/$1/$2/$3/');
+                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)\//gi, 'https://raw.githack.com/$1/$2/master/');
                         html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/web-port@latest\/whosyourdaddy\/TemplateData\/style\.css/gi, 'data:text/css,/*style*/');
-                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/$2/');
-                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/([^/]+)\//gi, 'https://raw.githack.com/mysticful/$1/main/');
-                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'https://raw.githack.com/genizy/google-class/main/mobile.js');
+                        html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'data:application/javascript,//mobile.js');
 
                         // 2. Strip any legacy tutoring branding & cat image
                         html = html.replace(/<div\s+id=["']spinning-logo["'][^>]*>[\s\S]*?<\/div>/gi, '');
@@ -3165,7 +3178,10 @@
         const closeGame = () => {
             overlay.style.display = 'none';
             const gl = document.getElementById('game-loader');
-            if (gl) gl.style.display = 'none';
+            if (gl) {
+                gl.style.display = 'none';
+                gl.style.opacity = '1';
+            }
             if (window._gameLoadTimer) clearTimeout(window._gameLoadTimer);
             frame.removeAttribute('srcdoc');
             frame.src = 'about:blank';

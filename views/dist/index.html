@@ -243,7 +243,7 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 if (url.includes('.') && !url.includes(' ')) {
                     url = 'https://' + url;
                 } else {
-                    url = 'https://duckduckgo.com/?q=' + encodeURIComponent(url);
+                    url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
                 }
             }
             window._currentProxyUrl = url;
@@ -263,8 +263,17 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
             };
 
             const engine = window._preferredEngine || 'sj';
-            if (engine === 'sj' && window._swPromise) {
-                try { await window._swPromise; } catch(_) {}
+            if (engine === 'sj') {
+                if (window._swPromise) {
+                    try { await window._swPromise; } catch(_) {}
+                }
+                if ('serviceWorker' in navigator && !navigator.serviceWorker.controller) {
+                    await Promise.race([
+                        navigator.serviceWorker.ready,
+                        new Promise(res => navigator.serviceWorker.addEventListener('controllerchange', res, { once: true })),
+                        new Promise(res => setTimeout(res, 1200))
+                    ]);
+                }
             }
             frame.removeAttribute('srcdoc');
             if (engine === 'sj' && sjEncode) {
@@ -380,7 +389,7 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
             }
             if (base === 'games') {
                 print('Opening Games Hub...', 'system');
-                setTimeout(() => location.href = '/games', 500);
+                location.href = '/games';
                 return;
             }
             if (base === 'theme') { 
