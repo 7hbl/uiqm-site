@@ -31,7 +31,7 @@
         #app { width: 100%; height: 100%; position: relative; }
         #proxy-shell { position: absolute; top:0; left:0; width:100%; height:100%; display:none; z-index: 10; background:#000; }
         #proxy-frame { width:100%; height:100%; border:none; }
-        #proxy-loading { position:fixed; top:0; left:0; width:100%; height:100%; background:#000; color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.5rem; text-shadow: 0 0 10px #ff0000; z-index: 15; }
+        #proxy-loading { position:fixed; top:0; left:0; width:100%; height:100%; background:#000; color:#fff; display:none; align-items:center; justify-content:center; font-size:1.5rem; text-shadow: 0 0 10px #ff0000; z-index: 15; pointer-events:none; }
         #back-btn { position: fixed; top: 20px; right: 20px; padding: 10px 20px; background: rgba(0,0,0,0.8); border: 2px solid currentColor; color: inherit; cursor: pointer; z-index: 100; font-family: inherit; font-weight: bold; text-shadow: 0 0 5px currentColor; box-shadow: 0 0 10px rgba(255,0,0,0.3); transition: all 0.2s; display: none; }
         #back-btn:hover { background: #ff0000; color: #fff; box-shadow: 0 0 20px #ff0000; }
         #terminal-shell { padding: 20px; height: 100%; overflow-y: auto; position: relative; z-index: 5; text-shadow: 0 0 5px currentColor; }
@@ -151,6 +151,8 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
     function closeProxy() {
         document.getElementById('proxy-shell').style.display = 'none';
         document.getElementById('back-btn').style.display = 'none';
+        const pl = document.getElementById('proxy-loading');
+        if (pl) pl.style.display = 'none';
         document.getElementById('proxy-frame').src = 'about:blank';
         document.getElementById('term-input').focus();
     }
@@ -243,7 +245,7 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 if (url.includes('.') && !url.includes(' ')) {
                     url = 'https://' + url;
                 } else {
-                    url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
+                    url = 'https://www.bing.com/search?q=' + encodeURIComponent(url);
                 }
             }
             window._currentProxyUrl = url;
@@ -408,6 +410,10 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
             }
             if (base === 'google') {
                 launchProxyUrl('https://www.google.com');
+                return;
+            }
+            if (base === 'bing') {
+                launchProxyUrl('https://www.bing.com');
                 return;
             }
             // Launch as direct URL or web search query

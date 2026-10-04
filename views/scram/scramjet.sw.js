@@ -409,6 +409,10 @@ self.addEventListener('fetch', event => {
                     if (event.clientId) clientOriginMap.set(event.clientId, parsedInner.origin);
                 }
             } catch(_) {}
+            if (innerTarget.includes('githack.com') || innerTarget.includes('githubusercontent.com')) {
+                event.respondWith(fetch(innerTarget, { mode: 'cors' }).catch(() => emergencyBypass(event.request, innerTarget)));
+                return;
+            }
             rawUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(innerTarget), self.location.origin);
         } else {
             rawUrl = url;
@@ -418,6 +422,9 @@ self.addEventListener('fetch', event => {
             ? safeURL(event.request.referrer)
             : new URL(lastUpstreamOrigin + '/');
     } else if (!isSameOrigin) {
+        if (url.hostname.includes('githack.com') || url.hostname.includes('githubusercontent.com') || url.hostname.includes('cdnjs.cloudflare.com')) {
+            return;
+        }
         let targetHref = fixBlockedMirrors(url.href);
         rawUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(targetHref), self.location.origin);
         try {
