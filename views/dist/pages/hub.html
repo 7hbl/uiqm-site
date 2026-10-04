@@ -2979,7 +2979,9 @@
     }
 ];
 
-        let sjEncode = null;
+        const WORKER_ROOT = '/worker/';
+        const SCRAMJET_PREFIX = '/worker/network/';
+        const sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
         const grid = document.getElementById('games-grid');
         const search = document.getElementById('search-input');
         const overlay = document.getElementById('proxy-overlay');
@@ -3111,12 +3113,8 @@
             frame.removeAttribute('srcdoc');
             if (url.startsWith('https://celesteclassic.github.io')) {
                 frame.src = url;
-            } else if (sjEncode) {
-                frame.src = sjEncode(url);
-            } else if (window._rhSession) {
-                frame.src = '/' + window._rhSession + '/' + url;
             } else {
-                frame.src = '/proxy/' + encodeURIComponent(url);
+                frame.src = sjEncode(url);
             }
         };
         window.launchGame = launchGame;
