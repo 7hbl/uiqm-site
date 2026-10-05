@@ -184,7 +184,6 @@ app.addHook('onRequest', async (request, reply) => {
 // Apply Helmet middleware for security (with frameguard disabled for proxy iframes).
 app.register(fastifyHelmet, {
   contentSecurityPolicy: false, // Disable CSP
-  frameguard: false,
   xFrameOptions: false,
   xPoweredBy: false,
 });
