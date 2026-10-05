@@ -181,10 +181,22 @@ app.addHook('onRequest', async (request, reply) => {
   }
 });
 
-// Apply Helmet middleware for security.
+// Apply Helmet middleware for security (with frameguard disabled for proxy iframes).
 app.register(fastifyHelmet, {
   contentSecurityPolicy: false, // Disable CSP
+  frameguard: false,
+  xFrameOptions: false,
   xPoweredBy: false,
+});
+
+app.addHook('onSend', async (request, reply, payload) => {
+  reply.removeHeader('x-frame-options');
+  reply.removeHeader('content-security-policy');
+  reply.removeHeader('content-security-policy-report-only');
+  reply.removeHeader('cross-origin-opener-policy');
+  reply.removeHeader('cross-origin-embedder-policy');
+  reply.removeHeader('cross-origin-resource-policy');
+  return payload;
 });
 
 // Assign server file paths to different paths, for serving content on the website.

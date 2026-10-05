@@ -248,34 +248,82 @@ async function initHandler() {
     const transport = rawEpoxy ? {
         ...rawEpoxy,
         async request(remote, method, body, headers, signal) {
-            let hdrs = (headers instanceof Headers) ? headers : new Headers(headers || {});
-            let targetRemote = remote;
-            if (targetRemote && targetRemote.href) {
-                const fixed = fixBlockedMirrors(targetRemote.href);
-                if (fixed !== targetRemote.href) {
-                    try { targetRemote = new URL(fixed); } catch(_) {}
+            let currentUrl = remote;
+            let currentMethod = (method || 'GET').toUpperCase();
+            let currentBody = ['GET', 'HEAD'].includes(currentMethod) ? null : body;
+            let redirects = 0;
+            let res = null;
+
+            while (redirects < 6) {
+                let hdrs = (headers instanceof Headers) ? new Headers(headers) : new Headers(headers || {});
+                if (currentUrl && currentUrl.href) {
+                    const fixed = fixBlockedMirrors(currentUrl.href);
+                    if (fixed !== currentUrl.href) {
+                        try { currentUrl = new URL(fixed); } catch(_) {}
+                    }
                 }
+                const host = (currentUrl && currentUrl.hostname) ? currentUrl.hostname : '';
+                if (host.includes('youtube.com') || host.includes('googleapis.com') || host.includes('googlevideo.com') || host.includes('gstatic.com')) {
+                    hdrs.set('origin', 'https://www.youtube.com');
+                    hdrs.set('referer', 'https://www.youtube.com/');
+                } else if (currentUrl && currentUrl.origin && currentUrl.origin.startsWith('http')) {
+                    if (!hdrs.has('origin') && !['GET', 'HEAD'].includes(currentMethod)) {
+                        hdrs.set('origin', currentUrl.origin);
+                    }
+                    if (!hdrs.has('referer')) {
+                        hdrs.set('referer', currentUrl.origin + '/');
+                    }
+                }
+                hdrs.delete('accept-encoding');
+                hdrs.set('accept-encoding', 'identity');
+
+                try {
+                    res = await rawEpoxy.request(currentUrl, currentMethod, currentBody, hdrs, signal);
+                } catch(err) {
+                    console.warn('[SW Transport] Epoxy error, trying server fallback:', err.message);
+                    try {
+                        const sProxy = await fetch('/proxy/' + encodeURIComponent(currentUrl.href), {
+                            method: currentMethod,
+                            headers: hdrs,
+                            body: currentBody
+                        });
+                        return {
+                            body: sProxy.body || null,
+                            headers: (sProxy.headers instanceof Headers) ? sProxy.headers : new Headers(sProxy.headers || {}),
+                            status: sProxy.status || 200,
+                            statusText: sProxy.statusText || 'OK'
+                        };
+                    } catch(_) {
+                        throw err;
+                    }
+                }
+
+                const status = res.status || 200;
+                let loc = null;
+                if (res.headers) {
+                    if (typeof res.headers.get === 'function') loc = res.headers.get('location');
+                    else if (res.headers['location']) loc = res.headers['location'];
+                }
+
+                if (status >= 300 && status < 400 && loc) {
+                    redirects++;
+                    try {
+                        currentUrl = new URL(loc, currentUrl.href || currentUrl);
+                        currentMethod = 'GET';
+                        currentBody = null;
+                        continue;
+                    } catch(_) {
+                        break;
+                    }
+                }
+                break;
             }
-            const host = (targetRemote && targetRemote.hostname) ? targetRemote.hostname : '';
-            if (host.includes('youtube.com') || host.includes('googleapis.com') || host.includes('googlevideo.com') || host.includes('gstatic.com')) {
-                hdrs.set('origin', 'https://www.youtube.com');
-                hdrs.set('referer', 'https://www.youtube.com/');
-            } else if (targetRemote && targetRemote.origin && targetRemote.origin.startsWith('http')) {
-                if (!hdrs.has('origin') && !['GET', 'HEAD'].includes((method || 'GET').toUpperCase())) {
-                    hdrs.set('origin', targetRemote.origin);
-                }
-                if (!hdrs.has('referer')) {
-                    hdrs.set('referer', targetRemote.origin + '/');
-                }
-            }
-            hdrs.delete('accept-encoding');
-            hdrs.set('accept-encoding', 'identity');
-            const res = await rawEpoxy.request(targetRemote, method, body, hdrs, signal);
+
             return {
-                body: res.body || null,
-                headers: (res.headers instanceof Headers) ? res.headers : new Headers(res.headers || {}),
-                status: res.status || 200,
-                statusText: res.statusText || 'OK'
+                body: res ? (res.body || null) : null,
+                headers: (res && res.headers instanceof Headers) ? res.headers : new Headers(res?.headers || {}),
+                status: res?.status || 200,
+                statusText: res?.statusText || 'OK'
             };
         }
     } : {
@@ -418,7 +466,7 @@ self.addEventListener('fetch', event => {
                 }
             } catch(_) {}
             if (innerTarget.includes('githack.com') || innerTarget.includes('githubusercontent.com')) {
-                event.respondWith(fetch(innerTarget, { mode: 'cors' }).catch(() => emergencyBypass(event.request, innerTarget)));
+                event.respondWith(emergencyBypass(event.request, innerTarget));
                 return;
             }
             if (innerTarget.includes('sync_mod_chunk') || innerTarget.includes('kevlar_base')) {
@@ -613,9 +661,28 @@ async function emergencyBypass(request, urlObj) {
                     }
                 } catch(_) {}
             }
-            const body = ['GET', 'HEAD'].includes(request.method) ? null : request.body;
-            const res = await ep.request(new URL(targetUrl), request.method, body, epHeaders);
-            response = toResponse(res);
+            let curTarget = targetUrl;
+            let redirects = 0;
+            let res = null;
+            while (redirects < 6) {
+                const body = ['GET', 'HEAD'].includes(request.method) ? null : request.body;
+                res = await ep.request(new URL(curTarget), request.method, body, epHeaders);
+                const status = res.status || 200;
+                let loc = null;
+                if (res.headers) {
+                    if (typeof res.headers.get === 'function') loc = res.headers.get('location');
+                    else if (res.headers['location']) loc = res.headers['location'];
+                }
+                if (status >= 300 && status < 400 && loc) {
+                    redirects++;
+                    try {
+                        curTarget = new URL(loc, curTarget).href;
+                        continue;
+                    } catch(_) { break; }
+                }
+                break;
+            }
+            if (res) response = toResponse(res);
         }
     } catch(e) { console.warn('[SW] Epoxy bypass failed:', e.message); }
 
