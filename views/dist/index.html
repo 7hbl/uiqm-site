@@ -96,7 +96,7 @@
                 <button onclick="try { document.getElementById('proxy-frame').contentWindow.history.forward(); } catch(_) {}" title="Forward"><i class="fas fa-arrow-right"></i></button>
                 <button onclick="try { document.getElementById('proxy-frame').contentWindow.location.reload(); } catch(_) { const f = document.getElementById('proxy-frame'); f.src = f.src; }" title="Reload"><i class="fas fa-redo-alt"></i></button>
                 <form id="proxy-nav-form" onsubmit="window.navigateProxyNav(); return false;" style="display:flex;align-items:center;">
-                    <input id="proxy-nav-input" type="text" placeholder="Search or enter URL..." autocomplete="off" spellcheck="false" style="background:#111;border:1px solid #ff0000;border-radius:15px;color:#fff;padding:4px 12px;font-size:12px;width:240px;outline:none;font-family:inherit;">
+                    <input id="proxy-nav-input" type="text" placeholder="Search or enter URL..." autocomplete="off" spellcheck="false">
                 </form>
                 <div style="margin-left: 5px; display: flex; gap: 5px; align-items: center;">
                     <button id="btn-engine-sj" class="nav-engine-btn active" onclick="switchEngine('sj')" title="Scramjet (Fastest / Recommended)">SCRAM</button>
