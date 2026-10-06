@@ -600,7 +600,7 @@
     {
         "title": "Rocket Goal.io",
         "desc": "A fast-paced soccer game where you score goals and avoid the opposing team.",
-        "url": "https://raw.githubusercontent.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/458.html",
+        "url": "https://cdn.jsdelivr.net/gh/clever-portal/useless@main/rocket-goal/index.html",
         "image": "https://raw.githubusercontent.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/458.jpg"
     },
     {
@@ -3047,6 +3047,7 @@
         };
 
         let _canvasCheckInterval = null;
+        let gameLoadSequence = 0;
         const hideLoader = () => {
             if (_canvasCheckInterval) {
                 clearInterval(_canvasCheckInterval);
@@ -3067,6 +3068,7 @@
         };
 
         const launchGame = async (url) => {
+            const gameLoadId = ++gameLoadSequence;
             let gameRoute = 'scramjet';
             try {
                 if (window._proxyReady && !(await window._proxyReady)) throw new Error('Scramjet did not start.');
@@ -3080,6 +3082,7 @@
                     return;
                 }
             }
+            if (gameLoadSequence !== gameLoadId) return;
 
             overlay.style.display = 'block';
             const gl = document.getElementById('game-loader');
@@ -3094,15 +3097,48 @@
             if (_canvasCheckInterval) clearInterval(_canvasCheckInterval);
             if (window._gameLoadTimer) clearTimeout(window._gameLoadTimer);
 
-            // Give large Unity/WebGL downloads time to finish, then explain a stalled load.
-            window._gameLoadTimer = setTimeout(() => {
+            let gameReady = false;
+            const showGameLoadFailure = () => {
+                if (gameLoadSequence !== gameLoadId || gameReady) return;
+                if (_canvasCheckInterval) {
+                    clearInterval(_canvasCheckInterval);
+                    _canvasCheckInterval = null;
+                }
                 const spinner = document.querySelector('#game-loader .game-loader-spinner');
                 const title = document.querySelector('#game-loader .game-loader-text');
                 const statusSub = gl?.querySelector('div[style*="letter-spacing: 1px"]');
                 if (spinner) spinner.style.display = 'none';
                 if (title) title.textContent = 'THIS GAME DID NOT START';
                 if (statusSub) statusSub.textContent = 'A required game file may be unavailable. The game host can block or remove assets; try another title or press EXIT.';
-            }, 45000);
+                window._gameLoadTimer = null;
+            };
+
+            const retryWithBackupProxy = async () => {
+                if (gameRoute !== 'scramjet' || gameLoadSequence !== gameLoadId || gameReady) return false;
+                const title = document.querySelector('#game-loader .game-loader-text');
+                const statusSub = gl?.querySelector('div[style*="letter-spacing: 1px"]');
+                if (title) title.textContent = 'RETRYING THROUGH BACKUP PROXY';
+                if (statusSub) statusSub.textContent = 'The first route stalled. Switching engines once...';
+                try {
+                    const session = await ensureRammerheadSession();
+                    if (gameLoadSequence !== gameLoadId || gameReady) return false;
+                    gameRoute = `/${session}/`;
+                    checks = 0;
+                    frame.src = gameRoute + url;
+                    window._gameLoadTimer = setTimeout(showGameLoadFailure, 90000);
+                    return true;
+                } catch (error) {
+                    console.warn('The game stalled on Scramjet and the backup proxy could not start.', error);
+                    return false;
+                }
+            };
+
+            // Allow large WebGL downloads time to finish, then retry one time on
+            // the alternate engine before showing the failure message.
+            window._gameLoadTimer = setTimeout(async () => {
+                if (await retryWithBackupProxy()) return;
+                showGameLoadFailure();
+            }, 60000);
 
             // Poll every 300ms to detect when canvas renders or game is ready
             let checks = 0;
@@ -3122,6 +3158,7 @@
                         const unityReady = Boolean(unityGame?.Module || unityGame?.SendMessage) &&
                             (!unityProgress || unityProgress.classList.contains('done'));
                         if (isUnityGame ? unityReady : canvas && (canvas.width > 50 || canvas.height > 50 || checks > 10)) {
+                            gameReady = true;
                             hideLoader();
                             return;
                         }
@@ -3160,6 +3197,7 @@
         window.launchGame = launchGame;
 
         const closeGame = () => {
+            gameLoadSequence++;
             if (_canvasCheckInterval) {
                 clearInterval(_canvasCheckInterval);
                 _canvasCheckInterval = null;
