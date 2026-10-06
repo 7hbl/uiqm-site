@@ -407,82 +407,71 @@ async function initFetchHandler() {
     ? {
         ...rawTransport,
         async request(remote, method, body, headers, signal) {
-          let currentUrl = new URL(remote.href || String(remote));
-          let currentMethod = (method || 'GET').toUpperCase();
-          let currentBody = ['GET', 'HEAD'].includes(currentMethod) ? null : body;
+          const currentUrl = new URL(remote.href || String(remote));
+          const currentMethod = (method || 'GET').toUpperCase();
+          const currentBody = ['GET', 'HEAD'].includes(currentMethod) ? null : body;
+          const requestHeaders = headers?.clone ? headers.clone() : headers;
+          const youtubeApi =
+            (currentUrl.hostname === 'youtube.com' || currentUrl.hostname.endsWith('.youtube.com')) &&
+            currentUrl.pathname.startsWith('/youtubei/');
+          if (youtubeApi && requestHeaders?.set) {
+            requestHeaders.set('origin', currentUrl.origin);
+            if (!requestHeaders.has('referer')) requestHeaders.set('referer', `${currentUrl.origin}/`);
+            requestHeaders.set('sec-fetch-site', 'same-origin');
+            requestHeaders.set('sec-fetch-mode', 'same-origin');
+            requestHeaders.set('sec-fetch-dest', 'empty');
+          }
+          const backoffExpiry = transportBackoffUntil.get(currentUrl.origin) || 0;
+          if (backoffExpiry > Date.now()) {
+            const error = new Error('The direct transport is cooling down; retrying through the server proxy.');
+            error.code = 'SCRAM_TRANSPORT_BACKOFF';
+            throw error;
+          }
+          if (backoffExpiry) transportBackoffUntil.delete(currentUrl.origin);
 
-          for (let redirects = 0; redirects < 8; redirects++) {
-            const requestHeaders = headers?.clone ? headers.clone() : headers;
-            const youtubeApi =
-              (currentUrl.hostname === 'youtube.com' || currentUrl.hostname.endsWith('.youtube.com')) &&
-              currentUrl.pathname.startsWith('/youtubei/');
-            if (youtubeApi && requestHeaders?.set) {
-              requestHeaders.set('origin', currentUrl.origin);
-              if (!requestHeaders.has('referer')) requestHeaders.set('referer', `${currentUrl.origin}/`);
-              requestHeaders.set('sec-fetch-site', 'same-origin');
-              requestHeaders.set('sec-fetch-mode', 'same-origin');
-              requestHeaders.set('sec-fetch-dest', 'empty');
-            }
-            const backoffExpiry = transportBackoffUntil.get(currentUrl.origin) || 0;
-            if (backoffExpiry > Date.now()) {
-              const error = new Error('The direct transport is cooling down; retrying through the server proxy.');
-              error.code = 'SCRAM_TRANSPORT_BACKOFF';
-              throw error;
-            }
-            if (backoffExpiry) transportBackoffUntil.delete(currentUrl.origin);
+          let response;
+          try {
+            response = await rawTransport.request(
+              currentUrl,
+              currentMethod,
+              currentBody,
+              requestHeaders,
+              signal
+            );
+          } catch (error) {
+            if (shouldBackoffEpoxy(error)) rememberEpoxyFailure(currentUrl.origin, error);
+            throw error;
+          }
+          response = await normalizeUnityLoaderBlobProgress(response, currentUrl.href);
+          const normalized = normalizeHtmlMime(response, currentUrl.href);
+          const responseHeaders = makeHeaders(normalized.headers);
+          const contentType = responseHeaders.get('content-type') || '';
 
-            let response;
+          // Scramjet handles redirects itself so it can rewrite Location and keep
+          // the virtual URL, origin, referrer, and redirect cookies in sync.
+          if (
+            isScriptUrl(currentUrl) &&
+            currentMethod === 'GET' &&
+            (normalized.status >= 400 || /text\/html/i.test(contentType))
+          ) {
             try {
-              response = await rawTransport.request(
-                currentUrl,
+              const fallback = await fetchServerProxyResponse(
+                currentUrl.href,
                 currentMethod,
-                currentBody,
-                requestHeaders,
-                signal
+                headers,
+                null
               );
+              if (fallback) return responseToTransport(fallback, currentUrl.href);
             } catch (error) {
-              if (shouldBackoffEpoxy(error)) rememberEpoxyFailure(currentUrl.origin, error);
-              throw error;
+              console.warn('[Scramjet] Script response fallback failed:', error);
             }
-            response = await normalizeUnityLoaderBlobProgress(response, currentUrl.href);
-            const normalized = normalizeHtmlMime(response, currentUrl.href);
-            const responseHeaders = makeHeaders(normalized.headers);
-            const location = responseHeaders.get('location');
-
-            if (normalized.status >= 300 && normalized.status < 400 && location) {
-              currentUrl = new URL(location, currentUrl);
-              currentMethod = 'GET';
-              currentBody = null;
-              continue;
-            }
-
-            const contentType = responseHeaders.get('content-type') || '';
-            if (
-              isScriptUrl(currentUrl) &&
-              currentMethod === 'GET' &&
-              (normalized.status >= 400 || /text\/html/i.test(contentType))
-            ) {
-              try {
-                const fallback = await fetchServerProxyResponse(
-                  currentUrl.href,
-                  currentMethod,
-                  headers,
-                  null
-                );
-                if (fallback) return responseToTransport(fallback, currentUrl.href);
-              } catch (error) {
-                console.warn('[Scramjet] Script response fallback failed:', error);
-              }
-              throw new Error(`Upstream returned ${normalized.status} ${normalized.statusText || ''} for script ${currentUrl.href}`.trim());
-            }
-
-            return {
-              ...normalized,
-              headers: [...responseHeaders.entries()],
-            };
+            throw new Error(`Upstream returned ${normalized.status} ${normalized.statusText || ''} for script ${currentUrl.href}`.trim());
           }
 
-          throw new Error('The upstream site redirected too many times.');
+          return {
+            ...normalized,
+            headers: [...responseHeaders.entries()],
+          };
         },
       }
     : {
