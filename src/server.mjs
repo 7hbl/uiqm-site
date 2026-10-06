@@ -625,41 +625,114 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       parsedTarget = new URL('https://' + targetUrlStr);
     }
     const targetOrigin = parsedTarget.origin;
-    try {
-      const clientIp = (request.headers['x-forwarded-for'] || '').split(',')[0].trim() || request.socket?.remoteAddress;
-      lastUpstreamByIp.set(clientIp, { origin: targetOrigin, timestamp: Date.now() });
-      reply.header('Set-Cookie', `__active_proxy_origin=${encodeURIComponent(targetOrigin)}; Path=/; SameSite=Lax`);
-    } catch (_) {}
+    const isYoutubeApi =
+      (parsedTarget.hostname === 'youtube.com' || parsedTarget.hostname.endsWith('.youtube.com')) &&
+      parsedTarget.pathname.startsWith('/youtubei/');
+    const isYoutubeTarget =
+      parsedTarget.hostname === 'youtube.com' || parsedTarget.hostname.endsWith('.youtube.com');
+    const responseCookies = [];
+    const isTopLevelNavigation =
+      request.headers['sec-fetch-mode'] === 'navigate' ||
+      request.headers['sec-fetch-dest'] === 'document' ||
+      (!request.headers['sec-fetch-dest'] && parsedTarget.pathname === '/' && request.method === 'GET');
+    if (isTopLevelNavigation) {
+      try {
+        const clientIp = (request.headers['x-forwarded-for'] || '').split(',')[0].trim() || request.socket?.remoteAddress;
+        lastUpstreamByIp.set(clientIp, { origin: targetOrigin, timestamp: Date.now() });
+        responseCookies.push(`__active_proxy_origin=${encodeURIComponent(targetOrigin)}; Path=/; SameSite=Lax`);
+      } catch (_) {}
+    }
 
     const forwardHeaders = {};
-    const headersToCopy = ['user-agent', 'accept', 'accept-language', 'content-type', 'authorization'];
+    const headersToCopy = [
+      'user-agent', 'accept', 'accept-language', 'content-type', 'content-encoding',
+      'authorization', 'x-origin', 'device-memory', 'priority', 'sec-ch-dpr',
+      'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform', 'sec-ch-viewport-width',
+      'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'x-client-data'
+    ];
     for (const h of headersToCopy) {
       if (request.headers[h]) {
         forwardHeaders[h] = request.headers[h];
       }
     }
+    for (const [name, value] of Object.entries(request.headers)) {
+      const lowerName = name.toLowerCase();
+      if (lowerName.startsWith('x-youtube-') || lowerName.startsWith('x-goog-')) {
+        forwardHeaders[lowerName] = value;
+      }
+    }
+    if (isYoutubeApi && request.headers.cookie) {
+      const youtubeCookieNames = new Set([
+        'VISITOR_PRIVACY_METADATA', 'VISITOR_INFO1_LIVE', 'YSC', 'GPS', 'PREF',
+        '__Secure-BUCKET', '__Secure-ROLLOUT_TOKEN', '__Secure-YNID',
+        'SID', 'HSID', 'SSID', 'APISID', 'SAPISID', '__Secure-1PAPISID',
+        '__Secure-3PAPISID', '__Secure-1PSID', '__Secure-3PSID', 'LOGIN_INFO',
+        'SIDCC', '__Secure-1PSIDCC', '__Secure-3PSIDCC'
+      ]);
+      const youtubeCookies = request.headers.cookie
+        .split(';')
+        .map((entry) => entry.trim())
+        .filter((entry) => youtubeCookieNames.has(entry.slice(0, entry.indexOf('='))));
+      if (youtubeCookies.length) forwardHeaders.cookie = youtubeCookies.join('; ');
+    }
     if (!forwardHeaders['user-agent']) {
       forwardHeaders['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
     }
-    if (!['GET', 'HEAD'].includes(request.method)) {
+    if (!['GET', 'HEAD'].includes(request.method) && !isYoutubeApi) {
       forwardHeaders['origin'] = targetOrigin;
     }
     forwardHeaders['referer'] = targetOrigin + '/';
+    if (isYoutubeApi) {
+      forwardHeaders['sec-fetch-site'] = 'same-origin';
+      forwardHeaders['sec-fetch-mode'] = 'same-origin';
+      forwardHeaders['sec-fetch-dest'] = 'empty';
+    }
 
     let fetchTarget = targetUrlStr;
     if (parsedTarget.pathname === '' || parsedTarget.pathname === '/') {
       fetchTarget = parsedTarget.origin + '/' + (parsedTarget.search || '');
     }
-    
-    const response = await fetch(fetchTarget, {
+
+    let requestBody = null;
+    if (!['GET', 'HEAD'].includes(request.method)) {
+      requestBody = request.body;
+      if (requestBody === undefined) requestBody = request.raw;
+      if (
+        requestBody && typeof requestBody === 'object' &&
+        !Buffer.isBuffer(requestBody) &&
+        typeof requestBody.getReader !== 'function' &&
+        typeof requestBody[Symbol.asyncIterator] !== 'function' &&
+        !(requestBody instanceof ArrayBuffer) &&
+        !ArrayBuffer.isView(requestBody)
+      ) {
+        requestBody = JSON.stringify(requestBody);
+      }
+    }
+
+    const fetchOptions = {
       method: request.method,
       headers: forwardHeaders,
-      body: ['GET', 'HEAD'].includes(request.method) ? null : request.body,
+      body: requestBody,
       redirect: 'follow',
-    });
-    
+    };
+    if (
+      requestBody &&
+      (typeof requestBody.getReader === 'function' || typeof requestBody[Symbol.asyncIterator] === 'function')
+    ) {
+      fetchOptions.duplex = 'half';
+    }
+
+    const response = await fetch(fetchTarget, fetchOptions);
+
     const responseHeaders = {};
+    const upstreamSetCookies = response.headers.getSetCookie?.() || [];
+    if (isYoutubeTarget) {
+      for (const cookie of upstreamSetCookies) {
+        responseCookies.push(cookie.replace(/;\s*domain=[^;]*/ig, ''));
+      }
+    }
     response.headers.forEach((value, key) => {
+      if (key.toLowerCase() === 'set-cookie') return;
       const blockedHeaders = [
         'x-frame-options',
         'content-security-policy',
@@ -703,6 +776,16 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     
     if (contentType) {
       responseHeaders['content-type'] = contentType;
+    }
+    if (responseCookies.length) responseHeaders['set-cookie'] = responseCookies;
+
+    if (isYoutubeTarget && (contentType.includes('text/html') || cleanUrl.endsWith('.html'))) {
+      const html = await response.text();
+      responseHeaders['content-type'] = contentType || 'text/html; charset=UTF-8';
+      reply.headers(responseHeaders);
+      reply.code(response.status);
+      reply.send(html);
+      return;
     }
 
     // HTML Rewriting for seamless in-iframe browsing

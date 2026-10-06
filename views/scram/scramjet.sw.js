@@ -12,6 +12,19 @@ let epoxy = null;
 let lastUpstreamOrigin = 'https://www.youtube.com';
 const clientOriginMap = new Map();
 
+function rememberClientOrigin(event, origin) {
+    try {
+        const normalizedOrigin = new URL(origin).origin;
+        // event.clientId identifies the page that made the request. For a
+        // subresource, that page's origin is not necessarily the resource's
+        // origin, so only associate origins with the document created by a
+        // navigation.
+        const clientId = event.resultingClientId ||
+            (event.request.mode === 'navigate' ? event.clientId : null);
+        if (clientId) clientOriginMap.set(clientId, normalizedOrigin);
+    } catch (_) {}
+}
+
 globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});
 
 async function getEpoxy() {
@@ -26,6 +39,26 @@ async function getEpoxy() {
         }
     } catch(e) { console.warn('[SW] Epoxy init failed:', e); }
     return null;
+}
+
+function isScriptUrl(url) {
+    try {
+        const pathname = new URL(url).pathname;
+        return /\.(?:m?js)$/.test(pathname) || pathname.includes('/js/');
+    } catch (_) {
+        return false;
+    }
+}
+
+async function fetchServerProxyResponse(url, method, headers, body) {
+    const response = await fetch('/proxy/' + encodeURIComponent(url), {
+        method,
+        headers,
+        body: ['GET', 'HEAD'].includes(method) ? null : body
+    });
+    const contentType = response.headers.get('content-type') || '';
+    if (!response.ok || /text\/html/i.test(contentType)) return null;
+    return response;
 }
 
 // Headers that must be stripped from every proxied response to allow iframe embedding
@@ -278,6 +311,23 @@ async function initHandler() {
                 hdrs.set('accept-encoding', 'identity');
 
                 try {
+                    if (
+                        currentMethod === 'GET' && currentUrl && currentUrl.pathname === '/' &&
+                        (currentUrl.hostname === 'youtube.com' || currentUrl.hostname.endsWith('.youtube.com'))
+                    ) {
+                        const pageResponse = await fetch('/proxy/' + encodeURIComponent(currentUrl.href), {
+                            method: currentMethod,
+                            headers: hdrs,
+                            credentials: 'include'
+                        });
+                        return {
+                            body: pageResponse.body || null,
+                            headers: pageResponse.headers,
+                            status: pageResponse.status || 200,
+                            statusText: pageResponse.statusText || 'OK'
+                        };
+                    }
+
                     res = await rawEpoxy.request(currentUrl, currentMethod, currentBody, hdrs, signal);
                 } catch(err) {
                     console.warn('[SW Transport] Epoxy error, trying server fallback:', err.message);
@@ -314,6 +364,30 @@ async function initHandler() {
                         continue;
                     } catch(_) {
                         break;
+                    }
+                }
+
+                const responseContentType = res.headers && typeof res.headers.get === 'function'
+                    ? (res.headers.get('content-type') || '')
+                    : (res.headers && (res.headers['content-type'] || res.headers['Content-Type'])) || '';
+                if (isScriptUrl(currentUrl.href || currentUrl) && /text\/html/i.test(responseContentType)) {
+                    try {
+                        const serverResponse = await fetchServerProxyResponse(
+                            currentUrl.href || currentUrl,
+                            currentMethod,
+                            hdrs,
+                            currentBody
+                        );
+                        if (serverResponse) {
+                            return {
+                                body: serverResponse.body || null,
+                                headers: serverResponse.headers,
+                                status: serverResponse.status || 200,
+                                statusText: serverResponse.statusText || 'OK'
+                            };
+                        }
+                    } catch (err) {
+                        console.warn('[SW Transport] Script fallback failed:', err.message);
                     }
                 }
                 break;
@@ -460,9 +534,12 @@ self.addEventListener('fetch', event => {
                         }
                     }
                     innerTarget = activeOrigin + parsedInner.pathname + parsedInner.search;
+                    rememberClientOrigin(event, activeOrigin);
                 } else {
-                    lastUpstreamOrigin = parsedInner.origin;
-                    if (event.clientId) clientOriginMap.set(event.clientId, parsedInner.origin);
+                    if (event.request.mode === 'navigate') {
+                        lastUpstreamOrigin = parsedInner.origin;
+                    }
+                    rememberClientOrigin(event, parsedInner.origin);
                 }
             } catch(_) {}
             if (innerTarget.includes('githack.com') || innerTarget.includes('githubusercontent.com')) {
@@ -491,11 +568,6 @@ self.addEventListener('fetch', event => {
             return;
         }
         rawUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(targetHref), self.location.origin);
-        try {
-            const p = new URL(targetHref);
-            lastUpstreamOrigin = p.origin;
-            if (event.clientId) clientOriginMap.set(event.clientId, p.origin);
-        } catch(_) {}
         rawClientUrl = event.request.referrer
             ? safeURL(event.request.referrer)
             : new URL(lastUpstreamOrigin + '/');
@@ -525,6 +597,7 @@ self.addEventListener('fetch', event => {
         if (!upstream) upstream = lastUpstreamOrigin;
 
         if (upstream) {
+            rememberClientOrigin(event, upstream);
             const fullTarget = fixBlockedMirrors(upstream + url.pathname + url.search);
             if (fullTarget.includes('sync_mod_chunk') || fullTarget.includes('kevlar_base')) {
                 event.respondWith(emergencyBypass(event.request, fullTarget));
@@ -535,6 +608,35 @@ self.addEventListener('fetch', event => {
         } else {
             return;
         }
+    }
+
+    const apiTarget = rawUrl && extractTargetFromScram(rawUrl.href);
+    if (apiTarget && !['GET', 'HEAD'].includes(event.request.method)) {
+        try {
+            const parsedApiTarget = new URL(apiTarget);
+            if (
+                (parsedApiTarget.hostname === 'youtube.com' || parsedApiTarget.hostname.endsWith('.youtube.com')) &&
+                parsedApiTarget.pathname.startsWith('/youtubei/')
+            ) {
+                const apiRequest = event.request.clone();
+                event.respondWith((async () => {
+                    const apiHeaders = new Headers(apiRequest.headers);
+                    // YouTube receives this as a same-origin API call. The local
+                    // proxy origin must not be forwarded as the request Origin.
+                    apiHeaders.delete('origin');
+                    apiHeaders.set('referer', parsedApiTarget.origin + '/');
+                    const apiBody = await apiRequest.arrayBuffer();
+                    return fetch('/proxy/' + encodeURIComponent(parsedApiTarget.href), {
+                        method: apiRequest.method,
+                        headers: apiHeaders,
+                        body: apiBody,
+                        credentials: 'include',
+                        redirect: 'follow'
+                    });
+                })());
+                return;
+            }
+        } catch (_) {}
     }
 
     event.respondWith((async () => {
@@ -557,8 +659,39 @@ self.addEventListener('fetch', event => {
             });
 
             let resp = toResponse(response);
-            const ct = resp.headers.get('content-type') || '';
-            if (ct.includes('text/html')) {
+            let ct = resp.headers.get('content-type') || '';
+
+            // Some transports return an HTML error page with a successful
+            // status for script requests. A script cannot execute that page;
+            // retry it through the server fetch path, which preserves the
+            // upstream JavaScript response and MIME type.
+            if (
+                (event.request.destination === 'script' || event.request.destination === 'worker') &&
+                /text\/html/i.test(ct)
+            ) {
+                const scriptTarget = rawUrl && extractTargetFromScram(rawUrl.href);
+                if (scriptTarget) {
+                    try {
+                        const serverResponse = await fetchServerProxyResponse(
+                            scriptTarget,
+                            event.request.method,
+                            event.request.headers,
+                            event.request.body
+                        );
+                        if (serverResponse) {
+                            resp = toResponse(serverResponse);
+                            ct = resp.headers.get('content-type') || '';
+                        }
+                    } catch (err) {
+                        console.warn('[SW] Script response fallback failed:', err.message);
+                    }
+                }
+            }
+
+            if (
+                ct.includes('text/html') &&
+                (event.request.mode === 'navigate' || event.request.destination === 'document')
+            ) {
                 let html = await resp.text();
                 // 1. Universal rewrite: all blocked jsdelivr mirrors to working raw.githack.com
                 html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/$1/$2/$3/');
@@ -707,6 +840,26 @@ async function emergencyBypass(request, urlObj) {
     }
 
     if (!response) return new Response('Proxy Error: All bypass tiers failed for ' + targetUrl, { status: 502 });
+
+    const initialContentType = response.headers.get('content-type') || '';
+    if (
+        (request.destination === 'script' || request.destination === 'worker') &&
+        /text\/html/i.test(initialContentType)
+    ) {
+        try {
+            const serverResponse = await fetchServerProxyResponse(
+                targetUrl,
+                request.method || 'GET',
+                request.headers,
+                ['GET', 'HEAD'].includes((request.method || 'GET').toUpperCase())
+                    ? null
+                    : await request.clone().blob()
+            );
+            if (serverResponse) response = serverResponse;
+        } catch (err) {
+            console.warn('[SW] Script fallback failed:', err.message);
+        }
+    }
 
     const bypassStatus = response.status || 200;
     const bypassNullBody = NULL_BODY_STATUSES.has(bypassStatus);
