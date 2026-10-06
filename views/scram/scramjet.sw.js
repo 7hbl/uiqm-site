@@ -228,6 +228,26 @@ function rememberEpoxyFailure(origin, error) {
   }
 }
 
+async function storeRedirectCookies(response, url) {
+  const headers = response?.headers;
+  const cookies = typeof headers?.getSetCookie === 'function'
+    ? headers.getSetCookie()
+    : [headers?.get?.('set-cookie')].filter(Boolean);
+  if (!cookies.length) return;
+
+  try {
+    workerCookieJar?.setCookies(cookies, new URL(url));
+  } catch (error) {
+    console.warn('[Scramjet] Could not store cookies from an upstream redirect:', error);
+  }
+
+  for (const client of await self.clients.matchAll()) {
+    for (const cookie of cookies) {
+      client.postMessage({ type: 'scramjet-set-cookie', url: url.href || String(url), cookie });
+    }
+  }
+}
+
 function dataUrlResponse(value) {
   const comma = value.indexOf(',');
   if (!value.startsWith('data:') || comma < 5) throw new TypeError('Invalid data URL.');
@@ -407,71 +427,115 @@ async function initFetchHandler() {
     ? {
         ...rawTransport,
         async request(remote, method, body, headers, signal) {
-          const currentUrl = new URL(remote.href || String(remote));
-          const currentMethod = (method || 'GET').toUpperCase();
-          const currentBody = ['GET', 'HEAD'].includes(currentMethod) ? null : body;
-          const requestHeaders = headers?.clone ? headers.clone() : headers;
-          const youtubeApi =
-            (currentUrl.hostname === 'youtube.com' || currentUrl.hostname.endsWith('.youtube.com')) &&
-            currentUrl.pathname.startsWith('/youtubei/');
-          if (youtubeApi && requestHeaders?.set) {
-            requestHeaders.set('origin', currentUrl.origin);
-            if (!requestHeaders.has('referer')) requestHeaders.set('referer', `${currentUrl.origin}/`);
-            requestHeaders.set('sec-fetch-site', 'same-origin');
-            requestHeaders.set('sec-fetch-mode', 'same-origin');
-            requestHeaders.set('sec-fetch-dest', 'empty');
-          }
-          const backoffExpiry = transportBackoffUntil.get(currentUrl.origin) || 0;
-          if (backoffExpiry > Date.now()) {
-            const error = new Error('The direct transport is cooling down; retrying through the server proxy.');
-            error.code = 'SCRAM_TRANSPORT_BACKOFF';
-            throw error;
-          }
-          if (backoffExpiry) transportBackoffUntil.delete(currentUrl.origin);
+          let currentUrl = new URL(remote.href || String(remote));
+          let currentMethod = (method || 'GET').toUpperCase();
+          let currentBody = ['GET', 'HEAD'].includes(currentMethod) ? null : body;
+          const originalOrigin = currentUrl.origin;
+          const originalHeaders = headers?.clone ? headers.clone() : makeHeaders(headers);
+          const visited = new Set();
 
-          let response;
-          try {
-            response = await rawTransport.request(
-              currentUrl,
-              currentMethod,
-              currentBody,
-              requestHeaders,
-              signal
-            );
-          } catch (error) {
-            if (shouldBackoffEpoxy(error)) rememberEpoxyFailure(currentUrl.origin, error);
-            throw error;
-          }
-          response = await normalizeUnityLoaderBlobProgress(response, currentUrl.href);
-          const normalized = normalizeHtmlMime(response, currentUrl.href);
-          const responseHeaders = makeHeaders(normalized.headers);
-          const contentType = responseHeaders.get('content-type') || '';
+          for (let redirectCount = 0; redirectCount <= 10; redirectCount++) {
+            if (visited.has(currentUrl.href)) throw new Error('The upstream site returned a redirect loop.');
+            visited.add(currentUrl.href);
 
-          // Scramjet handles redirects itself so it can rewrite Location and keep
-          // the virtual URL, origin, referrer, and redirect cookies in sync.
-          if (
-            isScriptUrl(currentUrl) &&
-            currentMethod === 'GET' &&
-            (normalized.status >= 400 || /text\/html/i.test(contentType))
-          ) {
-            try {
-              const fallback = await fetchServerProxyResponse(
-                currentUrl.href,
-                currentMethod,
-                headers,
-                null
-              );
-              if (fallback) return responseToTransport(fallback, currentUrl.href);
-            } catch (error) {
-              console.warn('[Scramjet] Script response fallback failed:', error);
+            const requestHeaders = originalHeaders.clone ? originalHeaders.clone() : makeHeaders(originalHeaders);
+            const youtubeApi =
+              (currentUrl.hostname === 'youtube.com' || currentUrl.hostname.endsWith('.youtube.com')) &&
+              currentUrl.pathname.startsWith('/youtubei/');
+            if (youtubeApi && requestHeaders?.set) {
+              requestHeaders.set('origin', currentUrl.origin);
+              if (!requestHeaders.has('referer')) requestHeaders.set('referer', `${currentUrl.origin}/`);
+              requestHeaders.set('sec-fetch-site', 'same-origin');
+              requestHeaders.set('sec-fetch-mode', 'same-origin');
+              requestHeaders.set('sec-fetch-dest', 'empty');
             }
-            throw new Error(`Upstream returned ${normalized.status} ${normalized.statusText || ''} for script ${currentUrl.href}`.trim());
+
+            if (currentUrl.origin !== originalOrigin) {
+              requestHeaders.delete?.('authorization');
+              requestHeaders.delete?.('origin');
+              requestHeaders.delete?.('cookie');
+            }
+            const jarCookies = workerCookieJar?.getCookies(currentUrl, false);
+            if (jarCookies) requestHeaders.set('cookie', jarCookies);
+
+            const backoffExpiry = transportBackoffUntil.get(currentUrl.origin) || 0;
+            if (backoffExpiry > Date.now()) {
+              const error = new Error('The direct transport is cooling down; retrying through the server proxy.');
+              error.code = 'SCRAM_TRANSPORT_BACKOFF';
+              throw error;
+            }
+            if (backoffExpiry) transportBackoffUntil.delete(currentUrl.origin);
+
+            let response;
+            try {
+              response = await rawTransport.request(
+                currentUrl,
+                currentMethod,
+                currentBody,
+                requestHeaders,
+                signal
+              );
+            } catch (error) {
+              if (shouldBackoffEpoxy(error)) rememberEpoxyFailure(currentUrl.origin, error);
+              throw error;
+            }
+
+            response = await normalizeUnityLoaderBlobProgress(response, currentUrl.href);
+            const normalized = normalizeHtmlMime(response, currentUrl.href);
+            const responseHeaders = makeHeaders(normalized.headers);
+            const location = responseHeaders.get('location');
+            if (normalized.status >= 300 && normalized.status < 400 && normalized.status !== 304) {
+              if (!location) throw new Error(`The upstream returned ${normalized.status} without a redirect destination.`);
+              if (redirectCount === 10) throw new Error('The upstream site redirected too many times.');
+
+              await storeRedirectCookies(normalized, currentUrl);
+              const nextUrl = new URL(location, currentUrl);
+              if (!['http:', 'https:'].includes(nextUrl.protocol)) {
+                throw new Error('The upstream returned an unsupported redirect destination.');
+              }
+              if (nextUrl.origin !== currentUrl.origin) {
+                originalHeaders.delete?.('authorization');
+                originalHeaders.delete?.('origin');
+                originalHeaders.delete?.('cookie');
+              }
+              if (
+                normalized.status === 303 ||
+                ((normalized.status === 301 || normalized.status === 302) && currentMethod === 'POST')
+              ) {
+                currentMethod = 'GET';
+                currentBody = null;
+              }
+              currentUrl = nextUrl;
+              continue;
+            }
+
+            const contentType = responseHeaders.get('content-type') || '';
+            if (
+              isScriptUrl(currentUrl) &&
+              currentMethod === 'GET' &&
+              (normalized.status >= 400 || /text\/html/i.test(contentType))
+            ) {
+              try {
+                const fallback = await fetchServerProxyResponse(
+                  currentUrl.href,
+                  currentMethod,
+                  requestHeaders,
+                  null
+                );
+                if (fallback) return responseToTransport(fallback, currentUrl.href);
+              } catch (error) {
+                console.warn('[Scramjet] Script response fallback failed:', error);
+              }
+              throw new Error(`Upstream returned ${normalized.status} ${normalized.statusText || ''} for script ${currentUrl.href}`.trim());
+            }
+
+            return {
+              ...normalized,
+              headers: [...responseHeaders.entries()],
+            };
           }
 
-          return {
-            ...normalized,
-            headers: [...responseHeaders.entries()],
-          };
+          throw new Error('The upstream site redirected too many times.');
         },
       }
     : {

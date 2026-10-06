@@ -33,6 +33,12 @@
         #proxy-shell { position: absolute; top:0; left:0; width:100%; height:100%; display:none; z-index: 10; background:#000; }
         #proxy-frame { width:100%; height:100%; border:none; }
         #proxy-loading { position:fixed; top:0; left:0; width:100%; height:100%; background:#000; color:#fff; display:none; align-items:center; justify-content:center; font-size:1.5rem; text-shadow: 0 0 10px #ff0000; z-index: 15; pointer-events:none; }
+        #proxy-error { position:absolute; inset:0; display:none; align-items:center; justify-content:center; padding:24px; z-index:20; background:#050505; color:#ff4d4d; text-align:center; }
+        #proxy-error[data-visible="true"] { display:flex; }
+        #proxy-error-content { max-width:620px; }
+        #proxy-error h2 { margin-bottom:12px; font-size:clamp(20px,3vw,30px); }
+        #proxy-error p { margin-bottom:18px; color:#ddd; line-height:1.5; }
+        #proxy-error button { margin:0 6px; padding:8px 14px; border:1px solid #ff0000; border-radius:6px; background:#111; color:#ff5555; font:inherit; cursor:pointer; }
         #back-btn { position: fixed; bottom: 12px; right: 15px; top: auto; padding: 5px 12px; font-size: 11px; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); border: 1px solid #ff0000; border-radius: 16px; color: #ff0000; cursor: pointer; z-index: 1001; font-family: inherit; font-weight: bold; text-shadow: 0 0 5px #ff0000; box-shadow: 0 2px 12px rgba(0,0,0,0.6); transition: all 0.2s; display: none; }
         #back-btn:hover { background: #ff0000; color: #fff; box-shadow: 0 0 15px #ff0000; }
         #terminal-shell { padding: 20px; height: 100%; overflow-y: auto; position: relative; z-index: 5; text-shadow: 0 0 5px currentColor; }
@@ -98,6 +104,14 @@
             </div>
             <iframe id="proxy-frame" name="uiqm-proxy-frame" title="UIQM Proxy Frame" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
             <div id="proxy-loading"><pre>   CONNECTING TO TUNNEL...</pre></div>
+            <div id="proxy-error" role="status" aria-live="polite">
+                <div id="proxy-error-content">
+                    <h2>Page did not load</h2>
+                    <p>The proxy received an empty or blocked response. You can retry this address or return to the terminal.</p>
+                    <button type="button" onclick="window.retryProxyPage()">Retry</button>
+                    <button type="button" onclick="closeProxy()">Return to terminal</button>
+                </div>
+            </div>
         </div>
         <div id="terminal-shell">
             <div class="live-status">
@@ -169,6 +183,8 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         document.getElementById('back-btn').style.display = 'none';
         const pl = document.getElementById('proxy-loading');
         if (pl) pl.style.display = 'none';
+        const error = document.getElementById('proxy-error');
+        if (error) error.dataset.visible = 'false';
         document.getElementById('proxy-frame').src = 'about:blank';
         document.getElementById('term-input').focus();
     }
@@ -177,6 +193,7 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         const input = document.getElementById('term-input'), output = document.getElementById('term-output-lines');
         const terminal = document.getElementById('terminal-shell'), frame = document.getElementById('proxy-frame');
         const loading = document.getElementById('proxy-loading'), proxyShell = document.getElementById('proxy-shell');
+        const proxyError = document.getElementById('proxy-error');
         const statusLine = document.getElementById('status-line'), backBtn = document.getElementById('back-btn');
         const canvas = document.getElementById('matrix-canvas');
 
@@ -245,6 +262,10 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 launchProxyUrl(inp.value.trim());
             }
         };
+        window.retryProxyPage = () => {
+            proxyError.dataset.visible = 'false';
+            launchProxyUrl(window._currentProxyUrl || document.getElementById('proxy-nav-input')?.value || 'https://www.google.com/');
+        };
 
         const getRammerheadSession = async () => {
             if (/^[a-f0-9]{32}$/i.test(window._rhSession || '')) return window._rhSession;
@@ -267,6 +288,7 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 ) return 'upstream-block';
                 if (/^\s*(?:Proxy Error:|The proxy could not load this site\.|Scramjet WebAssembly could not be loaded\.)/im.test(text)) return 'proxy-error';
                 if (!doc.location?.href || doc.location.href === 'about:blank') return 'blank';
+                if (!doc.body || (!doc.body.children.length && !doc.body.textContent.trim())) return 'blank';
                 return 'loaded';
             } catch (_) {
                 // A frame the browser treats as cross-origin is already beyond our safe inspection boundary.
@@ -336,14 +358,29 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
             const navigationId = ++proxyNavigationId;
             if (cancelProxyAttempt) cancelProxyAttempt();
             let url = targetUrl.trim();
-            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            if (/^[a-z][a-z\d+.-]*:\/\//i.test(url) && !/^https?:\/\//i.test(url)) {
+                setStatus('Only HTTP and HTTPS pages can be opened.', '#ff4444');
+                print('Enter an HTTP or HTTPS address and try again.', 'system');
+                return;
+            }
+            if (!/^https?:\/\//i.test(url)) {
                 if (url.includes('.') && !url.includes(' ')) {
                     url = 'https://' + url;
                 } else {
                     url = 'https://www.bing.com/search?q=' + encodeURIComponent(url);
                 }
             }
+            try {
+                const parsedUrl = new URL(url);
+                if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Only HTTP and HTTPS pages are supported.');
+                url = parsedUrl.href;
+            } catch (error) {
+                setStatus(error.message || 'Enter a valid web address.', '#ff4444');
+                print('Enter a valid HTTP or HTTPS address and try again.', 'system');
+                return;
+            }
             window._currentProxyUrl = url;
+            proxyError.dataset.visible = 'false';
             try {
                 const targetOrigin = new URL(url).origin;
                 document.cookie = '__active_proxy_origin=' + encodeURIComponent(targetOrigin) + '; Path=/; SameSite=Lax';
@@ -396,6 +433,7 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
 
             if (navigationId !== proxyNavigationId) return;
             stopProxyLoading();
+            proxyError.dataset.visible = 'true';
             setStatus('Could not establish a proxy connection.', '#ff4444');
             print(`Automatic connection attempts failed: ${lastError?.message || 'no proxy route responded'}`, 'system');
         };
