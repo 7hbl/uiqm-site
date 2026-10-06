@@ -100,7 +100,7 @@
             box-shadow: 0 0 20px rgba(255,0,0,0.2);
         }
 
-        .actions { display: flex; gap: 15px; }
+        .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
         .btn {
             padding: 10px 20px;
             background: transparent;
@@ -308,6 +308,7 @@
                     <span id="live-clock" style="margin-left: 10px; border-left: 1px solid rgba(255,0,0,0.3); padding-left: 10px;">--:--:-- --</span>
                 </div>
                 <button class="btn" onclick="openSettings()">SETTINGS</button>
+                <a class="btn" href="https://www.friv.com/" target="_blank" rel="noopener noreferrer" title="Open the official Friv site">FRIV WEBSITE</a>
                 <a href="/" class="btn">TERMINAL</a>
             </div>
         </div>
@@ -421,7 +422,7 @@
         "title": "Subway Surfers",
         "desc": "Dash as fast as you can through subway tracks, dodging oncoming trains and obstacles.",
         "url": "https://raw.githubusercontent.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/200.html",
-        "image": "https://raw.githubusercontent.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/200.jpg"
+        "image": "https://subwaysurfers.com/media/ox2h5tku/subway-surfers-desktop-hero-2020-final.jpg"
     },
     {
         "title": "Super Mario 64",
@@ -2995,13 +2996,18 @@
             }
             
             // Pre-fetch Rammerhead session ID for games
-            fetch('/newsession')
-                .then(r => r.text())
-                .then(id => {
-                    if (id && id.length === 32) window._rhSession = id;
-                })
-                .catch(() => {});
+            ensureRammerheadSession().catch(() => {});
             return proxyReady;
+        };
+
+        const ensureRammerheadSession = async () => {
+            if (/^[a-f0-9]{32}$/i.test(window._rhSession || '')) return window._rhSession;
+            const response = await fetch('/newsession', { cache: 'no-store' });
+            if (!response.ok) throw new Error(`Rammerhead session request failed (${response.status}).`);
+            const session = (await response.text()).trim();
+            if (!/^[a-f0-9]{32}$/i.test(session)) throw new Error('Rammerhead returned an invalid session.');
+            window._rhSession = session;
+            return session;
         };
 
         const renderGames = (filter = '') => {
@@ -3068,9 +3074,18 @@
         };
 
         const launchGame = async (url) => {
-            if (window._proxyReady && !(await window._proxyReady)) {
-                alert('The game proxy could not start. Reload the page and try again.');
-                return;
+            let gameRoute = 'scramjet';
+            try {
+                if (window._proxyReady && !(await window._proxyReady)) throw new Error('Scramjet did not start.');
+            } catch (error) {
+                try {
+                    const session = await ensureRammerheadSession();
+                    gameRoute = `/${session}/`;
+                    console.warn('Scramjet could not start; opening this game through the alternate route.', error);
+                } catch (fallbackError) {
+                    alert(`The game proxy could not start. ${fallbackError.message}`);
+                    return;
+                }
             }
 
             overlay.style.display = 'block';
@@ -3147,7 +3162,7 @@
             } catch(_) {}
 
             frame.removeAttribute('srcdoc');
-            frame.src = sjEncode(url);
+            frame.src = gameRoute === 'scramjet' ? sjEncode(url) : gameRoute + url;
         };
         window.launchGame = launchGame;
 
