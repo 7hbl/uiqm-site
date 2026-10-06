@@ -607,7 +607,9 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       targetUrlStr = 'https://' + targetUrlStr;
     }
 
-    console.log(`[Proxy Server Fallback] Fetching upstream: ${targetUrlStr}`);
+    if (process.env.PROXY_DEBUG === '1') {
+      console.log(`[Proxy Server Fallback] Fetching upstream: ${targetUrlStr}`);
+    }
     
     let parsedTarget;
     try {

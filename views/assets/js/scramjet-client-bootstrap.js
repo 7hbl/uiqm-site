@@ -72,13 +72,13 @@
     codecEncode: (value) => encodeURIComponent(String(value)),
     codecDecode,
     getInjectScripts: (_meta, _handler, script) => [
-      script(new URL('/worker/working.all.js?v=2.7.3', origin).href),
-      script(new URL('/worker/scramjet.wasm.js?v=2.7.3', origin).href),
-      script(new URL('/epoch/index.js?v=2.7.3', origin).href),
-      script(new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.3', origin).href),
+      script(new URL('/worker/working.all.js?v=2.7.4', origin).href),
+      script(new URL('/worker/scramjet.wasm.js?v=2.7.4', origin).href),
+      script(new URL('/epoch/index.js?v=2.7.4', origin).href),
+      script(new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.4', origin).href),
     ],
     getWorkerInjectScripts: (_meta, _type, script) =>
-      script(new URL('/worker/working.all.js?v=2.7.3', origin).href),
+      script(new URL('/worker/working.all.js?v=2.7.4', origin).href),
   };
 
   const createContext = (global) => {

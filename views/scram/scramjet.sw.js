@@ -1,15 +1,15 @@
 // Scramjet service worker integration.
-importScripts('/worker/working.all.js?v=2.7.3');
-importScripts('/epoch/index.js?v=2.7.3');
+importScripts('/worker/working.all.js?v=2.7.4');
+importScripts('/epoch/index.js?v=2.7.4');
 
 const SCRAM_PREFIX = '/worker/';
 const NETWORK_PREFIX = SCRAM_PREFIX + 'network/';
 const ORIGIN = self.location.origin;
-const RUNTIME_SCRIPT_URL = new URL('/worker/working.all.js?v=2.7.3', ORIGIN).href;
+const RUNTIME_SCRIPT_URL = new URL('/worker/working.all.js?v=2.7.4', ORIGIN).href;
 const WASM_SCRIPT_PATH = '/worker/scramjet.wasm.js';
-const WASM_SCRIPT_URL = new URL(`${WASM_SCRIPT_PATH}?v=2.7.3`, ORIGIN).href;
-const EPOXY_SCRIPT_URL = new URL('/epoch/index.js?v=2.7.3', ORIGIN).href;
-const CLIENT_BOOTSTRAP_URL = new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.3', ORIGIN).href;
+const WASM_SCRIPT_URL = new URL(`${WASM_SCRIPT_PATH}?v=2.7.4`, ORIGIN).href;
+const EPOXY_SCRIPT_URL = new URL('/epoch/index.js?v=2.7.4', ORIGIN).href;
+const CLIENT_BOOTSTRAP_URL = new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.4', ORIGIN).href;
 const WISP_URL =
   (self.location.protocol === 'https:' ? 'wss' : 'ws') +
   '://' +
@@ -53,6 +53,8 @@ let epoxyTransport;
 let wasmScriptPromise;
 let workerCookieJar;
 const clientOrigins = new Map();
+const transportBackoffUntil = new Map();
+const TRANSPORT_BACKOFF_MS = 8000;
 
 function makeHeaders(input) {
   if (input instanceof Headers) return new Headers(input);
@@ -102,19 +104,69 @@ function normalizeHtmlMime(response, targetUrl) {
   return { ...response, headers };
 }
 
-function normalizeResourceMime(headers, targetUrl, destination, status = 200) {
-  if (status >= 400) return headers;
+async function responseStartsWithHtml(response) {
+  if (!response?.body || response.bodyUsed) return false;
+
+  let reader;
+  let sample = '';
+  try {
+    reader = response.clone().body?.getReader();
+    if (!reader) return false;
+    const decoder = new TextDecoder();
+    let bytesRead = 0;
+    while (bytesRead < 2048) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytesRead += value.byteLength;
+      sample += decoder.decode(value, { stream: true });
+      if (/<\/?html\b|<!doctype\s+html\b/i.test(sample)) break;
+    }
+  } catch (_) {
+    return false;
+  } finally {
+    reader?.cancel().catch(() => {});
+  }
+
+  const firstMarkup = sample.replace(/^\uFEFF?\s*(?:<!--[\s\S]*?-->\s*)*/, '');
+  return /^(?:<!doctype\s+html\b|<html\b|<head\b|<body\b|<script\b)/i.test(firstMarkup);
+}
+
+async function normalizeResourceResponse(response, targetUrl, destination) {
+  const headers = cleanResponseHeaders(makeHeaders(response.headers));
   let pathname = '';
   try {
     pathname = new URL(targetUrl).pathname.toLowerCase();
   } catch (_) {
-    return headers;
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
   }
 
   const extension = pathname.match(/\.([a-z0-9]+)$/i)?.[1];
   const contentType = headers.get('content-type') || '';
   const replaceUnknownType =
     !contentType || /^(?:text\/plain|application\/octet-stream)(?:\s*;|$)/i.test(contentType);
+  const isDocument =
+    destination === 'document' ||
+    destination === 'iframe' ||
+    /^(?:html?|xhtml)$/i.test(extension || '');
+
+  // Upstream protection pages are often sent with text/plain on 403/429 responses.
+  // Let the browser render those HTML pages, while keeping actual plain-text errors intact.
+  if (isDocument && replaceUnknownType && await responseStartsWithHtml(response)) {
+    headers.set('content-type', 'text/html; charset=UTF-8');
+  }
+
+  if (response.status >= 400) {
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
+
   const fallbackTypes = {
     js: 'application/javascript; charset=UTF-8',
     mjs: 'application/javascript; charset=UTF-8',
@@ -128,20 +180,19 @@ function normalizeResourceMime(headers, targetUrl, destination, status = 200) {
     otf: 'font/otf',
   };
 
-  if (
-    destination === 'document' ||
-    destination === 'iframe' ||
-    /^(?:html?|xhtml)$/i.test(extension || '')
-  ) {
-    headers.set('content-type', 'text/html; charset=UTF-8');
-  } else if (replaceUnknownType && fallbackTypes[extension]) {
+  if (replaceUnknownType && fallbackTypes[extension]) {
     headers.set('content-type', fallbackTypes[extension]);
   } else if (replaceUnknownType && ['script', 'worker', 'sharedworker'].includes(destination)) {
     headers.set('content-type', 'application/javascript; charset=UTF-8');
   } else if (replaceUnknownType && destination === 'style') {
     headers.set('content-type', 'text/css; charset=UTF-8');
   }
-  return headers;
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 function responseToTransport(response, targetUrl) {
@@ -156,6 +207,25 @@ function responseToTransport(response, targetUrl) {
   );
   normalized.headers = [...makeHeaders(normalized.headers).entries()];
   return normalized;
+}
+
+function shouldBackoffEpoxy(error) {
+  const message = String(error?.message || error || '');
+  return /tls handshake|unexpected eof|network error|fetch failed|connection (?:reset|closed|refused)|timed? ?out/i.test(message);
+}
+
+function rememberEpoxyFailure(origin, error) {
+  const existingExpiry = transportBackoffUntil.get(origin) || 0;
+  const expiresAt = Date.now() + TRANSPORT_BACKOFF_MS;
+  transportBackoffUntil.delete(origin);
+  transportBackoffUntil.set(origin, expiresAt);
+  if (transportBackoffUntil.size > 128) {
+    const oldestOrigin = transportBackoffUntil.keys().next().value;
+    transportBackoffUntil.delete(oldestOrigin);
+  }
+  if (existingExpiry <= Date.now()) {
+    console.warn(`[Scramjet] Temporary transport failure for ${new URL(origin).host}; using the server proxy for ${TRANSPORT_BACKOFF_MS / 1000}s.`, error);
+  }
 }
 
 function dataUrlResponse(value) {
@@ -353,13 +423,27 @@ async function initFetchHandler() {
               requestHeaders.set('sec-fetch-mode', 'same-origin');
               requestHeaders.set('sec-fetch-dest', 'empty');
             }
-            let response = await rawTransport.request(
-              currentUrl,
-              currentMethod,
-              currentBody,
-              requestHeaders,
-              signal
-            );
+            const backoffExpiry = transportBackoffUntil.get(currentUrl.origin) || 0;
+            if (backoffExpiry > Date.now()) {
+              const error = new Error('The direct transport is cooling down; retrying through the server proxy.');
+              error.code = 'SCRAM_TRANSPORT_BACKOFF';
+              throw error;
+            }
+            if (backoffExpiry) transportBackoffUntil.delete(currentUrl.origin);
+
+            let response;
+            try {
+              response = await rawTransport.request(
+                currentUrl,
+                currentMethod,
+                currentBody,
+                requestHeaders,
+                signal
+              );
+            } catch (error) {
+              if (shouldBackoffEpoxy(error)) rememberEpoxyFailure(currentUrl.origin, error);
+              throw error;
+            }
             response = await normalizeUnityLoaderBlobProgress(response, currentUrl.href);
             const normalized = normalizeHtmlMime(response, currentUrl.href);
             const responseHeaders = makeHeaders(normalized.headers);
@@ -565,23 +649,18 @@ async function routeProxyRequest(event, proxyUrl, targetUrl, fallbackRequest) {
       clientId: event.clientId || event.resultingClientId,
     });
 
-    const responseHeaders = normalizeResourceMime(
-      makeHeaders(response.headers),
+    return normalizeResourceResponse(
+      toResponse(response),
       targetUrl,
-      event.request.destination,
-      response.status
+      event.request.destination
     );
-    return toResponse({ ...response, headers: responseHeaders });
   } catch (error) {
-    console.error('[Scramjet] Request failed; retrying through the server proxy:', error);
+    if (error?.code !== 'SCRAM_TRANSPORT_BACKOFF') {
+      console.warn('[Scramjet] Request failed; retrying through the server proxy:', error);
+    }
     try {
       const response = await fetchServerProxy(targetUrl, fallbackRequest);
-      const headers = cleanResponseHeaders(makeHeaders(response.headers));
-      return new Response(NULL_BODY_STATUSES.has(response.status) ? null : response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers,
-      });
+      return normalizeResourceResponse(response, targetUrl, event.request.destination);
     } catch (fallbackError) {
       console.error('[Scramjet] Server proxy fallback failed:', fallbackError);
       return new Response('The proxy could not load this site. Please try again.', {
@@ -606,7 +685,7 @@ function encodeBase64(buffer) {
 
 async function wasmScriptResponse() {
   if (!wasmScriptPromise) {
-    wasmScriptPromise = fetch(new URL('/worker/working.wasm.wasm?v=2.7.3', ORIGIN), {
+    wasmScriptPromise = fetch(new URL('/worker/working.wasm.wasm?v=2.7.4', ORIGIN), {
       headers: { 'x-scramjet-bypass': '1' },
     }).then(async (response) => {
       if (!response.ok) throw new Error(`Unable to load Scramjet WebAssembly (${response.status}).`);
