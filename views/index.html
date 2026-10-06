@@ -184,7 +184,10 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         const BARE_MUX_WORKER = '/gmt/worker.js';
         const TRANSPORT_MJS = '/epoch/index.mjs';
 
-        const proxyEngineOrder = ['sj', 'direct', 'rh'];
+        // Automatic browsing should use full proxy engines that rewrite page
+        // resources and redirects. The server's /proxy route only fetches the
+        // top-level response and leaves page URLs untouched.
+        const proxyEngineOrder = ['sj', 'rh'];
         let proxyNavigationId = 0;
         let cancelProxyAttempt = null;
         window.cancelProxyNavigation = () => {
