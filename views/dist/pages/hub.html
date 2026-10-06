@@ -8,26 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
-    <script src="/gmt/index.js"></script>
     <script src="/assets/js/core.js"></script>
-    <script>
-        window._proxyReady = (async () => {
-            const clearDB = (name) => new Promise(res => {
-                const r = indexedDB.deleteDatabase(name);
-                r.onsuccess = r.onerror = r.onblocked = () => res();
-            });
-            try {
-                await clearDB('__sj'); await clearDB('sj');
-            } catch (_) {}
-            await new Promise((resolve, reject) => {
-                const s = document.createElement('script');
-                s.src = '/worker/working.all.js';
-                s.onload = resolve;
-                s.onerror = () => reject(new Error('Failed to load proxy engine'));
-                document.head.appendChild(s);
-            });
-        })();
-    </script>
     <style>
         :root {
             --glow: #ff0000;
@@ -350,7 +331,7 @@
             <button class="tool-btn" onclick="toggleFullscreen()">FULLSCREEN</button>
             <button class="tool-btn" onclick="closeGame()" style="border-color: #ff0000; color: #ff0000;">EXIT</button>
         </div>
-        <iframe id="proxy-frame" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen; gamepad" allowfullscreen></iframe>
+        <iframe id="proxy-frame" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen; gamepad"></iframe>
     </div>
 
     <div id="settings-modal">
@@ -2979,29 +2960,35 @@
     }
 ];
 
-        let sjEncode = url => '/worker/network/' + encodeURIComponent(url);
+        const sjEncode = url => '/worker/network/' + encodeURIComponent(url);
         const grid = document.getElementById('games-grid');
         const search = document.getElementById('search-input');
         const overlay = document.getElementById('proxy-overlay');
         const frame = document.getElementById('proxy-frame');
 
-        const BARE_MUX_WORKER = '/gmt/worker.js', TRANSPORT_MJS = '/unix/index.mjs';
-        const SCRAMJET_PREFIX = '/worker/network/', WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
-        const WORKER_ROOT = '/worker/';
-
         const initProxy = async () => {
+            let proxyReady = false;
             try {
                 if ('serviceWorker' in navigator) {
-                    await navigator.serviceWorker.register('/worker/working.sw.js?v=2.6.2', { scope: '/', updateViaCache: 'none' })
-                        .catch(() => navigator.serviceWorker.register('/worker/working.sw.js?v=2.6.2', { scope: '/worker/' }));
-                    
-                    const script = document.createElement('script');
-                    script.src = '/worker/working.all.js';
-                    document.head.appendChild(script);
-                    script.onload = () => {
-                        console.log('Scramjet v2 Engine Loaded');
-                        sjEncode = url => WORKER_ROOT + 'network/' + encodeURIComponent(url);
-                    };
+                    const registration = await navigator.serviceWorker.register(
+                        '/worker/working.sw.js?v=2.7.2',
+                        { scope: '/', updateViaCache: 'none' }
+                    );
+                    await registration.update().catch(() => {});
+                    await navigator.serviceWorker.ready;
+                    if (!navigator.serviceWorker.controller) {
+                        await new Promise(resolve => {
+                            navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
+                            setTimeout(resolve, 3000);
+                        });
+                    }
+                    if (!navigator.serviceWorker.controller) {
+                        throw new Error('The site proxy worker did not take control of this page.');
+                    }
+                    proxyReady = true;
+                    console.log('Scramjet proxy ready');
+                } else {
+                    throw new Error('This browser does not support service workers.');
                 }
             } catch (e) {
                 console.warn('Service Worker initialization note:', e);
@@ -3017,6 +3004,7 @@
                     if (id && id.length === 32) window._rhSession = id;
                 })
                 .catch(() => {});
+            return proxyReady;
         };
 
         const renderGames = (filter = '') => {
@@ -3082,7 +3070,12 @@
             }
         };
 
-        const launchGame = (url) => {
+        const launchGame = async (url) => {
+            if (window._proxyReady && !(await window._proxyReady)) {
+                alert('The game proxy could not start. Reload the page and try again.');
+                return;
+            }
+
             overlay.style.display = 'block';
             const gl = document.getElementById('game-loader');
             if (gl) {
@@ -3120,25 +3113,6 @@
                     if (statusSub) statusSub.textContent = 'DOWNLOADING ASSETS (Large WebGL game unpacking in memory)...';
                 }
             }, 300);
-
-            frame.onload = () => {
-                try {
-                    const doc = frame.contentDocument || frame.contentWindow?.document;
-                    if (doc) {
-                        const cat = doc.getElementById('spinning-logo');
-                        if (cat) cat.remove();
-                        const note = doc.getElementById('note');
-                        if (note) note.textContent = 'DOWNLOADING...';
-                        const style = doc.createElement('style');
-                        style.textContent = '#spinning-logo { display: none !important; width: 0 !important; height: 0 !important; opacity: 0 !important; visibility: hidden !important; } #note { color: #ff3333 !important; font-family: monospace, sans-serif !important; font-size: 16px !important; letter-spacing: 2px !important; text-transform: uppercase !important; font-weight: bold !important; }';
-                        doc.head?.appendChild(style);
-                        // Check if canvas is already present on initial load
-                        if (doc.querySelector('canvas')) {
-                            setTimeout(hideLoader, 500);
-                        }
-                    }
-                } catch(_) {}
-            };
 
             // Set cookie for active proxy origin
             try {
@@ -3237,7 +3211,7 @@
         }
 
         renderGames();
-        initProxy();
+        window._proxyReady = initProxy();
     </script>
 </body>
 </html>

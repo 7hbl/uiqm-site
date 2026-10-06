@@ -30,6 +30,6 @@ import puppeteer from 'puppeteer';
   await page.goto('https://uiqm.lol/worker/network/https%3A%2F%2Fwww.youtube.com%2F', { waitUntil: 'networkidle2', timeout: 30000 }).catch(e => console.log('Err:', e.message));
 
   await new Promise(r => setTimeout(r, 6000));
-  await page.screenshot({ path: 'scratch/yt_failed_details.png' });
+  await page.screenshot({ path: 'tools/diagnostics/screenshots/yt_failed_details.png' });
   await browser.close();
 })();

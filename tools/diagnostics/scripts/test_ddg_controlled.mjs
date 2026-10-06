@@ -44,8 +44,8 @@ import puppeteer from 'puppeteer';
         }
     }
     
-    await page.screenshot({ path: 'tools/maintenance/ddg_controlled.png' });
-    console.log('Saved tools/maintenance/ddg_controlled.png');
+    await page.screenshot({ path: 'tools/diagnostics/screenshots/ddg_controlled.png' });
+    console.log('Saved tools/diagnostics/screenshots/ddg_controlled.png');
     
     await browser.close();
 })();

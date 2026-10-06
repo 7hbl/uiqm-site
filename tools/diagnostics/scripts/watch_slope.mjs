@@ -30,8 +30,8 @@ import puppeteer from 'puppeteer';
       if (ready) {
         console.log('Slope Canvas initialized!', ready, 'after', s + 1, 'seconds');
         await new Promise(r => setTimeout(r, 6000));
-        await page.screenshot({ path: 'scratch/slope_gameplay_live.png' });
-        console.log('Saved scratch/slope_gameplay_live.png');
+        await page.screenshot({ path: 'tools/diagnostics/screenshots/slope_gameplay_live.png' });
+        console.log('Saved tools/diagnostics/screenshots/slope_gameplay_live.png');
         break;
       }
     }

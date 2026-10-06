@@ -1,920 +1,639 @@
-// Scramjet v2 Service Worker - v2.6.2 (High Compatibility & Resilience)
+// Scramjet service worker integration.
 importScripts('/worker/working.all.js');
 importScripts('/epoch/index.js');
 
-// Server maps: scram/ -> worker/ so the external URL is /worker/
 const SCRAM_PREFIX = '/worker/';
-const WISP_URL = (self.location.protocol === 'https:' ? 'wss' : 'ws') + '://' + self.location.host + '/cron/';
+const NETWORK_PREFIX = SCRAM_PREFIX + 'network/';
 const ORIGIN = self.location.origin;
+const RUNTIME_SCRIPT_URL = new URL('/worker/working.all.js?v=2.7.2', ORIGIN).href;
+const WASM_SCRIPT_PATH = '/worker/scramjet.wasm.js';
+const WASM_SCRIPT_URL = new URL(`${WASM_SCRIPT_PATH}?v=2.7.2`, ORIGIN).href;
+const EPOXY_SCRIPT_URL = new URL('/epoch/index.js?v=2.7.2', ORIGIN).href;
+const CLIENT_BOOTSTRAP_URL = new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.2', ORIGIN).href;
+const WISP_URL =
+  (self.location.protocol === 'https:' ? 'wss' : 'ws') +
+  '://' +
+  self.location.host +
+  '/cron/';
 
-let handler;
-let epoxy = null;
-let lastUpstreamOrigin = 'https://www.youtube.com';
-const clientOriginMap = new Map();
-
-function rememberClientOrigin(event, origin) {
-    try {
-        const normalizedOrigin = new URL(origin).origin;
-        // event.clientId identifies the page that made the request. For a
-        // subresource, that page's origin is not necessarily the resource's
-        // origin, so only associate origins with the document created by a
-        // navigation.
-        const clientId = event.resultingClientId ||
-            (event.request.mode === 'navigate' ? event.clientId : null);
-        if (clientId) clientOriginMap.set(clientId, normalizedOrigin);
-    } catch (_) {}
-}
-
-globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || (() => {});
-
-async function getEpoxy() {
-    if (epoxy && epoxy.ready) return epoxy;
-    try {
-        const EpoxyTransport = self.EpoxyTransport || (self.EpxMod && (self.EpxMod.default || self.EpxMod.EpoxyTransport || self.EpxMod));
-        if (EpoxyTransport && (typeof EpoxyTransport === 'function' || typeof EpoxyTransport.prototype?.init === 'function')) {
-            const t = new EpoxyTransport({ wisp: WISP_URL });
-            await t.init();
-            epoxy = t;
-            return epoxy;
-        }
-    } catch(e) { console.warn('[SW] Epoxy init failed:', e); }
-    return null;
-}
-
-function isScriptUrl(url) {
-    try {
-        const pathname = new URL(url).pathname;
-        return /\.(?:m?js)$/.test(pathname) || pathname.includes('/js/');
-    } catch (_) {
-        return false;
-    }
-}
-
-async function fetchServerProxyResponse(url, method, headers, body) {
-    const response = await fetch('/proxy/' + encodeURIComponent(url), {
-        method,
-        headers,
-        body: ['GET', 'HEAD'].includes(method) ? null : body
-    });
-    const contentType = response.headers.get('content-type') || '';
-    if (!response.ok || /text\/html/i.test(contentType)) return null;
-    return response;
-}
-
-// Headers that must be stripped from every proxied response to allow iframe embedding
-const BLOCKED_HEADERS = [
-    'x-frame-options',
-    'content-security-policy',
-    'content-security-policy-report-only',
-    'cross-origin-opener-policy',
-    'cross-origin-embedder-policy',
-    'cross-origin-resource-policy',
-    'x-content-type-options'
+const INTERNAL_PREFIXES = [
+  '/assets/',
+  '/archive/',
+  '/baremux/',
+  '/chii/',
+  '/cron/',
+  '/epoxy/',
+  '/epoch/',
+  '/gmt/',
+  '/libcurl/',
+  '/scram/',
+  '/unix/',
+  '/uv/',
 ];
+const INTERNAL_FILES = new Set([
+  '/favicon.ico',
+  '/manifest.json',
+  '/robots.txt',
+  '/sitemap.xml',
+  '/browserconfig.xml',
+]);
+const BLOCKED_RESPONSE_HEADERS = [
+  'content-security-policy',
+  'content-security-policy-report-only',
+  'cross-origin-embedder-policy',
+  'cross-origin-opener-policy',
+  'cross-origin-resource-policy',
+  'x-content-type-options',
+  'x-frame-options',
+];
+const NULL_BODY_STATUSES = new Set([204, 205, 304]);
 
-function sanitizeHeaders(h) {
-    BLOCKED_HEADERS.forEach(name => h.delete(name));
-    h.set('access-control-allow-origin', '*');
-    h.set('access-control-allow-methods', 'GET, POST, OPTIONS, PUT, DELETE');
-    h.set('access-control-allow-headers', '*');
-    return h;
+let fetchHandler;
+let epoxyTransport;
+let wasmScriptPromise;
+let workerCookieJar;
+const clientOrigins = new Map();
+
+function makeHeaders(input) {
+  if (input instanceof Headers) return new Headers(input);
+  const headers = new Headers();
+  if (!input) return headers;
+
+  try {
+    if (Array.isArray(input)) {
+      for (const [name, value] of input) headers.append(name, value);
+    } else if (typeof input.forEach === 'function') {
+      input.forEach((value, name) => headers.set(name, value));
+    } else if (typeof input[Symbol.iterator] === 'function') {
+      for (const [name, value] of input) headers.set(name, value);
+    } else {
+      for (const [name, value] of Object.entries(input)) {
+        if (value !== undefined && value !== null) headers.set(name, String(value));
+      }
+    }
+  } catch (_) {}
+
+  return headers;
 }
 
-// Status codes that must not have a response body per spec
-const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
+function cleanResponseHeaders(headers) {
+  for (const name of BLOCKED_RESPONSE_HEADERS) headers.delete(name);
+  return headers;
+}
+
+function htmlFileUrl(url) {
+  try {
+    return /\.(?:html?|xhtml)$/i.test(new URL(url).pathname);
+  } catch (_) {
+    return false;
+  }
+}
+
+function normalizeHtmlMime(response, targetUrl) {
+  const headers = makeHeaders(response.headers);
+  const contentType = headers.get('content-type') || '';
+  if (
+    htmlFileUrl(targetUrl) &&
+    (!contentType || /^(?:text\/plain|application\/octet-stream)(?:\s*;|$)/i.test(contentType))
+  ) {
+    headers.set('content-type', 'text/html; charset=UTF-8');
+  }
+  return { ...response, headers };
+}
+
+function normalizeResourceMime(headers, targetUrl, destination) {
+  let pathname = '';
+  try {
+    pathname = new URL(targetUrl).pathname.toLowerCase();
+  } catch (_) {
+    return headers;
+  }
+
+  const extension = pathname.match(/\.([a-z0-9]+)$/i)?.[1];
+  const contentType = headers.get('content-type') || '';
+  const replaceUnknownType =
+    !contentType || /^(?:text\/plain|application\/octet-stream)(?:\s*;|$)/i.test(contentType);
+  const fallbackTypes = {
+    js: 'application/javascript; charset=UTF-8',
+    mjs: 'application/javascript; charset=UTF-8',
+    css: 'text/css; charset=UTF-8',
+    wasm: 'application/wasm',
+    json: 'application/json; charset=UTF-8',
+    svg: 'image/svg+xml',
+    woff: 'font/woff',
+    woff2: 'font/woff2',
+    ttf: 'font/ttf',
+    otf: 'font/otf',
+  };
+
+  if (
+    destination === 'document' ||
+    destination === 'iframe' ||
+    /^(?:html?|xhtml)$/i.test(extension || '')
+  ) {
+    headers.set('content-type', 'text/html; charset=UTF-8');
+  } else if (replaceUnknownType && fallbackTypes[extension]) {
+    headers.set('content-type', fallbackTypes[extension]);
+  } else if (replaceUnknownType && ['script', 'worker', 'sharedworker'].includes(destination)) {
+    headers.set('content-type', 'application/javascript; charset=UTF-8');
+  } else if (replaceUnknownType && destination === 'style') {
+    headers.set('content-type', 'text/css; charset=UTF-8');
+  }
+  return headers;
+}
+
+function responseToTransport(response, targetUrl) {
+  const normalized = normalizeHtmlMime(
+    {
+      body: response.body,
+      headers: response.headers,
+      status: response.status,
+      statusText: response.statusText,
+    },
+    targetUrl
+  );
+  normalized.headers = [...makeHeaders(normalized.headers).entries()];
+  return normalized;
+}
+
+function dataUrlResponse(value) {
+  const comma = value.indexOf(',');
+  if (!value.startsWith('data:') || comma < 5) throw new TypeError('Invalid data URL.');
+
+  const metadata = value.slice(5, comma);
+  const content = value.slice(comma + 1);
+  const parts = metadata.split(';');
+  const mediaType = parts.shift() || 'text/plain';
+  const isBase64 = parts.some((part) => part.toLowerCase() === 'base64');
+  const parameters = parts.filter((part) => part && part.toLowerCase() !== 'base64');
+  const contentType = mediaType + (parameters.length ? `;${parameters.join(';')}` : '');
+  let bytes;
+
+  if (isBase64) {
+    let base64 = decodeURIComponent(content).replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
+    base64 += '='.repeat((4 - (base64.length % 4)) % 4);
+    const binary = atob(base64);
+    bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  } else {
+    bytes = new TextEncoder().encode(decodeURIComponent(content));
+  }
+
+  return new Response(bytes, {
+    headers: { 'content-type': contentType },
+  });
+}
 
 function toResponse(raw) {
-    const status = raw.status || 200;
-    const nullBody = NULL_BODY_STATUSES.has(status);
-
-    if (raw instanceof Response) {
-        const h = new Headers(raw.headers);
-        sanitizeHeaders(h);
-        return new Response(nullBody ? null : raw.body, {
-            status,
-            statusText: raw.statusText,
-            headers: h
-        });
-    }
-    const h = new Headers();
-    try {
-        const hdrs = raw.headers;
-        if (hdrs) {
-            if (typeof hdrs.forEach === 'function') hdrs.forEach((v, k) => h.set(k, v));
-            else if (typeof hdrs.entries === 'function') { for (const [k, v] of hdrs.entries()) h.set(k, v); }
-            else if (typeof hdrs[Symbol.iterator] === 'function') { for (const [k, v] of hdrs) h.set(k, v); }
-            else { for (const k in hdrs) h.set(k, String(hdrs[k])); }
-        }
-    } catch(e) {}
-    if (!nullBody && !h.has('content-type')) h.set('content-type', 'text/html; charset=UTF-8');
-    sanitizeHeaders(h);
-    return new Response(nullBody ? null : (raw.body || null), {
-        status,
-        statusText: raw.statusText || 'OK',
-        headers: h
-    });
+  const status = Number(raw.status) || 200;
+  const headers = cleanResponseHeaders(makeHeaders(raw.headers));
+  const body = NULL_BODY_STATUSES.has(status) ? null : raw.body || null;
+  return new Response(body, {
+    status,
+    statusText: raw.statusText || 'OK',
+    headers,
+  });
 }
 
-// Safe URL parser — never throws, always returns a URL object
-function safeURL(str, base) {
-    if (str instanceof URL) return str;
-    if (!str || typeof str !== 'string') return new URL(base || (ORIGIN + '/'));
-    try { return new URL(str); } catch(_) {}
-    try { return new URL(str, base || ORIGIN); } catch(_) {}
-    return new URL(ORIGIN + '/');
+function isInternalRequest(url) {
+  if (url.origin !== ORIGIN) return false;
+  return (
+    INTERNAL_FILES.has(url.pathname) ||
+    INTERNAL_PREFIXES.some((prefix) => url.pathname.startsWith(prefix)) ||
+    /^\/worker\/working\.(?:all|sw|wasm\.wasm)/.test(url.pathname)
+  );
 }
 
-function extractTargetFromScram(s) {
-    if (!s || typeof s !== 'string') return null;
-    if (s.includes('/worker/network/')) {
-        let part = s.split('/worker/network/')[1];
-        if (!part) return null;
-        try { part = decodeURIComponent(part); } catch(_) {}
-        if (!part.includes('://')) part = 'https://' + part;
-        return part;
-    }
-    if (s.includes('/worker/')) {
-        let part = s.split('/worker/')[1];
-        if (!part) return null;
-        if (/^(?:https?%3A|https?:\/\/)/i.test(part)) {
-            try { part = decodeURIComponent(part); } catch(_) {}
-            if (!part.includes('://')) part = 'https://' + part;
-            return part;
-        }
-    }
+function extractTargetFromScram(value) {
+  try {
+    const url = value instanceof URL ? value : new URL(value, ORIGIN);
+    if (url.origin !== ORIGIN || !url.pathname.startsWith(NETWORK_PREFIX)) return null;
+
+    const encodedTarget = url.pathname.slice(NETWORK_PREFIX.length);
+    const decodedTarget = decodeURIComponent(encodedTarget);
+    const target = new URL(decodedTarget);
+    if (!['http:', 'https:', 'blob:', 'data:'].includes(target.protocol)) return null;
+    return target;
+  } catch (_) {
     return null;
+  }
 }
 
-function fixBlockedMirrors(urlStr) {
-    if (!urlStr || typeof urlStr !== 'string') return urlStr;
-    let s = urlStr;
-    try { s = decodeURIComponent(s); } catch(_) {}
-    try { s = decodeURIComponent(s); } catch(_) {}
-    return s
-        .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/$1/$2/$3/')
-        .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)\//gi, 'https://raw.githack.com/$1/$2/master/')
-        .replace(/https?:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'data:application/javascript,//mobile.js');
+function getClientOrigin(event) {
+  const knownOrigin = event.clientId && clientOrigins.get(event.clientId);
+  if (knownOrigin) return knownOrigin;
+
+  const referrerTarget = event.request.referrer
+    ? extractTargetFromScram(event.request.referrer)
+    : null;
+  if (referrerTarget) {
+    if (event.clientId) rememberClientOrigin(event.clientId, referrerTarget.origin);
+    return referrerTarget.origin;
+  }
+  return null;
 }
 
-const GLOBAL_SHIM = `
-(function() {
-    if (globalThis.$scramjet$initialized) return;
-    globalThis.$scramjet$initialized = true;
-    globalThis.$scramerr = globalThis.$scramerr || ((e) => {});
-    globalThis.$scramdbg = globalThis.$scramdbg || ((i, e) => e);
-    globalThis.$scramjet$prop = (p) => p;
-    globalThis.$scramjet$wrap = (o) => o;
-    globalThis.$scramjet$get = globalThis.$scramjet$get || ((o, p) => {
-        if (!o) return undefined;
-        try { return o[p]; } catch(_) { return undefined; }
-    });
-    globalThis.$scramjet$call = globalThis.$scramjet$call || ((o, p, a) => {
-        try { const fn = o && o[p]; return typeof fn === 'function' ? fn.apply(o, a) : undefined; } catch(_) { return undefined; }
-    });
-    globalThis.$scramjet$apply = globalThis.$scramjet$apply || ((o, p, a) => (globalThis.$scramjet$call ? globalThis.$scramjet$call(o, p, a) : undefined));
-    globalThis.$scramjet$set = globalThis.$scramjet$set || ((o, p, v) => { try { if (o && p !== 'undefined') o[p] = v; } catch(_) {} return v; });
-    globalThis.$scramjet$clean = (...a) => a;
-    globalThis.$scramjet$tryset = (o, p, v) => { try { o[p] = v; } catch(_) {} return v; };
-    globalThis.$scramjet$pushsourcemap = () => {};
-    var _createPostMessageFn = function(target) {
-        var fn = function(message, targetOrigin, transfer) {
-            try {
-                if (target && typeof target.postMessage === 'function') {
-                    return target.postMessage(message, '*', transfer);
-                }
-            } catch(_) {}
-        };
-        fn.postMessage = fn;
-        return fn;
-    };
-    globalThis.$scramjet$wrappostmessage = function(target, message, targetOrigin, transfer) {
-        if (arguments.length > 1) {
-            return _createPostMessageFn(target)(message, targetOrigin, transfer);
-        }
-        return _createPostMessageFn(target);
-    };
-    globalThis.$scramjet$wrapfunction = globalThis.$scramjet$wrapfunction || ((fn) => fn);
-    globalThis.$scramjet$wrapworker = globalThis.$scramjet$wrapworker || ((w) => w);
-    globalThis.$scramjet$wrapwindow = globalThis.$scramjet$wrapwindow || ((w) => w);
-    globalThis.$scramjet$wrapelement = globalThis.$scramjet$wrapelement || ((el) => el);
-
-    // YouTube Kevlar / Closure & Polymer DOM compatibility shims
-    if (typeof window !== 'undefined') {
-        try {
-            var _decodeTargetUrl = function(val) {
-                if (typeof val === 'string' && val.includes('/worker/network/')) {
-                    try {
-                        var idx = val.indexOf('/worker/network/');
-                        var target = val.slice(idx + 16);
-                        target = decodeURIComponent(target);
-                        if (!target.includes('://')) target = 'https://' + target;
-                        return target;
-                    } catch(_) {}
-                }
-                return val;
-            };
-
-            if (typeof HTMLScriptElement !== 'undefined') {
-                var scriptDesc = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
-                if (scriptDesc && scriptDesc.get) {
-                    var origScriptGet = scriptDesc.get;
-                    Object.defineProperty(HTMLScriptElement.prototype, 'src', {
-                        get: function() {
-                            return _decodeTargetUrl(origScriptGet.call(this));
-                        },
-                        set: function(v) {
-                            return scriptDesc.set.call(this, v);
-                        },
-                        configurable: true,
-                        enumerable: true
-                    });
-                }
-            }
-
-            if (typeof HTMLLinkElement !== 'undefined') {
-                var linkDesc = Object.getOwnPropertyDescriptor(HTMLLinkElement.prototype, 'href');
-                if (linkDesc && linkDesc.get) {
-                    var origLinkGet = linkDesc.get;
-                    Object.defineProperty(HTMLLinkElement.prototype, 'href', {
-                        get: function() {
-                            return _decodeTargetUrl(origLinkGet.call(this));
-                        },
-                        set: function(v) {
-                            return linkDesc.set.call(this, v);
-                        },
-                        configurable: true,
-                        enumerable: true
-                    });
-                }
-            }
-
-            if (typeof Element !== 'undefined' && Element.prototype && Element.prototype.getAttribute) {
-                var origGetAttr = Element.prototype.getAttribute;
-                Element.prototype.getAttribute = function(name) {
-                    var val = origGetAttr.call(this, name);
-                    if ((name === 'src' || name === 'href') && typeof val === 'string') {
-                        return _decodeTargetUrl(val);
-                    }
-                    return val;
-                };
-            }
-        } catch(_) {}
+function rememberClientOrigin(clientId, origin) {
+  if (!clientId || !origin) return;
+  try {
+    clientOrigins.set(clientId, new URL(origin).origin);
+    if (clientOrigins.size > 512) {
+      clientOrigins.delete(clientOrigins.keys().next().value);
     }
-})();`;
-
-const SCRIPT_HEADER = GLOBAL_SHIM;
-
-function injectScriptHeader(code) {
-    if (typeof code !== 'string') return code;
-    const strictMatch = code.match(/^\s*(['"])use strict\1;?/);
-    if (strictMatch) {
-        return `${strictMatch[0]}\n${SCRIPT_HEADER}\n${code.slice(strictMatch[0].length)}`;
-    }
-    return `${SCRIPT_HEADER}\n${code}`;
+  } catch (_) {}
 }
 
-async function initHandler() {
-    if (handler) return handler;
-    const { ScramjetFetchHandler, defaultConfig } = self.$scramjet;
+function encodeProxyUrl(targetUrl) {
+  return new URL(NETWORK_PREFIX + encodeURIComponent(targetUrl), ORIGIN);
+}
 
-    const rawEpoxy = await getEpoxy();
-    const transport = rawEpoxy ? {
-        ...rawEpoxy,
+function pickProxyHeaders(source) {
+  const headers = new Headers();
+  source.forEach((value, name) => {
+    const lowerName = name.toLowerCase();
+    if (
+      [
+        'accept',
+        'accept-language',
+        'authorization',
+        'content-type',
+        'if-modified-since',
+        'if-none-match',
+        'range',
+        'referer',
+        'x-requested-with',
+      ].includes(lowerName) ||
+      lowerName.startsWith('x-goog-') ||
+      lowerName.startsWith('x-youtube-')
+    ) {
+      try {
+        headers.set(name, value);
+      } catch (_) {}
+    }
+  });
+  return headers;
+}
+
+async function fetchServerProxy(targetUrl, request) {
+  const method = request.method || 'GET';
+  const init = {
+    method,
+    headers: pickProxyHeaders(request.headers),
+    redirect: 'follow',
+  };
+
+  if (!['GET', 'HEAD'].includes(method)) {
+    init.body = request.body || null;
+    if (init.body && typeof init.body.getReader === 'function') init.duplex = 'half';
+  }
+
+  return fetch('/proxy/' + encodeURIComponent(targetUrl), init);
+}
+
+async function fetchServerProxyResponse(targetUrl, method, headers, body) {
+  const init = {
+    method,
+    headers: pickProxyHeaders(makeHeaders(headers)),
+    redirect: 'follow',
+  };
+  if (!['GET', 'HEAD'].includes(method)) {
+    init.body = body || null;
+    if (init.body && typeof init.body.getReader === 'function') init.duplex = 'half';
+  }
+
+  const response = await fetch('/proxy/' + encodeURIComponent(targetUrl), init);
+  if (!response.ok || /text\/html/i.test(response.headers.get('content-type') || '')) {
+    return null;
+  }
+  return response;
+}
+
+async function getEpoxyTransport() {
+  if (epoxyTransport) return epoxyTransport;
+  const Transport =
+    self.EpoxyTransport ||
+    (self.EpxMod && (self.EpxMod.default || self.EpxMod.EpoxyTransport || self.EpxMod));
+  if (!Transport) return null;
+
+  try {
+    const transport = new Transport({ wisp: WISP_URL });
+    await transport.init();
+    epoxyTransport = transport;
+    return epoxyTransport;
+  } catch (error) {
+    console.warn('[Scramjet] Epoxy transport unavailable; using the server proxy.', error);
+    return null;
+  }
+}
+
+async function initFetchHandler() {
+  if (fetchHandler) return fetchHandler;
+
+  const { ScramjetFetchHandler, defaultConfig, CookieJar } = self.$scramjet;
+  const rawTransport = await getEpoxyTransport();
+  const transport = rawTransport
+    ? {
+        ...rawTransport,
         async request(remote, method, body, headers, signal) {
-            let currentUrl = remote;
-            let currentMethod = (method || 'GET').toUpperCase();
-            let currentBody = ['GET', 'HEAD'].includes(currentMethod) ? null : body;
-            let redirects = 0;
-            let res = null;
+          let currentUrl = new URL(remote.href || String(remote));
+          let currentMethod = (method || 'GET').toUpperCase();
+          let currentBody = ['GET', 'HEAD'].includes(currentMethod) ? null : body;
 
-            while (redirects < 6) {
-                let hdrs = (headers instanceof Headers) ? new Headers(headers) : new Headers(headers || {});
-                if (currentUrl && currentUrl.href) {
-                    const fixed = fixBlockedMirrors(currentUrl.href);
-                    if (fixed !== currentUrl.href) {
-                        try { currentUrl = new URL(fixed); } catch(_) {}
-                    }
-                }
-                const host = (currentUrl && currentUrl.hostname) ? currentUrl.hostname : '';
-                if (host.includes('youtube.com') || host.includes('googleapis.com') || host.includes('googlevideo.com') || host.includes('gstatic.com')) {
-                    hdrs.set('origin', 'https://www.youtube.com');
-                    hdrs.set('referer', 'https://www.youtube.com/');
-                } else if (currentUrl && currentUrl.origin && currentUrl.origin.startsWith('http')) {
-                    if (!hdrs.has('origin') && !['GET', 'HEAD'].includes(currentMethod)) {
-                        hdrs.set('origin', currentUrl.origin);
-                    }
-                    if (!hdrs.has('referer')) {
-                        hdrs.set('referer', currentUrl.origin + '/');
-                    }
-                }
-                hdrs.delete('accept-encoding');
-                hdrs.set('accept-encoding', 'identity');
+          for (let redirects = 0; redirects < 8; redirects++) {
+            const response = await rawTransport.request(
+              currentUrl,
+              currentMethod,
+              currentBody,
+              headers,
+              signal
+            );
+            const normalized = normalizeHtmlMime(response, currentUrl.href);
+            const responseHeaders = makeHeaders(normalized.headers);
+            const location = responseHeaders.get('location');
 
-                try {
-                    if (
-                        currentMethod === 'GET' && currentUrl && currentUrl.pathname === '/' &&
-                        (currentUrl.hostname === 'youtube.com' || currentUrl.hostname.endsWith('.youtube.com'))
-                    ) {
-                        const pageResponse = await fetch('/proxy/' + encodeURIComponent(currentUrl.href), {
-                            method: currentMethod,
-                            headers: hdrs,
-                            credentials: 'include'
-                        });
-                        return {
-                            body: pageResponse.body || null,
-                            headers: pageResponse.headers,
-                            status: pageResponse.status || 200,
-                            statusText: pageResponse.statusText || 'OK'
-                        };
-                    }
+            if (normalized.status >= 300 && normalized.status < 400 && location) {
+              currentUrl = new URL(location, currentUrl);
+              currentMethod = 'GET';
+              currentBody = null;
+              continue;
+            }
 
-                    res = await rawEpoxy.request(currentUrl, currentMethod, currentBody, hdrs, signal);
-                } catch(err) {
-                    console.warn('[SW Transport] Epoxy error, trying server fallback:', err.message);
-                    try {
-                        const sProxy = await fetch('/proxy/' + encodeURIComponent(currentUrl.href), {
-                            method: currentMethod,
-                            headers: hdrs,
-                            body: currentBody
-                        });
-                        return {
-                            body: sProxy.body || null,
-                            headers: (sProxy.headers instanceof Headers) ? sProxy.headers : new Headers(sProxy.headers || {}),
-                            status: sProxy.status || 200,
-                            statusText: sProxy.statusText || 'OK'
-                        };
-                    } catch(_) {
-                        throw err;
-                    }
-                }
-
-                const status = res.status || 200;
-                let loc = null;
-                if (res.headers) {
-                    if (typeof res.headers.get === 'function') loc = res.headers.get('location');
-                    else if (res.headers['location']) loc = res.headers['location'];
-                }
-
-                if (status >= 300 && status < 400 && loc) {
-                    redirects++;
-                    try {
-                        currentUrl = new URL(loc, currentUrl.href || currentUrl);
-                        currentMethod = 'GET';
-                        currentBody = null;
-                        continue;
-                    } catch(_) {
-                        break;
-                    }
-                }
-
-                const responseContentType = res.headers && typeof res.headers.get === 'function'
-                    ? (res.headers.get('content-type') || '')
-                    : (res.headers && (res.headers['content-type'] || res.headers['Content-Type'])) || '';
-                if (isScriptUrl(currentUrl.href || currentUrl) && /text\/html/i.test(responseContentType)) {
-                    try {
-                        const serverResponse = await fetchServerProxyResponse(
-                            currentUrl.href || currentUrl,
-                            currentMethod,
-                            hdrs,
-                            currentBody
-                        );
-                        if (serverResponse) {
-                            return {
-                                body: serverResponse.body || null,
-                                headers: serverResponse.headers,
-                                status: serverResponse.status || 200,
-                                statusText: serverResponse.statusText || 'OK'
-                            };
-                        }
-                    } catch (err) {
-                        console.warn('[SW Transport] Script fallback failed:', err.message);
-                    }
-                }
-                break;
+            const contentType = responseHeaders.get('content-type') || '';
+            if (
+              isScriptUrl(currentUrl) &&
+              /text\/html/i.test(contentType) &&
+              currentMethod === 'GET'
+            ) {
+              try {
+                const fallback = await fetchServerProxyResponse(
+                  currentUrl.href,
+                  currentMethod,
+                  headers,
+                  null
+                );
+                if (fallback) return responseToTransport(fallback, currentUrl.href);
+              } catch (error) {
+                console.warn('[Scramjet] Script response fallback failed:', error);
+              }
             }
 
             return {
-                body: res ? (res.body || null) : null,
-                headers: (res && res.headers instanceof Headers) ? res.headers : new Headers(res?.headers || {}),
-                status: res?.status || 200,
-                statusText: res?.statusText || 'OK'
+              ...normalized,
+              headers: [...responseHeaders.entries()],
             };
-        }
-    } : {
-        async init() {},
-        async request(remote, method, body, headers, signal) {
-            let u = remote ? remote.toString() : '';
-            u = fixBlockedMirrors(u);
-            const m = (method || 'GET').toUpperCase();
-            const r = await fetch(u, {
-                method: m,
-                headers: headers || {},
-                body: ['GET','HEAD'].includes(m) ? null : (body || null),
-                signal: signal || undefined
-            });
-            return { body: r.body, headers: r.headers, status: r.status, statusText: r.statusText };
-        },
-        async fetch(url, init) {
-            let u = url ? url.toString() : '';
-            u = fixBlockedMirrors(u);
-            return fetch(u, init || {});
-        },
-        connect() {}
-    };
+          }
 
-    handler = new ScramjetFetchHandler({
-        transport,
-        crossOriginIsolated: false,
-        context: {
-            prefix: new URL(SCRAM_PREFIX, self.location.origin),
-            cookieJar: new self.$scramjet.CookieJar(),
-            config: { ...defaultConfig, rewriteHtml: true, rewriteJs: true, rewriteCss: true },
-            interface: {
-                codecEncode: s => encodeURIComponent(s),
-                codecDecode: s => {
-                    try {
-                        if (!s) return new URL(ORIGIN + '/');
-                        let p = String(s);
-                        if (p.startsWith('#')) p = p.slice(1);
-                        if (p.includes('#')) p = p.split('#')[0];
-                        if (p.startsWith('network/')) p = p.slice(8);
-                        if (!p) return new URL(ORIGIN + '/');
-                        try {
-                            const d = decodeURIComponent(p);
-                            const urlStr = d.includes('://') ? d : 'https://' + d;
-                            return new URL(urlStr);
-                        } catch(_) {
-                            const urlStr = p.includes('://') ? p : 'https://' + p;
-                            return new URL(urlStr);
-                        }
-                    } catch(_) {
-                        return new URL(ORIGIN + '/');
-                    }
+          throw new Error('The upstream site redirected too many times.');
+        },
+      }
+    : {
+        async init() {},
+        async request(remote, method, body, headers) {
+          const targetUrl = new URL(remote.href || String(remote)).href;
+          const response = await fetchServerProxy(targetUrl, {
+            method: (method || 'GET').toUpperCase(),
+            headers: makeHeaders(headers),
+            body,
+          });
+          return responseToTransport(response, targetUrl);
+        },
+        async fetch(remote, init) {
+          const targetUrl = new URL(remote.href || String(remote)).href;
+          return fetchServerProxy(targetUrl, {
+            method: (init && init.method) || 'GET',
+            headers: makeHeaders((init && init.headers) || {}),
+            body: (init && init.body) || null,
+          });
+        },
+        connect() {
+          throw new Error('WebSocket proxying requires the Epoxy transport.');
+        },
+      };
+
+  fetchHandler = new ScramjetFetchHandler({
+    transport,
+    crossOriginIsolated: false,
+    context: {
+      prefix: new URL(NETWORK_PREFIX, ORIGIN),
+      cookieJar: (workerCookieJar = new CookieJar()),
+      config: defaultConfig,
+      interface: {
+        codecEncode: (value) => encodeURIComponent(value),
+        codecDecode: (value) => {
+          let encoded = String(value || '').replace(/^#/, '').split('#')[0];
+          if (encoded.startsWith('network/')) encoded = encoded.slice(8);
+          try {
+            return decodeURIComponent(encoded);
+          } catch (_) {
+            return encoded;
+          }
+        },
+        getInjectScripts: (_meta, _target, script) => [
+          script(RUNTIME_SCRIPT_URL),
+          script(WASM_SCRIPT_URL),
+          script(EPOXY_SCRIPT_URL),
+          script(CLIENT_BOOTSTRAP_URL),
+        ],
+        getWorkerInjectScripts: (_meta, _target, script) => {
+          const workerBootstrap = `(() => {
+            const { ScramjetClient, CookieJar, setWasm, defaultConfig } = self.$scramjet;
+            setWasm(Uint8Array.from(atob(self.WASM), (character) => character.charCodeAt(0)));
+            delete self.WASM;
+            const context = {
+              config: defaultConfig,
+              prefix: new URL(${JSON.stringify(NETWORK_PREFIX)}, self.location.origin),
+              cookieJar: new CookieJar(),
+              interface: {
+                codecEncode: (value) => encodeURIComponent(value),
+                codecDecode: (value) => {
+                  const encoded = String(value || '').replace(/^#/, '').split('#')[0];
+                  try { return decodeURIComponent(encoded); } catch (_) { return encoded; }
                 },
-                getInjectScripts: (_m, _h, script) => [
-                    script('/worker/working.all.js')
-                ],
-                getWorkerInjectScripts: (_m, _t, script) => script('/worker/working.all.js')
-            }
+              },
+            };
+            const client = new ScramjetClient(globalThis, {
+              context,
+              transport: null,
+              shouldPassthroughWebsocket: () => false,
+            });
+            client.hook();
+          })();`;
+          const encodedBootstrap = `data:text/javascript;base64,${btoa(workerBootstrap)}`;
+          return script(RUNTIME_SCRIPT_URL) + script(WASM_SCRIPT_URL) + script(encodedBootstrap);
         },
-        sendSetCookie: async (url, cookie) => {
-            for (const c of await self.clients.matchAll())
-                c.postMessage({ type: 'scramjet-set-cookie', url: url.href, cookie });
-        },
-        fetchBlobUrl: async (url) => fetch(url),
-        fetchDataUrl: async (url) => fetch(url)
+      },
+    },
+    sendSetCookie: async (url, cookie) => {
+      for (const client of await self.clients.matchAll()) {
+        client.postMessage({ type: 'scramjet-set-cookie', url: url.href, cookie });
+      }
+    },
+    fetchBlobUrl: (url) => fetch(url),
+    fetchDataUrl: (url) => dataUrlResponse(url),
+  });
+
+  return fetchHandler;
+}
+
+function isScriptUrl(value) {
+  try {
+    const pathname = new URL(value).pathname;
+    return /\.(?:m?js)$/i.test(pathname) || pathname.includes('/js/');
+  } catch (_) {
+    return false;
+  }
+}
+
+async function routeProxyRequest(event, proxyUrl, targetUrl, fallbackRequest) {
+  if (event.request.mode === 'navigate' && event.resultingClientId) {
+    rememberClientOrigin(event.resultingClientId, new URL(targetUrl).origin);
+  }
+
+  if (targetUrl.startsWith('data:')) {
+    try {
+      return dataUrlResponse(targetUrl);
+    } catch (error) {
+      console.error('[Scramjet] Could not decode a proxied data URL:', error);
+      return new Response('The proxied data URL is invalid.', {
+        status: 400,
+        headers: { 'content-type': 'text/plain; charset=UTF-8' },
+      });
+    }
+  }
+
+  try {
+    const handler = await initFetchHandler();
+    const request = event.request.clone();
+    const headers = new self.$scramjet.ScramjetHeaders();
+    request.headers.forEach((value, name) => {
+      try {
+        headers.set(name, value);
+      } catch (_) {}
     });
-    return handler;
+
+    const response = await handler.handleFetch({
+      rawUrl: proxyUrl,
+      rawClientUrl: request.referrer ? new URL(request.referrer) : undefined,
+      body: ['GET', 'HEAD'].includes(request.method) ? null : request.body,
+      method: request.method,
+      initialHeaders: headers,
+      destination: request.destination,
+      mode: request.mode,
+      referrer: request.referrer,
+      cache: request.cache,
+      clientId: event.clientId || event.resultingClientId,
+    });
+
+    const responseHeaders = normalizeResourceMime(
+      makeHeaders(response.headers),
+      targetUrl,
+      event.request.destination
+    );
+    return toResponse({ ...response, headers: responseHeaders });
+  } catch (error) {
+    console.error('[Scramjet] Request failed; retrying through the server proxy:', error);
+    try {
+      const response = await fetchServerProxy(targetUrl, fallbackRequest);
+      const headers = cleanResponseHeaders(makeHeaders(response.headers));
+      return new Response(NULL_BODY_STATUSES.has(response.status) ? null : response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    } catch (fallbackError) {
+      console.error('[Scramjet] Server proxy fallback failed:', fallbackError);
+      return new Response('The proxy could not load this site. Please try again.', {
+        status: 502,
+        headers: { 'content-type': 'text/plain; charset=UTF-8' },
+      });
+    }
+  }
 }
 
 self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
 
-self.addEventListener('fetch', event => {
-    const url = new URL(event.request.url);
-    const skip = ['working.all.js', 'working.sw.js', 'working.wasm.wasm', 'epoch/index.js'];
-    if (skip.some(s => url.pathname.endsWith(s))) return;
-    if (event.request.headers.has('x-scramjet-bypass')) return;
+function encodeBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
 
-    const isSameOrigin = url.origin === self.location.origin;
-    const isLocalAsset = isSameOrigin && (
-        url.pathname.startsWith('/cron/') ||
-        url.pathname.startsWith('/gmt/') ||
-        url.pathname.startsWith('/unix/') ||
-        url.pathname.startsWith('/epoch/') ||
-        url.pathname.startsWith('/assets/') ||
-        url.pathname.startsWith('/dist/') ||
-        url.pathname.startsWith('/bare/') ||
-        url.pathname.startsWith('/baremux/') ||
-        url.pathname.startsWith('/libcurl/') ||
-        url.pathname.startsWith('/chii/') ||
-        url.pathname.startsWith('/uv/') ||
-        url.pathname.startsWith('/scram/') ||
-        url.pathname === '/' ||
-        url.pathname === '/index.html' ||
-        url.pathname === '/games' ||
-        url.pathname === '/newsession' ||
-        url.pathname === '/favicon.ico' ||
-        url.pathname === '/manifest.json' ||
-        url.pathname === '/robots.txt' ||
-        url.pathname === '/sitemap.xml' ||
-        url.pathname === '/browserconfig.xml'
-    );
+async function wasmScriptResponse() {
+  if (!wasmScriptPromise) {
+    wasmScriptPromise = fetch(new URL('/worker/working.wasm.wasm?v=2.7.2', ORIGIN), {
+      headers: { 'x-scramjet-bypass': '1' },
+    }).then(async (response) => {
+      if (!response.ok) throw new Error(`Unable to load Scramjet WebAssembly (${response.status}).`);
+      return `self.WASM=${JSON.stringify(encodeBase64(await response.arrayBuffer()))};`;
+    }).catch((error) => {
+      wasmScriptPromise = null;
+      throw error;
+    });
+  }
 
-    if (isLocalAsset) return;
+  try {
+    const source = await wasmScriptPromise;
+    return new Response(source, {
+      headers: { 'content-type': 'application/javascript; charset=UTF-8', 'cache-control': 'public, max-age=3600' },
+    });
+  } catch (error) {
+    console.error('[Scramjet] Unable to provide the WebAssembly initializer:', error);
+    return new Response('throw new Error("Scramjet WebAssembly could not be loaded.");', {
+      status: 503,
+      headers: { 'content-type': 'application/javascript; charset=UTF-8' },
+    });
+  }
+}
 
-    // Cross-origin top-level navigation inside frame -> redirect to Scramjet URL
-    if (!isSameOrigin && event.request.mode === 'navigate') {
-        const scramUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(fixBlockedMirrors(url.href)), self.location.origin);
-        return event.respondWith(Response.redirect(scramUrl.href, 307));
-    }
-
-    let rawUrl;
-    let rawClientUrl;
-
-    if (isSameOrigin && url.pathname.startsWith(SCRAM_PREFIX)) {
-        let innerTarget = extractTargetFromScram(url.href);
-        if (innerTarget) {
-            innerTarget = fixBlockedMirrors(innerTarget);
-            try {
-                const parsedInner = new URL(innerTarget);
-                if (parsedInner.hostname === self.location.hostname) {
-                    // SAME-ORIGIN LEAK PREVENTED: Site tried to fetch root path against the proxy hostname!
-                    // Recover real upstream origin!
-                    let activeOrigin = (event.clientId && clientOriginMap.get(event.clientId)) || lastUpstreamOrigin || 'https://www.youtube.com';
-                    if (event.request.referrer) {
-                        const refTarget = extractTargetFromScram(event.request.referrer);
-                        if (refTarget) {
-                            try {
-                                const refParsed = new URL(refTarget);
-                                if (refParsed.hostname !== self.location.hostname) {
-                                    activeOrigin = refParsed.origin;
-                                }
-                            } catch(_) {}
-                        }
-                    }
-                    innerTarget = activeOrigin + parsedInner.pathname + parsedInner.search;
-                    rememberClientOrigin(event, activeOrigin);
-                } else {
-                    if (event.request.mode === 'navigate') {
-                        lastUpstreamOrigin = parsedInner.origin;
-                    }
-                    rememberClientOrigin(event, parsedInner.origin);
-                }
-            } catch(_) {}
-            if (innerTarget.includes('githack.com') || innerTarget.includes('githubusercontent.com')) {
-                event.respondWith(emergencyBypass(event.request, innerTarget));
-                return;
-            }
-            if (innerTarget.includes('sync_mod_chunk') || innerTarget.includes('kevlar_base')) {
-                event.respondWith(emergencyBypass(event.request, innerTarget));
-                return;
-            }
-            rawUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(innerTarget), self.location.origin);
-        } else {
-            rawUrl = url;
-        }
-
-        rawClientUrl = event.request.referrer
-            ? safeURL(event.request.referrer)
-            : new URL(lastUpstreamOrigin + '/');
-    } else if (!isSameOrigin) {
-        if (url.hostname.includes('githack.com') || url.hostname.includes('githubusercontent.com') || url.hostname.includes('cdnjs.cloudflare.com')) {
-            return;
-        }
-        let targetHref = fixBlockedMirrors(url.href);
-        if (targetHref.includes('sync_mod_chunk') || targetHref.includes('kevlar_base')) {
-            event.respondWith(emergencyBypass(event.request, targetHref));
-            return;
-        }
-        rawUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(targetHref), self.location.origin);
-        rawClientUrl = event.request.referrer
-            ? safeURL(event.request.referrer)
-            : new URL(lastUpstreamOrigin + '/');
-    } else {
-        // Same-origin request NOT starting with /worker/ (e.g. /s/player/base.js, /youtubei/..., /static/...)
-        let upstream = (event.clientId && clientOriginMap.get(event.clientId)) || null;
-        if (!upstream && event.request.referrer) {
-            const refTarget = extractTargetFromScram(event.request.referrer);
-            if (refTarget) {
-                try {
-                    const p = new URL(refTarget);
-                    if (p.hostname !== self.location.hostname) upstream = p.origin;
-                } catch(_) {}
-            }
-        }
-        if (!upstream && (
-            url.pathname.startsWith('/s/') ||
-            url.pathname.startsWith('/youtubei/') ||
-            url.pathname.startsWith('/static/') ||
-            url.pathname.startsWith('/videoplayback') ||
-            url.pathname.startsWith('/generate_204') ||
-            url.pathname.startsWith('/error_204') ||
-            url.pathname.startsWith('/api/stats/')
-        )) {
-            upstream = 'https://www.youtube.com';
-        }
-        if (!upstream) upstream = lastUpstreamOrigin;
-
-        if (upstream) {
-            rememberClientOrigin(event, upstream);
-            const fullTarget = fixBlockedMirrors(upstream + url.pathname + url.search);
-            if (fullTarget.includes('sync_mod_chunk') || fullTarget.includes('kevlar_base')) {
-                event.respondWith(emergencyBypass(event.request, fullTarget));
-                return;
-            }
-            rawUrl = new URL(SCRAM_PREFIX + 'network/' + encodeURIComponent(fullTarget), self.location.origin);
-            rawClientUrl = safeURL(upstream + '/');
-        } else {
-            return;
-        }
-    }
-
-    const apiTarget = rawUrl && extractTargetFromScram(rawUrl.href);
-    if (apiTarget && !['GET', 'HEAD'].includes(event.request.method)) {
-        try {
-            const parsedApiTarget = new URL(apiTarget);
-            if (
-                (parsedApiTarget.hostname === 'youtube.com' || parsedApiTarget.hostname.endsWith('.youtube.com')) &&
-                parsedApiTarget.pathname.startsWith('/youtubei/')
-            ) {
-                const apiRequest = event.request.clone();
-                event.respondWith((async () => {
-                    const apiHeaders = new Headers(apiRequest.headers);
-                    // YouTube receives this as a same-origin API call. The local
-                    // proxy origin must not be forwarded as the request Origin.
-                    apiHeaders.delete('origin');
-                    apiHeaders.set('referer', parsedApiTarget.origin + '/');
-                    const apiBody = await apiRequest.arrayBuffer();
-                    return fetch('/proxy/' + encodeURIComponent(parsedApiTarget.href), {
-                        method: apiRequest.method,
-                        headers: apiHeaders,
-                        body: apiBody,
-                        credentials: 'include',
-                        redirect: 'follow'
-                    });
-                })());
-                return;
-            }
-        } catch (_) {}
-    }
-
-    event.respondWith((async () => {
-        try {
-            const h = await initHandler();
-            const { ScramjetHeaders } = self.$scramjet;
-            const sjHeaders = new ScramjetHeaders();
-            event.request.headers.forEach((v, k) => { try { sjHeaders.set(k, v); } catch(_) {} });
-
-            const response = await h.handleFetch({
-                rawUrl,
-                rawClientUrl,
-                body: ['GET','HEAD'].includes(event.request.method) ? null : event.request.body,
-                method: event.request.method,
-                initialHeaders: sjHeaders,
-                destination: event.request.destination,
-                mode: event.request.mode,
-                referrer: event.request.referrer,
-                cache: event.request.cache
-            });
-
-            let resp = toResponse(response);
-            let ct = resp.headers.get('content-type') || '';
-
-            // Some transports return an HTML error page with a successful
-            // status for script requests. A script cannot execute that page;
-            // retry it through the server fetch path, which preserves the
-            // upstream JavaScript response and MIME type.
-            if (
-                (event.request.destination === 'script' || event.request.destination === 'worker') &&
-                /text\/html/i.test(ct)
-            ) {
-                const scriptTarget = rawUrl && extractTargetFromScram(rawUrl.href);
-                if (scriptTarget) {
-                    try {
-                        const serverResponse = await fetchServerProxyResponse(
-                            scriptTarget,
-                            event.request.method,
-                            event.request.headers,
-                            event.request.body
-                        );
-                        if (serverResponse) {
-                            resp = toResponse(serverResponse);
-                            ct = resp.headers.get('content-type') || '';
-                        }
-                    } catch (err) {
-                        console.warn('[SW] Script response fallback failed:', err.message);
-                    }
-                }
-            }
-
-            if (
-                ct.includes('text/html') &&
-                (event.request.mode === 'navigate' || event.request.destination === 'document')
-            ) {
-                let html = await resp.text();
-                // 1. Universal rewrite: all blocked jsdelivr mirrors to working raw.githack.com
-                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/$1/$2/$3/');
-                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)\//gi, 'https://raw.githack.com/$1/$2/master/');
-                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/web-port@latest\/whosyourdaddy\/TemplateData\/style\.css/gi, 'data:text/css,/*style*/');
-                html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'data:application/javascript,//mobile.js');
-
-                // 2. Strip tutoring branding & cat image
-                html = html.replace(/<div\s+id=["']spinning-logo["'][^>]*>[\s\S]*?<\/div>/gi, '');
-                html = html.replace(/<img[^>]*id=["']spinning-logo["'][^>]*>/gi, '');
-                html = html.replace(/<img[^>]*src=["']data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAYAAAC[^"']*["'][^>]*>/gi, '');
-                html = html.replace(/#spinning-logo\s*\{[^}]*\}/gi, '#spinning-logo { display: none !important; width: 0 !important; height: 0 !important; opacity: 0 !important; visibility: hidden !important; }');
-                html = html.replace(/url\(\s*['"]?data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAYAAAC[^'")]*['"]?\s*\)/gi, 'none');
-                html = html.replace(/<div\s+id=["']note["'][^>]*>[\s\S]*?<\/div>/gi, '<div id="note">DOWNLOADING...</div>');
-                html = html.replaceAll('we ALL loves noahs tutoring hub', 'DOWNLOADING...');
-                html = html.replaceAll(/we ALL loves[^\s<]*/gi, 'DOWNLOADING...');
-                html = html.replaceAll(/Noahs Tutoring Hub/gi, 'DOWNLOADING...');
-                html = html.replaceAll(/noahs tutoring hub/gi, 'DOWNLOADING...');
-
-                // 3. Inject global shim
-                const shimTag = `<script>${GLOBAL_SHIM}</script>`;
-                if (html.includes('<head>')) {
-                    html = html.replace('<head>', '<head>' + shimTag);
-                } else if (html.includes('<HEAD>')) {
-                    html = html.replace('<HEAD>', '<HEAD>' + shimTag);
-                } else {
-                    html = shimTag + html;
-                }
-                const newHeaders = new Headers(resp.headers);
-                newHeaders.set('content-type', 'text/html; charset=UTF-8');
-                return new Response(html, {
-                    status: resp.status,
-                    statusText: resp.statusText,
-                    headers: newHeaders
-                });
-            }
-
-            return resp;
-        } catch(e) {
-            console.error('[Scramjet v2 SW] Rewriter exception, falling back to bypass:', e);
-            return await emergencyBypass(event.request, rawUrl || url);
-        }
-    })());
+self.addEventListener('message', (event) => {
+  const message = event.data;
+  if (message?.type !== 'scramjet-set-cookie' || !workerCookieJar) return;
+  try {
+    workerCookieJar.setCookies([message.cookie], new URL(message.url));
+  } catch (error) {
+    console.warn('[Scramjet] Could not sync a page cookie:', error);
+  }
 });
 
-async function emergencyBypass(request, urlObj) {
-    let targetUrl;
-    if (typeof urlObj === 'string') {
-        targetUrl = urlObj;
-    } else if (urlObj && urlObj.origin && urlObj.origin !== self.location.origin) {
-        targetUrl = urlObj.href;
-    } else if (urlObj) {
-        let extracted = extractTargetFromScram(urlObj.href || urlObj.toString());
-        if (extracted) {
-            targetUrl = extracted;
-        } else {
-            targetUrl = (urlObj.pathname || '').slice(SCRAM_PREFIX.length) + (urlObj.search || '');
-            if (targetUrl.startsWith('network/')) targetUrl = targetUrl.slice(8);
-            try { targetUrl = decodeURIComponent(targetUrl); } catch(_) {}
-            if (!targetUrl.includes('://')) targetUrl = 'https://' + targetUrl;
-        }
-    } else {
-        return new Response('Bypass Error: Invalid target', { status: 400 });
-    }
+self.addEventListener('fetch', (event) => {
+  const requestUrl = new URL(event.request.url);
+  if (requestUrl.origin === ORIGIN && requestUrl.pathname === WASM_SCRIPT_PATH) {
+    event.respondWith(wasmScriptResponse());
+    return;
+  }
+  if (event.request.headers.has('x-scramjet-bypass') || isInternalRequest(requestUrl)) {
+    return;
+  }
 
-    targetUrl = fixBlockedMirrors(targetUrl);
+  const isSameOrigin = requestUrl.origin === ORIGIN;
+  const alreadyProxied = isSameOrigin && requestUrl.pathname.startsWith(NETWORK_PREFIX);
+  const upstreamOrigin = getClientOrigin(event);
 
-    try {
-        const parsed = new URL(targetUrl);
-        if (parsed.hostname === self.location.hostname) {
-            const activeOrigin = lastUpstreamOrigin || 'https://www.youtube.com';
-            targetUrl = activeOrigin + parsed.pathname + parsed.search;
-        }
-    } catch(_) {}
+  if (isSameOrigin && event.request.mode === 'navigate' && !alreadyProxied) {
+    if (event.resultingClientId) clientOrigins.delete(event.resultingClientId);
+    return;
+  }
 
-    console.log('[Scramjet v2 SW] Bypass for:', targetUrl);
+  let targetUrl;
+  if (alreadyProxied) {
+    const target = extractTargetFromScram(requestUrl);
+    if (!target) return;
+    targetUrl = target.href;
+  } else if (!isSameOrigin) {
+    // App-owned images and fonts load directly; proxied pages stay inside Scramjet.
+    if (event.request.mode !== 'navigate' && !upstreamOrigin) return;
+    targetUrl = requestUrl.href;
+  } else if (upstreamOrigin) {
+    targetUrl = new URL(requestUrl.pathname + requestUrl.search, upstreamOrigin).href;
+  } else {
+    return;
+  }
 
-    let response;
-    try {
-        const ep = await getEpoxy();
-        if (ep) {
-            const epHeaders = {};
-            if (request.headers && typeof request.headers.forEach === 'function') {
-                request.headers.forEach((v, k) => {
-                    const lk = k.toLowerCase();
-                    if (lk !== 'host' && lk !== 'origin' && lk !== 'referer') epHeaders[k] = v;
-                });
-            }
-            if (targetUrl.includes('youtube.com') || targetUrl.includes('googlevideo.com') || targetUrl.includes('gstatic.com') || targetUrl.includes('googleapis.com')) {
-                epHeaders['origin'] = 'https://www.youtube.com';
-                epHeaders['referer'] = 'https://www.youtube.com/';
-            } else {
-                try {
-                    const u = new URL(targetUrl);
-                    if (!epHeaders['origin'] && !['GET', 'HEAD'].includes((request.method || 'GET').toUpperCase())) {
-                        epHeaders['origin'] = u.origin;
-                    }
-                    if (!epHeaders['referer']) {
-                        epHeaders['referer'] = u.origin + '/';
-                    }
-                } catch(_) {}
-            }
-            let curTarget = targetUrl;
-            let redirects = 0;
-            let res = null;
-            while (redirects < 6) {
-                const body = ['GET', 'HEAD'].includes(request.method) ? null : request.body;
-                res = await ep.request(new URL(curTarget), request.method, body, epHeaders);
-                const status = res.status || 200;
-                let loc = null;
-                if (res.headers) {
-                    if (typeof res.headers.get === 'function') loc = res.headers.get('location');
-                    else if (res.headers['location']) loc = res.headers['location'];
-                }
-                if (status >= 300 && status < 400 && loc) {
-                    redirects++;
-                    try {
-                        curTarget = new URL(loc, curTarget).href;
-                        continue;
-                    } catch(_) { break; }
-                }
-                break;
-            }
-            if (res) response = toResponse(res);
-        }
-    } catch(e) { console.warn('[SW] Epoxy bypass failed:', e.message); }
-
-    if (!response) {
-        try {
-            const serverProxy = await fetch('/proxy/' + encodeURIComponent(targetUrl), {
-                method: request.method,
-                headers: request.headers,
-                body: ['GET', 'HEAD'].includes(request.method) ? null : await request.blob()
-            });
-            if (serverProxy.ok || serverProxy.status < 500) {
-                response = serverProxy;
-            }
-        } catch(_) {}
-    }
-
-    if (!response) {
-        try {
-            const direct = await fetch(targetUrl, { mode: 'no-cors', credentials: 'omit' });
-            if (direct.ok || direct.type === 'opaque') response = direct;
-        } catch(_) {}
-    }
-
-    if (!response) return new Response('Proxy Error: All bypass tiers failed for ' + targetUrl, { status: 502 });
-
-    const initialContentType = response.headers.get('content-type') || '';
-    if (
-        (request.destination === 'script' || request.destination === 'worker') &&
-        /text\/html/i.test(initialContentType)
-    ) {
-        try {
-            const serverResponse = await fetchServerProxyResponse(
-                targetUrl,
-                request.method || 'GET',
-                request.headers,
-                ['GET', 'HEAD'].includes((request.method || 'GET').toUpperCase())
-                    ? null
-                    : await request.clone().blob()
-            );
-            if (serverResponse) response = serverResponse;
-        } catch (err) {
-            console.warn('[SW] Script fallback failed:', err.message);
-        }
-    }
-
-    const bypassStatus = response.status || 200;
-    const bypassNullBody = NULL_BODY_STATUSES.has(bypassStatus);
-    const contentType = bypassNullBody ? '' : (response.headers.get('content-type') || '');
-
-    const bypassHeaders = new Headers(response.headers);
-    sanitizeHeaders(bypassHeaders);
-
-    if (bypassNullBody) {
-        return new Response(null, { headers: bypassHeaders, status: bypassStatus });
-    }
-
-    if (contentType.includes('font') || contentType.includes('image') || contentType.includes('wasm')) {
-        return new Response(response.body, { headers: bypassHeaders, status: bypassStatus });
-    }
-
-    if (contentType.includes('text/html')) {
-        let text = await response.text();
-        text = text.replace(/<div\s+id=["']spinning-logo["'][^>]*>[\s\S]*?<\/div>/gi, '');
-        text = text.replace(/<img[^>]*id=["']spinning-logo["'][^>]*>/gi, '');
-        text = text.replace(/<img[^>]*src=["']data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAYAAAC[^"']*["'][^>]*>/gi, '');
-        text = text.replace(/#spinning-logo\s*\{[^}]*\}/gi, '#spinning-logo { display: none !important; width: 0 !important; height: 0 !important; opacity: 0 !important; visibility: hidden !important; }');
-        text = text.replace(/url\(\s*['"]?data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAYAAAC[^'")]*['"]?\s*\)/gi, 'none');
-        text = text.replace(/<div\s+id=["']note["'][^>]*>[\s\S]*?<\/div>/gi, '<div id="note">DOWNLOADING...</div>');
-        text = text.replaceAll('we ALL loves noahs tutoring hub', 'DOWNLOADING...');
-        text = text.replaceAll(/we ALL loves[^\s<]*/gi, 'DOWNLOADING...');
-        text = text.replaceAll(/Noahs Tutoring Hub/gi, 'DOWNLOADING...');
-        text = text.replaceAll(/noahs tutoring hub/gi, 'DOWNLOADING...');
-
-        const runtimeScript = `<style>
-#spinning-logo { display: none !important; width: 0 !important; height: 0 !important; opacity: 0 !important; visibility: hidden !important; }
-#note { color: #ff3333 !important; font-family: monospace, sans-serif !important; font-size: 16px !important; letter-spacing: 2px !important; text-transform: uppercase !important; font-weight: bold !important; }
-</style>
-<script>
-(function() {
-    if (globalThis.__scramjet_emergency_active) return;
-    globalThis.__scramjet_emergency_active = true;
-    ${GLOBAL_SHIM}
-})();
-</script>`;
-        if (text.includes('<head>')) {
-            text = text.replace('<head>', '<head>' + runtimeScript);
-        } else if (text.includes('<HEAD>')) {
-            text = text.replace('<HEAD>', '<HEAD>' + runtimeScript);
-        } else {
-            text = runtimeScript + text;
-        }
-        bypassHeaders.set('content-type', 'text/html; charset=UTF-8');
-        return new Response(text, { headers: bypassHeaders, status: bypassStatus });
-    } else if (contentType.includes('javascript') || targetUrl.endsWith('.js') || request.destination === 'script' || request.destination === 'worker') {
-        let text = await response.text();
-        text = injectScriptHeader(text);
-        bypassHeaders.set('content-type', 'application/javascript; charset=UTF-8');
-        return new Response(text, { headers: bypassHeaders, status: bypassStatus });
-    }
-
-    return new Response(response.body, { headers: bypassHeaders, status: bypassStatus });
-}
+  const proxyUrl = alreadyProxied ? requestUrl : encodeProxyUrl(targetUrl);
+  const fallbackRequest = event.request.clone();
+  event.respondWith(routeProxyRequest(event, proxyUrl, targetUrl, fallbackRequest));
+});

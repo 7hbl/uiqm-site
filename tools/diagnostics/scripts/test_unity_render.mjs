@@ -26,8 +26,8 @@ import puppeteer from 'puppeteer';
     console.log('Waiting 18 seconds for Unity WebGL to render start screen...');
     await new Promise(r => setTimeout(r, 18000));
     
-    await page.screenshot({ path: 'tools/maintenance/game_unity_loaded.png' });
-    console.log('Saved tools/maintenance/game_unity_loaded.png');
+    await page.screenshot({ path: 'tools/diagnostics/screenshots/game_unity_loaded.png' });
+    console.log('Saved tools/diagnostics/screenshots/game_unity_loaded.png');
 
     await browser.close();
 })();

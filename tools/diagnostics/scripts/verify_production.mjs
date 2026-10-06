@@ -60,7 +60,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
       const bodyLen = await frame.evaluate(() => document.body ? document.body.innerHTML.length : 0);
       console.log('[Verify] Search results body length:', bodyLen);
     }
-    await page.screenshot({ path: join(__dirname, 'verified_search.png') });
+    await page.screenshot({ path: join(__dirname, '..', 'screenshots', 'verified_search.png') });
 
     // Test Wikipedia (301 redirect following test)
     console.log('[Verify] 3. Testing navigation to wikipedia.org...');
@@ -76,7 +76,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
       const wikiTitle = await frame.title();
       console.log('[Verify] Wikipedia title:', wikiTitle, 'body length:', wikiLen);
     }
-    await page.screenshot({ path: join(__dirname, 'verified_wikipedia.png') });
+    await page.screenshot({ path: join(__dirname, '..', 'screenshots', 'verified_wikipedia.png') });
 
     // Test Games Hub
     console.log('[Verify] 4. Navigating to https://uiqm.lol/games ...');
@@ -119,8 +119,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
     }
     console.log('[Verify] Game frame status:', JSON.stringify(gameStatus));
 
-    await page.screenshot({ path: join(__dirname, 'verified_slope_game.png') });
-    console.log('[Verify] Saved verified_slope_game.png');
+    await page.screenshot({ path: join(__dirname, '..', 'screenshots', 'verified_slope_game.png') });
+    console.log('[Verify] Saved tools/diagnostics/screenshots/verified_slope_game.png');
 
     console.log('[Verify] Critical errors encountered:', errors);
   } finally {

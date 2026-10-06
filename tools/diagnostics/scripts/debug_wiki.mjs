@@ -28,7 +28,7 @@ import puppeteer from 'puppeteer';
   await page.goto('https://uiqm.lol/worker/network/' + encodeURIComponent('https://en.wikipedia.org/wiki/Main_Page'), { waitUntil: 'networkidle2', timeout: 30000 }).catch(e => console.log('Err:', e.message));
 
   await new Promise(r => setTimeout(r, 4000));
-  await page.screenshot({ path: 'scratch/debug_wikipedia.png' });
-  console.log('Saved scratch/debug_wikipedia.png');
+  await page.screenshot({ path: 'tools/diagnostics/screenshots/debug_wikipedia.png' });
+  console.log('Saved tools/diagnostics/screenshots/debug_wikipedia.png');
   await browser.close();
 })();

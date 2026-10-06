@@ -45,7 +45,7 @@ import puppeteer from 'puppeteer';
         }
         
         const slug = site.replace(/[^a-z0-9]/gi, '_');
-        await page.screenshot({ path: `tools/maintenance/site_${slug}.png` });
+        await page.screenshot({ path: `tools/diagnostics/screenshots/site_${slug}.png` });
         console.log({ site, frameSrc, loadingDisplay, frameInfo });
     }
 

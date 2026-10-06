@@ -51,6 +51,7 @@ import fs from 'fs';
   }
 
   await browser.close();
-  fs.writeFileSync('scratch/games_sample_results.json', JSON.stringify(results, null, 2));
+  fs.mkdirSync('tools/diagnostics/results', { recursive: true });
+  fs.writeFileSync('tools/diagnostics/results/games_sample_results.json', JSON.stringify(results, null, 2));
   console.log('Sample test completed.');
 })();

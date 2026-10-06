@@ -64,7 +64,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
       const searchBodyLen = await frame.evaluate(() => document.body ? document.body.innerHTML.length : 0);
       console.log('[Verify All] Search results body length:', searchBodyLen);
     }
-    await page.screenshot({ path: join(__dirname, 'prod_search.png') });
+    await page.screenshot({ path: join(__dirname, '..', 'screenshots', 'prod_search.png') });
 
     // 3. Direct Navigation & 301 Redirect Follow (wikipedia.org)
     console.log('[Verify All] 3. Direct URL navigation to wikipedia.org via bottom nav bar...');
@@ -79,7 +79,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
       const wikiTitle = await frame.title();
       console.log('[Verify All] Wikipedia title:', wikiTitle, 'body length:', wikiLen);
     }
-    await page.screenshot({ path: join(__dirname, 'prod_wikipedia.png') });
+    await page.screenshot({ path: join(__dirname, '..', 'screenshots', 'prod_wikipedia.png') });
 
     // 4. YouTube via Scramjet
     console.log('[Verify All] 4. Navigating to youtube.com via bottom nav bar...');
@@ -97,7 +97,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
       })).catch(e => ({ error: e.message }));
       console.log('[Verify All] YouTube status:', JSON.stringify(ytStatus));
     }
-    await page.screenshot({ path: join(__dirname, 'prod_youtube.png') });
+    await page.screenshot({ path: join(__dirname, '..', 'screenshots', 'prod_youtube.png') });
 
     // 5. Games Hub
     console.log('[Verify All] 5. Navigating to https://uiqm.lol/games ...');
@@ -143,8 +143,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
     }
 
     await new Promise(r => setTimeout(r, 3000));
-    await page.screenshot({ path: join(__dirname, 'prod_slope.png') });
-    console.log('[Verify All] Captured prod_slope.png screenshot.');
+    await page.screenshot({ path: join(__dirname, '..', 'screenshots', 'prod_slope.png') });
+    console.log('[Verify All] Captured tools/diagnostics/screenshots/prod_slope.png screenshot.');
 
     console.log('[Verify All] Critical console errors recorded:', errors.filter(e => !e.includes('favicon') && !e.includes('ERR_BLOCKED_BY_CLIENT')));
   } finally {

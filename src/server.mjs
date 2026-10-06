@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import { createServer } from 'node:http';
+import { Readable } from 'node:stream';
 import dns from 'node:dns';
 try {
   dns.setDefaultResultOrder('ipv4first');
@@ -606,16 +607,6 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       targetUrlStr = 'https://' + targetUrlStr;
     }
 
-    // Auto-fix blocked jsdelivr accounts to reliable mirrors
-    if (targetUrlStr.includes('cdn.jsdelivr.net/gh/')) {
-      targetUrlStr = targetUrlStr
-        .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/$1/$2/$3/')
-        .replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)\//gi, 'https://raw.githack.com/$1/$2/master/');
-    }
-    if (targetUrlStr.includes('cdn.jsdelivr.net/js/mobile.js')) {
-      targetUrlStr = 'https://raw.githack.com/genizy/google-class/main/mobile.js';
-    }
-
     console.log(`[Proxy Server Fallback] Fetching upstream: ${targetUrlStr}`);
     
     let parsedTarget;
@@ -755,22 +746,25 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     responseHeaders['access-control-allow-headers'] = '*';
     
     let contentType = response.headers.get('content-type') || '';
-    const cleanUrl = targetUrlStr.split('?')[0].toLowerCase();
-    const ext = cleanUrl.split('.').pop();
-    
-    if (ext === 'js' || cleanUrl.includes('/js/') || cleanUrl.endsWith('.js')) {
-      contentType = 'application/javascript; charset=UTF-8';
-    } else if (ext === 'wasm' || cleanUrl.includes('.wasm')) {
-      contentType = 'application/wasm';
-    } else if (ext === 'css') {
-      contentType = 'text/css; charset=UTF-8';
-    } else if (ext === 'woff2') {
-      contentType = 'font/woff2';
-    } else if (ext === 'woff') {
-      contentType = 'font/woff';
-    } else if (ext === 'ttf') {
-      contentType = 'font/ttf';
-    } else if (ext === 'html' || cleanUrl.endsWith('.html')) {
+    const extension = parsedTarget.pathname.toLowerCase().match(/\.([a-z0-9]+)$/i)?.[1];
+    const fallbackContentType = (type) =>
+      !contentType || /^(?:text\/plain|application\/octet-stream)(?:\s*;|$)/i.test(contentType)
+        ? type
+        : contentType;
+
+    if (extension === 'js' || extension === 'mjs') {
+      contentType = fallbackContentType('application/javascript; charset=UTF-8');
+    } else if (extension === 'wasm') {
+      contentType = fallbackContentType('application/wasm');
+    } else if (extension === 'css') {
+      contentType = fallbackContentType('text/css; charset=UTF-8');
+    } else if (extension === 'woff2') {
+      contentType = fallbackContentType('font/woff2');
+    } else if (extension === 'woff') {
+      contentType = fallbackContentType('font/woff');
+    } else if (extension === 'ttf') {
+      contentType = fallbackContentType('font/ttf');
+    } else if (extension === 'html' || extension === 'htm' || extension === 'xhtml') {
       contentType = 'text/html; charset=UTF-8';
     }
     
@@ -779,194 +773,9 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     }
     if (responseCookies.length) responseHeaders['set-cookie'] = responseCookies;
 
-    if (isYoutubeTarget && (contentType.includes('text/html') || cleanUrl.endsWith('.html'))) {
-      const html = await response.text();
-      responseHeaders['content-type'] = contentType || 'text/html; charset=UTF-8';
-      reply.headers(responseHeaders);
-      reply.code(response.status);
-      reply.send(html);
-      return;
-    }
-
-    // HTML Rewriting for seamless in-iframe browsing
-    if (contentType.includes('text/html') || cleanUrl.endsWith('.html')) {
-      let html = await response.text();
-
-      // Rewrite blocked CDNs to working mirrors in HTML
-      html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)@([^/]+)\//gi, 'https://raw.githack.com/$1/$2/$3/');
-      html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)\//gi, 'https://raw.githack.com/$1/$2/master/');
-      html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/gh\/mysticful\/web-port@latest\/whosyourdaddy\/TemplateData\/style\.css/gi, 'data:text/css,/*style*/');
-      html = html.replace(/https?:\/\/cdn\.jsdelivr\.net\/js\/mobile\.js/gi, 'data:application/javascript,//mobile.js');
-
-      // Sanitize unwanted loader elements (cat logo / third party tutoring branding)
-      html = html.replace(/<div\s+id=["']spinning-logo["'][^>]*>[\s\S]*?<\/div>/gi, '');
-      html = html.replace(/<img[^>]*id=["']spinning-logo["'][^>]*>/gi, '');
-      html = html.replace(/<img[^>]*src=["']data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAYAAAC[^"']*["'][^>]*>/gi, '');
-      html = html.replace(/#spinning-logo\s*\{[^}]*\}/gi, '#spinning-logo { display: none !important; width: 0 !important; height: 0 !important; opacity: 0 !important; visibility: hidden !important; }');
-      html = html.replace(/url\(\s*['"]?data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAYAAAC[^'")]*['"]?\s*\)/gi, 'none');
-      html = html.replace(/<div\s+id=["']note["'][^>]*>[\s\S]*?<\/div>/gi, '<div id="note">DOWNLOADING...</div>');
-      html = html.replaceAll('we ALL loves noahs tutoring hub', 'DOWNLOADING...');
-      html = html.replaceAll(/we ALL loves[^\s<]*/gi, 'DOWNLOADING...');
-      html = html.replaceAll(/Noahs Tutoring Hub/gi, 'DOWNLOADING...');
-      html = html.replaceAll(/noahs tutoring hub/gi, 'DOWNLOADING...');
-
-      const clientScript = `
-<style>
-#spinning-logo { display: none !important; width: 0 !important; height: 0 !important; visibility: hidden !important; opacity: 0 !important; }
-#note { color: #ff3333 !important; font-family: monospace, sans-serif !important; font-size: 16px !important; letter-spacing: 2px !important; text-transform: uppercase !important; font-weight: bold !important; }
-</style>
-<script>
-(function() {
-  try {
-    var sanitizeLoader = function() {
-      var cat = document.getElementById('spinning-logo');
-      if (cat) cat.remove();
-      var note = document.getElementById('note');
-      if (note) note.textContent = 'DOWNLOADING...';
-    };
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', sanitizeLoader);
-    } else {
-      sanitizeLoader();
-    }
-  } catch(_) {}
-  var _getProxyOrigin = function() {
-    try {
-      if (typeof window !== 'undefined' && window.parent && window.parent !== window && window.parent.location && window.parent.location.origin) {
-        var po = window.parent.location.origin;
-        if (po && !po.includes('youtube') && !po.includes('google')) return po;
-      }
-    } catch(_) {}
-    try {
-      var lo = (typeof location !== 'undefined' ? location.origin : '');
-      if (lo && !lo.includes('youtube') && !lo.includes('google')) return lo;
-    } catch(_) {}
-    return '';
-  };
-
-  var _targetOrigin = '${targetOrigin}';
-  var _wrapUrl = function(u) {
-    if (!u || typeof u === 'boolean') return u;
-    var s = typeof u === 'string' ? u : (u.href ? u.href : (u.url ? u.url : ''));
-    if (!s || typeof s !== 'string' || s === 'true' || s === 'false' || s === 'null' || s === 'undefined') return u;
-    if (s.indexOf('/worker/network/') !== -1 || s.indexOf('/cron/') !== -1 || s.indexOf('/gmt/') !== -1 || s.indexOf('/unix/') !== -1 || s.indexOf('/epoch/') !== -1) return s;
-    if (s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('javascript:')) return s;
-
-    var proxyOrigin = _getProxyOrigin();
-    var full = s;
-    try {
-      var base = (typeof document !== 'undefined' && document.baseURI) ? document.baseURI : _targetOrigin;
-      full = new URL(s, base).href;
-    } catch (_) {
-      if (full.startsWith('//')) {
-        full = 'https:' + full;
-      } else if (full.startsWith('/')) {
-        full = _targetOrigin + full;
-      } else if (!full.includes('://')) {
-        full = _targetOrigin + '/' + full;
-      }
-    }
-
-    return (proxyOrigin || '') + '/worker/network/' + encodeURIComponent(full);
-  };
-
-  try {
-    var _realFetch = window.fetch;
-    if (_realFetch) {
-      var _createWrapped = function(origFetch) {
-        return function(resource, init) {
-          try {
-            if (typeof resource === 'string') {
-              resource = _wrapUrl(resource);
-            } else if (resource instanceof URL) {
-              resource = _wrapUrl(resource.href);
-            } else if (resource && typeof resource === 'object' && resource.url) {
-              var nw = _wrapUrl(resource.url);
-              if (nw !== resource.url) {
-                try {
-                  resource = new Request(nw, resource);
-                } catch(_) {
-                  try {
-                    resource = new Request(nw, {
-                      method: resource.method,
-                      headers: resource.headers,
-                      credentials: resource.credentials,
-                      cache: resource.cache,
-                      redirect: resource.redirect
-                    });
-                  } catch(__) {
-                    resource = nw;
-                  }
-                }
-              }
-            }
-          } catch(_) {}
-          return origFetch.call(this, resource, init);
-        };
-      };
-      var _currentFetch = _createWrapped(_realFetch);
-      try {
-        Object.defineProperty(window, 'fetch', {
-          get: function() { return _currentFetch; },
-          set: function(fn) {
-            if (typeof fn === 'function' && fn !== _currentFetch) {
-              _realFetch = fn;
-              _currentFetch = _createWrapped(fn);
-            }
-          },
-          configurable: true,
-          enumerable: true
-        });
-      } catch(_) {
-        window.fetch = _currentFetch;
-      }
-    }
-  } catch(_) {}
-
-  try {
-    if (window.XMLHttpRequest && window.XMLHttpRequest.prototype) {
-      var _origOpen = window.XMLHttpRequest.prototype.open;
-      window.XMLHttpRequest.prototype.open = function(method, url) {
-        try { arguments[1] = _wrapUrl(url); } catch(_) {}
-        var rest = Array.prototype.slice.call(arguments, 2);
-        return _origOpen.apply(this, [method, arguments[1]].concat(rest));
-      };
-    }
-  } catch(_) {}
-
-  try {
-    if (window.navigator && window.navigator.sendBeacon) {
-      var _origBeacon = window.navigator.sendBeacon;
-      window.navigator.sendBeacon = function(url, data) {
-        try { url = _wrapUrl(url); } catch(_) {}
-        return _origBeacon.call(this, url, data);
-      };
-    }
-  } catch(_) {}
-
-})();
-</script>`;
-
-      if (html.includes('<head>')) {
-        html = html.replace('<head>', '<head>' + clientScript);
-      } else if (html.includes('<HEAD>')) {
-        html = html.replace('<HEAD>', '<HEAD>' + clientScript);
-      } else {
-        html = clientScript + html;
-      }
-
-      responseHeaders['content-type'] = 'text/html; charset=UTF-8';
-      reply.headers(responseHeaders);
-      reply.code(response.status);
-      reply.send(html);
-      return;
-    }
-    
     reply.headers(responseHeaders);
     reply.code(response.status);
-    
-    const arrayBuffer = await response.arrayBuffer();
-    reply.send(Buffer.from(arrayBuffer));
+    reply.send(response.body ? Readable.fromWeb(response.body) : null);
     return;
 
   } catch (err) {

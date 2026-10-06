@@ -233,42 +233,6 @@ commands: for (let i = 2; i < process.argv.length; i++)
         console.log('[Build] Custom scramjet.sw.js -> scram/working.sw.js ✅ (overrode npm version)');
       }
 
-      const scramjetBundle = join(rootPath, 'views/dist/scram/working.all.js');
-      if (existsSync(scramjetBundle)) {
-        let content = readFileSync(scramjetBundle, 'utf8');
-        console.log('[Build] Applying Global Stability Patches to working.all.js...');
-        
-        // Correctly fix assignments like this.stack.length = 0
-        content = content.replace(/([\w$]+)\.stack\??\.length\s*=\s*0/g, '($1.stack && ($1.stack.length = 0))');
-        content = content.replace(/([\w$]+)\.buffers\??\.length\s*=\s*0/g, '($1.buffers && ($1.buffers.length = 0))');
-        content = content.replace(/([\w$]+)\.foreignContext\??\.length\s*=\s*0/g, '($1.foreignContext && ($1.foreignContext.length = 0))');
-        
-        // Safety check for reading length
-        content = content.replace(/([\w$]+)\.stack\.length(?!\s*=)/g, '($1.stack?.length||0)');
-        content = content.replace(/([\w$]+)\.buffers\.length(?!\s*=)/g, '($1.buffers?.length||0)');
-        content = content.replace(/([\w$]+)\.foreignContext\.length(?!\s*=)/g, '($1.foreignContext?.length||0)');
-        content = content.replace(/([\w$]+)\.children\.length(?!\s*=)/g, '($1.children?.length||0)');
-        content = content.replace(/([\w$]+)\.keys\.length(?!\s*=)/g, '($1.keys?.length||0)');
-        
-        // Final catch-all for .length in loops
-        content = content.replace(/([^\w$])([a-zA-Z])\.length(?!\s*=)/g, '$1($2?.length||0)');
-
-        // INJECT GLOBAL_SHIM AT THE VERY TOP OF working.all.js
-        let extractedShim = '';
-        try {
-          const swSource = readFileSync(join(rootPath, 'views/scram/scramjet.sw.js'), 'utf8').replace(/\r\n/g, '\n');
-          const m = swSource.match(/const GLOBAL_SHIM\s*=\s*`([\s\S]*?)`;\s*const SCRIPT_HEADER/);
-          if (m && m[1]) {
-            extractedShim = m[1].trim();
-          }
-        } catch(_) {}
-        const shim = extractedShim || `globalThis.$scramjet$pushsourcemap = globalThis.$scramjet$pushsourcemap || function() {}; globalThis.$scramjet$initialized = true;`;
-        content = shim + "\n" + content;
-        
-        writeFileSync(scramjetBundle, content);
-        console.log('[Build] Global Stability Patches applied ✅');
-      }
-
       // Minify the scripts and stylesheets upon compiling, if enabled in config.
       if (config.minifyScripts)
         await build({
