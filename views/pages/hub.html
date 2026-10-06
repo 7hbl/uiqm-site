@@ -308,12 +308,11 @@
                     <span id="live-clock" style="margin-left: 10px; border-left: 1px solid rgba(255,0,0,0.3); padding-left: 10px;">--:--:-- --</span>
                 </div>
                 <button class="btn" onclick="openSettings()">SETTINGS</button>
-                <a class="btn" href="https://www.friv.com/" target="_blank" rel="noopener noreferrer" title="Open the official Friv site">FRIV WEBSITE</a>
                 <a href="/" class="btn">TERMINAL</a>
             </div>
         </div>
         <div class="search-container">
-            <input type="text" id="search-input" placeholder="Search 425+ games..." autocomplete="off">
+            <input type="text" id="search-input" placeholder="Search games..." autocomplete="off">
         </div>
     </header>
 
@@ -2372,12 +2371,6 @@
         "image": "https://raw.githubusercontent.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/47.jpg"
     },
     {
-        "title": "Granny 3",
-        "desc": "Horror escape with new challenges",
-        "url": "https://raw.githubusercontent.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/259.html",
-        "image": "https://raw.githubusercontent.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/images/48.jpg"
-    },
-    {
         "title": "Granny 2",
         "desc": "Sequel horror escape game",
         "url": "https://raw.githubusercontent.com/NoahsAmazingTutoringHelp/Noahs-Calculus-Tutor/refs/heads/master/games/258.html",
@@ -3225,6 +3218,52 @@
 
         search.oninput = () => renderGames(search.value);
 
+        // Add Friv's desktop games to the same catalog and use the same proxy
+        // launch path as every other card. Keep the existing game order intact,
+        // filter title duplicates, and spread additions through the grid.
+        const normalizeGameTitle = title => (title || '')
+            .normalize('NFKD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '');
+
+        const loadFrivGames = async () => {
+            try {
+                const response = await fetch('/assets/json/friv-games.json', { cache: 'force-cache' });
+                if (!response.ok) throw new Error(`Friv game list request failed (${response.status}).`);
+                const additions = await response.json();
+                if (!Array.isArray(additions)) throw new Error('Friv game list has an invalid format.');
+
+                const seen = new Set();
+                const originalGames = games.filter(game => {
+                    const key = normalizeGameTitle(game.title);
+                    if (!key || seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                });
+                const frivGames = additions.filter(game => {
+                    const key = normalizeGameTitle(game?.title);
+                    if (!key || !game.url || seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                });
+
+                const mixedGames = [];
+                let nextFrivGame = 0;
+                originalGames.forEach((game, index) => {
+                    mixedGames.push(game);
+                    const targetFrivCount = Math.floor(((index + 1) * frivGames.length) / originalGames.length);
+                    while (nextFrivGame < targetFrivCount) mixedGames.push(frivGames[nextFrivGame++]);
+                });
+                while (nextFrivGame < frivGames.length) mixedGames.push(frivGames[nextFrivGame++]);
+
+                games.splice(0, games.length, ...mixedGames);
+                renderGames(search.value);
+            } catch (error) {
+                console.warn('Friv games could not be added to the catalog; showing the built-in games.', error);
+            }
+        };
+
         // Live users
         const updateUsers = () => {
             const count = Math.floor(Math.random() * (3 - 1) + 1);
@@ -3252,6 +3291,7 @@
         }
 
         renderGames();
+        loadFrivGames();
         window._proxyReady = initProxy();
     </script>
 </body>
