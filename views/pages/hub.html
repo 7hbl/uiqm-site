@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="/assets/js/core.js"></script>
+    <script src="/assets/js/proxy-service-worker.js?v=2.7.3"></script>
     <style>
         :root {
             --glow: #ff0000;
@@ -331,7 +332,7 @@
             <button class="tool-btn" onclick="toggleFullscreen()">FULLSCREEN</button>
             <button class="tool-btn" onclick="closeGame()" style="border-color: #ff0000; color: #ff0000;">EXIT</button>
         </div>
-        <iframe id="proxy-frame" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen; gamepad"></iframe>
+        <iframe id="proxy-frame" name="uiqm-game-proxy-frame" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; gamepad" allowfullscreen></iframe>
     </div>
 
     <div id="settings-modal">
@@ -2966,30 +2967,26 @@
         const overlay = document.getElementById('proxy-overlay');
         const frame = document.getElementById('proxy-frame');
 
+        window.showUnitywebNoSupport = () => {
+            const gl = document.getElementById('game-loader');
+            const spinner = gl?.querySelector('.game-loader-spinner');
+            const title = gl?.querySelector('.game-loader-text');
+            const statusSub = gl?.querySelector('div[style*="letter-spacing: 1px"]');
+            if (spinner) spinner.style.display = 'none';
+            if (title) title.textContent = 'UNITY GAME COULD NOT START';
+            if (statusSub) statusSub.textContent = 'This game could not use the required WebGL runtime or load a required asset. Try another title or press EXIT.';
+            if (window._gameLoadTimer) {
+                clearTimeout(window._gameLoadTimer);
+                window._gameLoadTimer = null;
+            }
+        };
+
         const initProxy = async () => {
             let proxyReady = false;
             try {
-                if ('serviceWorker' in navigator) {
-                    const registration = await navigator.serviceWorker.register(
-                        '/worker/working.sw.js?v=2.7.2',
-                        { scope: '/', updateViaCache: 'none' }
-                    );
-                    await registration.update().catch(() => {});
-                    await navigator.serviceWorker.ready;
-                    if (!navigator.serviceWorker.controller) {
-                        await new Promise(resolve => {
-                            navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
-                            setTimeout(resolve, 3000);
-                        });
-                    }
-                    if (!navigator.serviceWorker.controller) {
-                        throw new Error('The site proxy worker did not take control of this page.');
-                    }
-                    proxyReady = true;
-                    console.log('Scramjet proxy ready');
-                } else {
-                    throw new Error('This browser does not support service workers.');
-                }
+                await window.ensureUiqmProxyWorker();
+                proxyReady = true;
+                console.log('Scramjet proxy ready 2.7.3');
             } catch (e) {
                 console.warn('Service Worker initialization note:', e);
             } finally {
@@ -3089,8 +3086,15 @@
             if (_canvasCheckInterval) clearInterval(_canvasCheckInterval);
             if (window._gameLoadTimer) clearTimeout(window._gameLoadTimer);
 
-            // Safety fallback: maximum 25s for very heavy games
-            window._gameLoadTimer = setTimeout(hideLoader, 25000);
+            // Give large Unity/WebGL downloads time to finish, then explain a stalled load.
+            window._gameLoadTimer = setTimeout(() => {
+                const spinner = document.querySelector('#game-loader .game-loader-spinner');
+                const title = document.querySelector('#game-loader .game-loader-text');
+                const statusSub = gl?.querySelector('div[style*="letter-spacing: 1px"]');
+                if (spinner) spinner.style.display = 'none';
+                if (title) title.textContent = 'THIS GAME DID NOT START';
+                if (statusSub) statusSub.textContent = 'A required game file may be unavailable. The game host can block or remove assets; try another title or press EXIT.';
+            }, 45000);
 
             // Poll every 300ms to detect when canvas renders or game is ready
             let checks = 0;
@@ -3100,8 +3104,30 @@
                     const doc = frame.contentDocument || frame.contentWindow?.document;
                     if (doc) {
                         const canvas = doc.querySelector('canvas');
-                        if (canvas && (canvas.width > 50 || canvas.height > 50 || checks > 10)) {
+                        const gameWindow = doc.defaultView;
+                        const unityGame = gameWindow?.unityGame || gameWindow?.gameInstance || gameWindow?.unityInstance;
+                        const unityProgress = doc.querySelector('#progress-container');
+                        const isUnityGame = Boolean(
+                            unityGame || gameWindow?.UnityLoader ||
+                            doc.querySelector('#unity-container, #unity-loading-bar, #unity-canvas, #progress-container')
+                        );
+                        const unityReady = Boolean(unityGame?.Module || unityGame?.SendMessage) &&
+                            (!unityProgress || unityProgress.classList.contains('done'));
+                        if (isUnityGame ? unityReady : canvas && (canvas.width > 50 || canvas.height > 50 || checks > 10)) {
                             hideLoader();
+                            return;
+                        }
+                        if (doc.body?.innerText && /user .* is blocked|not found|access denied/i.test(doc.body.innerText.slice(0, 1200))) {
+                            const spinner = document.querySelector('#game-loader .game-loader-spinner');
+                            const title = document.querySelector('#game-loader .game-loader-text');
+                            const statusSub = gl?.querySelector('div[style*="letter-spacing: 1px"]');
+                            if (spinner) spinner.style.display = 'none';
+                            if (title) title.textContent = 'GAME HOST DENIED THE REQUEST';
+                            if (statusSub) statusSub.textContent = 'This title’s host is refusing its files. Try another title or press EXIT.';
+                            clearInterval(_canvasCheckInterval);
+                            _canvasCheckInterval = null;
+                            clearTimeout(window._gameLoadTimer);
+                            window._gameLoadTimer = null;
                             return;
                         }
                     }

@@ -38,17 +38,47 @@
       return encoded;
     }
   };
+  const patchUnityBlobResponseUrl = (global) => {
+    const prototype = global.XMLHttpRequest?.prototype;
+    const descriptor = prototype && Object.getOwnPropertyDescriptor(prototype, 'responseURL');
+    if (!descriptor?.get || !descriptor.configurable) return;
+
+    try {
+      Object.defineProperty(prototype, 'responseURL', {
+        configurable: true,
+        enumerable: descriptor.enumerable,
+        get() {
+          const responseUrl = descriptor.get.call(this);
+          const merged = global.mergedBlobUrls;
+          if (!merged || typeof merged !== 'object') return responseUrl;
+          const requestUrl = typeof this._url === 'string' ? this._url : '';
+          const entry = Object.entries(merged).find(([filename, blobUrl]) =>
+            blobUrl === responseUrl || requestUrl.includes(filename)
+          );
+          if (!entry) return responseUrl;
+
+          try {
+            return new URL(`Build/${entry[0]}`, global.document.baseURI).href;
+          } catch (_) {
+            return responseUrl;
+          }
+        },
+      });
+    } catch (error) {
+      console.warn('[Scramjet] Could not normalize a Unity blob response URL:', error);
+    }
+  };
   const interfaceConfig = {
     codecEncode: (value) => encodeURIComponent(String(value)),
     codecDecode,
     getInjectScripts: (_meta, _handler, script) => [
-      script(new URL('/worker/working.all.js?v=2.7.2', origin).href),
-      script(new URL('/worker/scramjet.wasm.js?v=2.7.2', origin).href),
-      script(new URL('/epoch/index.js?v=2.7.2', origin).href),
-      script(new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.2', origin).href),
+      script(new URL('/worker/working.all.js?v=2.7.3', origin).href),
+      script(new URL('/worker/scramjet.wasm.js?v=2.7.3', origin).href),
+      script(new URL('/epoch/index.js?v=2.7.3', origin).href),
+      script(new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.3', origin).href),
     ],
     getWorkerInjectScripts: (_meta, _type, script) =>
-      script(new URL('/worker/working.all.js?v=2.7.2', origin).href),
+      script(new URL('/worker/working.all.js?v=2.7.3', origin).href),
   };
 
   const createContext = (global) => {
@@ -77,6 +107,7 @@
       hookSubcontext: (childGlobal) => createContext(childGlobal),
     });
     client.hook();
+    patchUnityBlobResponseUrl(global);
     return client;
   };
 

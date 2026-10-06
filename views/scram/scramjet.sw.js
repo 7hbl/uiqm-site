@@ -1,15 +1,15 @@
 // Scramjet service worker integration.
-importScripts('/worker/working.all.js');
-importScripts('/epoch/index.js');
+importScripts('/worker/working.all.js?v=2.7.3');
+importScripts('/epoch/index.js?v=2.7.3');
 
 const SCRAM_PREFIX = '/worker/';
 const NETWORK_PREFIX = SCRAM_PREFIX + 'network/';
 const ORIGIN = self.location.origin;
-const RUNTIME_SCRIPT_URL = new URL('/worker/working.all.js?v=2.7.2', ORIGIN).href;
+const RUNTIME_SCRIPT_URL = new URL('/worker/working.all.js?v=2.7.3', ORIGIN).href;
 const WASM_SCRIPT_PATH = '/worker/scramjet.wasm.js';
-const WASM_SCRIPT_URL = new URL(`${WASM_SCRIPT_PATH}?v=2.7.2`, ORIGIN).href;
-const EPOXY_SCRIPT_URL = new URL('/epoch/index.js?v=2.7.2', ORIGIN).href;
-const CLIENT_BOOTSTRAP_URL = new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.2', ORIGIN).href;
+const WASM_SCRIPT_URL = new URL(`${WASM_SCRIPT_PATH}?v=2.7.3`, ORIGIN).href;
+const EPOXY_SCRIPT_URL = new URL('/epoch/index.js?v=2.7.3', ORIGIN).href;
+const CLIENT_BOOTSTRAP_URL = new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.3', ORIGIN).href;
 const WISP_URL =
   (self.location.protocol === 'https:' ? 'wss' : 'ws') +
   '://' +
@@ -93,6 +93,7 @@ function normalizeHtmlMime(response, targetUrl) {
   const headers = makeHeaders(response.headers);
   const contentType = headers.get('content-type') || '';
   if (
+    response.status < 400 &&
     htmlFileUrl(targetUrl) &&
     (!contentType || /^(?:text\/plain|application\/octet-stream)(?:\s*;|$)/i.test(contentType))
   ) {
@@ -101,7 +102,8 @@ function normalizeHtmlMime(response, targetUrl) {
   return { ...response, headers };
 }
 
-function normalizeResourceMime(headers, targetUrl, destination) {
+function normalizeResourceMime(headers, targetUrl, destination, status = 200) {
+  if (status >= 400) return headers;
   let pathname = '';
   try {
     pathname = new URL(targetUrl).pathname.toLowerCase();
@@ -340,13 +342,25 @@ async function initFetchHandler() {
           let currentBody = ['GET', 'HEAD'].includes(currentMethod) ? null : body;
 
           for (let redirects = 0; redirects < 8; redirects++) {
-            const response = await rawTransport.request(
+            const requestHeaders = headers?.clone ? headers.clone() : headers;
+            const youtubeApi =
+              (currentUrl.hostname === 'youtube.com' || currentUrl.hostname.endsWith('.youtube.com')) &&
+              currentUrl.pathname.startsWith('/youtubei/');
+            if (youtubeApi && requestHeaders?.set) {
+              requestHeaders.set('origin', currentUrl.origin);
+              if (!requestHeaders.has('referer')) requestHeaders.set('referer', `${currentUrl.origin}/`);
+              requestHeaders.set('sec-fetch-site', 'same-origin');
+              requestHeaders.set('sec-fetch-mode', 'same-origin');
+              requestHeaders.set('sec-fetch-dest', 'empty');
+            }
+            let response = await rawTransport.request(
               currentUrl,
               currentMethod,
               currentBody,
-              headers,
+              requestHeaders,
               signal
             );
+            response = await normalizeUnityLoaderBlobProgress(response, currentUrl.href);
             const normalized = normalizeHtmlMime(response, currentUrl.href);
             const responseHeaders = makeHeaders(normalized.headers);
             const location = responseHeaders.get('location');
@@ -361,8 +375,8 @@ async function initFetchHandler() {
             const contentType = responseHeaders.get('content-type') || '';
             if (
               isScriptUrl(currentUrl) &&
-              /text\/html/i.test(contentType) &&
-              currentMethod === 'GET'
+              currentMethod === 'GET' &&
+              (normalized.status >= 400 || /text\/html/i.test(contentType))
             ) {
               try {
                 const fallback = await fetchServerProxyResponse(
@@ -375,6 +389,7 @@ async function initFetchHandler() {
               } catch (error) {
                 console.warn('[Scramjet] Script response fallback failed:', error);
               }
+              throw new Error(`Upstream returned ${normalized.status} ${normalized.statusText || ''} for script ${currentUrl.href}`.trim());
             }
 
             return {
@@ -484,6 +499,32 @@ function isScriptUrl(value) {
   }
 }
 
+async function normalizeUnityLoaderBlobProgress(response, targetUrl) {
+  if (response.status >= 400 || !/\/UnityLoader[^/]*\.js$/i.test(new URL(targetUrl).pathname) || !response.body) {
+    return response;
+  }
+
+  const source = await new Response(response.body).text();
+  const patched = source.replace(
+    /var\s+n\s*=\s*r\.target\.responseURL\s*,\s*o\s*=\s*n\.split\(["']\/Build\/["']\)\[1\]\s*;\s*o\s*=\s*o\.split\(["']\?["']\)\[0\]\s*;/,
+    'var n = r.target.responseURL || r.target._url || "", o = (n.split("/Build/")[1] || n.split("/").pop() || "").split("?")[0]; if (window.mergedBlobUrls) { for (var uiqmMergedName in window.mergedBlobUrls) { if (window.mergedBlobUrls[uiqmMergedName] === n || (r.target._url && String(r.target._url).indexOf(uiqmMergedName) !== -1)) { o = uiqmMergedName; break; } } }'
+  );
+
+  const headers = makeHeaders(response.headers);
+  headers.delete('content-length');
+  headers.delete('content-encoding');
+  if (patched === source) {
+    return { ...response, body: new TextEncoder().encode(source).buffer, headers: [...headers.entries()] };
+  }
+
+  headers.delete('etag');
+  return {
+    ...response,
+    body: new TextEncoder().encode(patched).buffer,
+    headers: [...headers.entries()],
+  };
+}
+
 async function routeProxyRequest(event, proxyUrl, targetUrl, fallbackRequest) {
   if (event.request.mode === 'navigate' && event.resultingClientId) {
     rememberClientOrigin(event.resultingClientId, new URL(targetUrl).origin);
@@ -527,7 +568,8 @@ async function routeProxyRequest(event, proxyUrl, targetUrl, fallbackRequest) {
     const responseHeaders = normalizeResourceMime(
       makeHeaders(response.headers),
       targetUrl,
-      event.request.destination
+      event.request.destination,
+      response.status
     );
     return toResponse({ ...response, headers: responseHeaders });
   } catch (error) {
@@ -550,7 +592,7 @@ async function routeProxyRequest(event, proxyUrl, targetUrl, fallbackRequest) {
   }
 }
 
-self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('install', (event) => event.waitUntil(self.skipWaiting()));
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
 
 function encodeBase64(buffer) {
@@ -564,7 +606,7 @@ function encodeBase64(buffer) {
 
 async function wasmScriptResponse() {
   if (!wasmScriptPromise) {
-    wasmScriptPromise = fetch(new URL('/worker/working.wasm.wasm?v=2.7.2', ORIGIN), {
+    wasmScriptPromise = fetch(new URL('/worker/working.wasm.wasm?v=2.7.3', ORIGIN), {
       headers: { 'x-scramjet-bypass': '1' },
     }).then(async (response) => {
       if (!response.ok) throw new Error(`Unable to load Scramjet WebAssembly (${response.status}).`);
@@ -591,6 +633,10 @@ async function wasmScriptResponse() {
 
 self.addEventListener('message', (event) => {
   const message = event.data;
+  if (message?.type === 'uiqm-skip-waiting') {
+    event.waitUntil(self.skipWaiting());
+    return;
+  }
   if (message?.type !== 'scramjet-set-cookie' || !workerCookieJar) return;
   try {
     workerCookieJar.setCookies([message.cookie], new URL(message.url));

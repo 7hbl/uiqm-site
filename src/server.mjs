@@ -674,6 +674,7 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     }
     forwardHeaders['referer'] = targetOrigin + '/';
     if (isYoutubeApi) {
+      forwardHeaders['origin'] = targetOrigin;
       forwardHeaders['sec-fetch-site'] = 'same-origin';
       forwardHeaders['sec-fetch-mode'] = 'same-origin';
       forwardHeaders['sec-fetch-dest'] = 'empty';
@@ -752,20 +753,22 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
         ? type
         : contentType;
 
-    if (extension === 'js' || extension === 'mjs') {
-      contentType = fallbackContentType('application/javascript; charset=UTF-8');
-    } else if (extension === 'wasm') {
-      contentType = fallbackContentType('application/wasm');
-    } else if (extension === 'css') {
-      contentType = fallbackContentType('text/css; charset=UTF-8');
-    } else if (extension === 'woff2') {
-      contentType = fallbackContentType('font/woff2');
-    } else if (extension === 'woff') {
-      contentType = fallbackContentType('font/woff');
-    } else if (extension === 'ttf') {
-      contentType = fallbackContentType('font/ttf');
-    } else if (extension === 'html' || extension === 'htm' || extension === 'xhtml') {
-      contentType = 'text/html; charset=UTF-8';
+    if (response.status < 400) {
+      if (extension === 'js' || extension === 'mjs') {
+        contentType = fallbackContentType('application/javascript; charset=UTF-8');
+      } else if (extension === 'wasm') {
+        contentType = fallbackContentType('application/wasm');
+      } else if (extension === 'css') {
+        contentType = fallbackContentType('text/css; charset=UTF-8');
+      } else if (extension === 'woff2') {
+        contentType = fallbackContentType('font/woff2');
+      } else if (extension === 'woff') {
+        contentType = fallbackContentType('font/woff');
+      } else if (extension === 'ttf') {
+        contentType = fallbackContentType('font/ttf');
+      } else if (extension === 'html' || extension === 'htm' || extension === 'xhtml') {
+        contentType = 'text/html; charset=UTF-8';
+      }
     }
     
     if (contentType) {

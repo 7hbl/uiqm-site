@@ -7,12 +7,13 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>">
     <script src="/gmt/index.js"></script>
     <script src="/assets/js/core.js"></script>
+    <script src="/assets/js/proxy-service-worker.js?v=2.7.3"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <script>
         window._proxyReady = (async () => {
             await new Promise((resolve, reject) => {
                 const s = document.createElement('script');
-                s.src = '/worker/working.all.js';
+                s.src = '/worker/working.all.js?v=2.7.3';
                 s.onload = resolve;
                 s.onerror = () => reject(new Error('Failed to load proxy engine'));
                 document.head.appendChild(s);
@@ -104,7 +105,7 @@
                     <button id="btn-engine-rh" class="nav-engine-btn" onclick="switchEngine('rh')" title="Rammerhead Proxy">RH</button>
                 </div>
             </div>
-            <iframe id="proxy-frame" title="UIQM Proxy Frame" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe>
+            <iframe id="proxy-frame" name="uiqm-proxy-frame" title="UIQM Proxy Frame" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
             <div id="proxy-loading"><pre>   CONNECTING TO TUNNEL...</pre></div>
         </div>
         <div id="terminal-shell">
@@ -195,6 +196,10 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         let sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
         const print = (h, c = '') => { const d = document.createElement('div'); d.className = 'line ' + c; d.innerHTML = h; output.appendChild(d); terminal.scrollTop = terminal.scrollHeight; };
         const setStatus = (m, c = 'yellow') => statusLine.innerHTML = `<span style="color:${c}">${m}</span>`;
+        window.showUnitywebNoSupport = () => {
+            setStatus('This Unity game could not start in the current browser.', '#ff4444');
+            print('The game host may have blocked a required asset or the browser may lack WebGL support.', 'system');
+        };
 
         input.disabled = false;
         input.focus();
@@ -208,26 +213,19 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
             try {
                 await window._proxyReady;
                 if (window.BareMux) {
-                    const conn = new BareMux.BareMuxConnection(BARE_MUX_WORKER);
-                    await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
+                    try {
+                        const conn = new BareMux.BareMuxConnection(BARE_MUX_WORKER);
+                        await conn.setTransport(TRANSPORT_MJS, [{ wisp: WISP_URL }]);
+                    } catch (err) {
+                        console.warn('Optional BareMux transport could not start:', err);
+                    }
                 }
-                if ('serviceWorker' in navigator) {
-                    window._swPromise = navigator.serviceWorker.register('/worker/working.sw.js?v=2.6.2', { scope: '/', updateViaCache: 'none' })
-                        .catch(() => navigator.serviceWorker.register('/worker/working.sw.js?v=2.6.2', { scope: '/worker/' }))
-                        .then(reg => {
-                            setStatus('Secure Channel Active. System ready.', '#00ff00');
-                            return reg;
-                        })
-                        .catch(err => {
-                            setStatus('Secure Channel Active. System ready.', '#00ff00');
-                            return null;
-                        });
-                } else {
-                    setStatus('Secure Channel Active. System ready.', '#00ff00');
-                }
+                window._swPromise = window.ensureUiqmProxyWorker();
+                await window._swPromise;
+                setStatus('Secure Channel Active. System ready.', '#00ff00');
             } catch (e) {
                 console.warn('Proxy init:', e);
-                setStatus('Secure Channel Active. System ready.', '#00ff00');
+                setStatus('Proxy worker failed to update. Refresh and try again.', '#ff4444');
             }
         };
 
@@ -289,15 +287,13 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
 
             const engine = window._preferredEngine || 'sj';
             if (engine === 'sj') {
-                if (window._swPromise) {
-                    try { await window._swPromise; } catch(_) {}
-                }
-                if ('serviceWorker' in navigator && !navigator.serviceWorker.controller) {
-                    await Promise.race([
-                        navigator.serviceWorker.ready,
-                        new Promise(res => navigator.serviceWorker.addEventListener('controllerchange', res, { once: true })),
-                        new Promise(res => setTimeout(res, 1200))
-                    ]);
+                try {
+                    await (window._swPromise || window.ensureUiqmProxyWorker());
+                } catch (error) {
+                    loading.style.display = 'none';
+                    setStatus('Proxy worker is not controlling this page.', '#ff4444');
+                    print(`Scramjet could not start: ${error.message}`, 'system');
+                    return;
                 }
             }
             frame.removeAttribute('srcdoc');
