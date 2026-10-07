@@ -307,9 +307,12 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
             try { return new URL(window._currentProxyUrl); } catch (_) { return null; }
         };
 
-        const submitYoutubeSearch = (event, form) => {
+        const submitYoutubeSearch = (event, form, input) => {
             const target = getProxiedTargetUrl();
-            const searchInput = form?.querySelector('input[name="search_query"]');
+            // YouTube currently renders its search control outside a form on some
+            // layouts, so support both the traditional form and the live widget.
+            const searchInput = input || form?.querySelector('input[name="search_query"]') ||
+                frame.contentDocument?.querySelector('input[name="search_query"]');
             const query = searchInput?.value?.trim();
             if (!target || !/(^|\.)youtube\.com$/i.test(target.hostname) || !query) return false;
 
@@ -332,16 +335,23 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                     if (form instanceof doc.defaultView.HTMLFormElement) submitYoutubeSearch(event, form);
                 }, true);
                 doc.addEventListener('click', event => {
-                    const button = event.target.closest?.('button');
-                    if (!button || button.type !== 'submit') return;
+                    const path = event.composedPath?.() || [event.target];
+                    const button = path.find(node =>
+                        node instanceof doc.defaultView.HTMLButtonElement && node.getAttribute('aria-label') === 'Search'
+                    );
+                    if (!button || button.getAttribute('aria-label') !== 'Search') return;
                     const form = button?.closest('form');
-                    if (form?.querySelector('input[name="search_query"]')) submitYoutubeSearch(event, form);
+                    const input = form?.querySelector('input[name="search_query"]') ||
+                        doc.querySelector('input[name="search_query"]');
+                    if (input) submitYoutubeSearch(event, form, input);
                 }, true);
                 doc.addEventListener('keydown', event => {
                     if (event.key !== 'Enter') return;
-                    const input = event.target;
-                    if (input instanceof doc.defaultView.HTMLInputElement && input.name === 'search_query') {
-                        submitYoutubeSearch(event, input.form || input.closest('form'));
+                    const input = event.composedPath?.().find(node =>
+                        node instanceof doc.defaultView.HTMLInputElement && node.name === 'search_query'
+                    ) || (event.target instanceof doc.defaultView.HTMLInputElement && event.target.name === 'search_query' ? event.target : null);
+                    if (input) {
+                        submitYoutubeSearch(event, input.form || input.closest('form'), input);
                     }
                 }, true);
             } catch (_) {}
