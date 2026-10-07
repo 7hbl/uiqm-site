@@ -1,15 +1,15 @@
 // Scramjet service worker integration.
-importScripts('/worker/working.all.js?v=2.7.5');
-importScripts('/epoch/index.js?v=2.7.5');
+importScripts('/worker/working.all.js?v=2.7.6');
+importScripts('/epoch/index.js?v=2.7.6');
 
 const SCRAM_PREFIX = '/worker/';
 const NETWORK_PREFIX = SCRAM_PREFIX + 'network/';
 const ORIGIN = self.location.origin;
-const RUNTIME_SCRIPT_URL = new URL('/worker/working.all.js?v=2.7.5', ORIGIN).href;
+const RUNTIME_SCRIPT_URL = new URL('/worker/working.all.js?v=2.7.6', ORIGIN).href;
 const WASM_SCRIPT_PATH = '/worker/scramjet.wasm.js';
-const WASM_SCRIPT_URL = new URL(`${WASM_SCRIPT_PATH}?v=2.7.5`, ORIGIN).href;
-const EPOXY_SCRIPT_URL = new URL('/epoch/index.js?v=2.7.5', ORIGIN).href;
-const CLIENT_BOOTSTRAP_URL = new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.5', ORIGIN).href;
+const WASM_SCRIPT_URL = new URL(`${WASM_SCRIPT_PATH}?v=2.7.6`, ORIGIN).href;
+const EPOXY_SCRIPT_URL = new URL('/epoch/index.js?v=2.7.6', ORIGIN).href;
+const CLIENT_BOOTSTRAP_URL = new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.6', ORIGIN).href;
 const WISP_URL =
   (self.location.protocol === 'https:' ? 'wss' : 'ws') +
   '://' +
@@ -320,6 +320,31 @@ function extractTargetFromScram(value) {
   } catch (_) {
     return null;
   }
+}
+
+function normalizeScramjetClientUrl(value) {
+  if (!value) return undefined;
+
+  let url;
+  try {
+    url = new URL(value, ORIGIN);
+  } catch (_) {
+    return undefined;
+  }
+
+  // Scramjet handles these URL schemes without trying to decode its proxy prefix.
+  if (url.protocol === 'about:' || url.protocol === 'blob:') return url;
+
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
+  if (url.origin === ORIGIN) {
+    // Only pass UIQM URLs that are valid Scramjet proxy routes. A normal UIQM
+    // page URL is not a proxied client URL and Scramjet would decode it wrongly.
+    return extractTargetFromScram(url) ? url : undefined;
+  }
+
+  // Scramjet's rawClientUrl parser expects an encoded proxy URL. Re-encode
+  // absolute upstream referrers before passing them to handleFetch().
+  return encodeProxyUrl(url.href);
 }
 
 function getClientOrigin(event) {
@@ -742,10 +767,11 @@ async function routeProxyRequest(event, proxyUrl, targetUrl, fallbackRequest) {
         headers.set(name, value);
       } catch (_) {}
     });
+    const rawClientUrl = normalizeScramjetClientUrl(request.referrer);
 
     const response = await handler.handleFetch({
       rawUrl: proxyUrl,
-      rawClientUrl: request.referrer ? new URL(request.referrer) : undefined,
+      rawClientUrl,
       body: ['GET', 'HEAD'].includes(request.method) ? null : request.body,
       method: request.method,
       initialHeaders: headers,
@@ -792,7 +818,7 @@ function encodeBase64(buffer) {
 
 async function wasmScriptResponse() {
   if (!wasmScriptPromise) {
-    wasmScriptPromise = fetch(new URL('/worker/working.wasm.wasm?v=2.7.5', ORIGIN), {
+    wasmScriptPromise = fetch(new URL('/worker/working.wasm.wasm?v=2.7.6', ORIGIN), {
       headers: { 'x-scramjet-bypass': '1' },
     }).then(async (response) => {
       if (!response.ok) throw new Error(`Unable to load Scramjet WebAssembly (${response.status}).`);
