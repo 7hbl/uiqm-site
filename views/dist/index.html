@@ -7,13 +7,13 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>">
     <script src="/gmt/index.js"></script>
     <script src="/assets/js/core.js"></script>
-    <script src="/assets/js/proxy-service-worker.js?v=2.7.4"></script>
+    <script src="/assets/js/proxy-service-worker.js?v=2.7.7"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <script>
         window._proxyReady = (async () => {
             await new Promise((resolve, reject) => {
                 const s = document.createElement('script');
-                s.src = '/worker/working.all.js?v=2.7.4';
+                s.src = '/worker/working.all.js?v=2.7.7';
                 s.onload = resolve;
                 s.onerror = () => reject(new Error('Failed to load proxy engine'));
                 document.head.appendChild(s);

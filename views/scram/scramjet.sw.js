@@ -1,15 +1,15 @@
 // Scramjet service worker integration.
-importScripts('/worker/working.all.js?v=2.7.6');
-importScripts('/epoch/index.js?v=2.7.6');
+importScripts('/worker/working.all.js?v=2.7.7');
+importScripts('/epoch/index.js?v=2.7.7');
 
 const SCRAM_PREFIX = '/worker/';
 const NETWORK_PREFIX = SCRAM_PREFIX + 'network/';
 const ORIGIN = self.location.origin;
-const RUNTIME_SCRIPT_URL = new URL('/worker/working.all.js?v=2.7.6', ORIGIN).href;
+const RUNTIME_SCRIPT_URL = new URL('/worker/working.all.js?v=2.7.7', ORIGIN).href;
 const WASM_SCRIPT_PATH = '/worker/scramjet.wasm.js';
-const WASM_SCRIPT_URL = new URL(`${WASM_SCRIPT_PATH}?v=2.7.6`, ORIGIN).href;
-const EPOXY_SCRIPT_URL = new URL('/epoch/index.js?v=2.7.6', ORIGIN).href;
-const CLIENT_BOOTSTRAP_URL = new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.6', ORIGIN).href;
+const WASM_SCRIPT_URL = new URL(`${WASM_SCRIPT_PATH}?v=2.7.7`, ORIGIN).href;
+const EPOXY_SCRIPT_URL = new URL('/epoch/index.js?v=2.7.7', ORIGIN).href;
+const CLIENT_BOOTSTRAP_URL = new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.7', ORIGIN).href;
 const WISP_URL =
   (self.location.protocol === 'https:' ? 'wss' : 'ws') +
   '://' +
@@ -252,10 +252,30 @@ async function storeRedirectCookies(response, url) {
     console.warn('[Scramjet] Could not store cookies from an upstream redirect:', error);
   }
 
-  for (const client of await self.clients.matchAll()) {
-    for (const cookie of cookies) {
-      client.postMessage({ type: 'scramjet-set-cookie', url: url.href || String(url), cookie });
+  await broadcastCookieSync(cookies.map((cookie) => ({ url, cookie })));
+}
+
+function normalizeCookieSyncEntries(cookies) {
+  if (!Array.isArray(cookies)) return [];
+  return cookies.flatMap((entry) => {
+    if (!entry || typeof entry.cookie !== 'string') return [];
+    try {
+      const url = entry.url instanceof URL ? entry.url : new URL(entry.url);
+      return [{ url: url.href, cookie: entry.cookie }];
+    } catch (_) {
+      return [];
     }
+  });
+}
+
+async function broadcastCookieSync(cookies, options = {}) {
+  const entries = normalizeCookieSyncEntries(cookies);
+  for (const client of await self.clients.matchAll()) {
+    client.postMessage({
+      type: 'scramjet-cookie-sync',
+      cookies: entries,
+      clear: Boolean(options.clear),
+    });
   }
 }
 
@@ -694,10 +714,15 @@ async function initFetchHandler() {
         },
       },
     },
-    sendSetCookie: async (url, cookie) => {
-      for (const client of await self.clients.matchAll()) {
-        client.postMessage({ type: 'scramjet-set-cookie', url: url.href, cookie });
+    sendSetCookie: async (cookies, options) => {
+      // Scramjet 2.x sends CookieSyncEntry[] plus options here. The worker's
+      // CookieJar has already consumed response Set-Cookie headers; mirror the
+      // same entries into page runtimes so document.cookie and fetches agree.
+      if (options?.clear) workerCookieJar.clear();
+      for (const entry of normalizeCookieSyncEntries(cookies)) {
+        workerCookieJar.setCookies(entry.cookie, new URL(entry.url));
       }
+      await broadcastCookieSync(cookies, options);
     },
     fetchBlobUrl: (url) => fetch(url),
     fetchDataUrl: (url) => dataUrlResponse(url),
@@ -818,7 +843,7 @@ function encodeBase64(buffer) {
 
 async function wasmScriptResponse() {
   if (!wasmScriptPromise) {
-    wasmScriptPromise = fetch(new URL('/worker/working.wasm.wasm?v=2.7.6', ORIGIN), {
+    wasmScriptPromise = fetch(new URL('/worker/working.wasm.wasm?v=2.7.7', ORIGIN), {
       headers: { 'x-scramjet-bypass': '1' },
     }).then(async (response) => {
       if (!response.ok) throw new Error(`Unable to load Scramjet WebAssembly (${response.status}).`);
@@ -849,9 +874,28 @@ self.addEventListener('message', (event) => {
     event.waitUntil(self.skipWaiting());
     return;
   }
-  if (message?.type !== 'scramjet-set-cookie' || !workerCookieJar) return;
+  if (message?.type === 'scramjet-cookie-jar-snapshot') {
+    event.ports?.[0]?.postMessage({
+      type: 'scramjet-cookie-jar-snapshot',
+      cookies: workerCookieJar?.dump() || '{}',
+    });
+    return;
+  }
+  if (!workerCookieJar) return;
+  if (message?.type === 'scramjet-cookie-sync') {
+    if (message.clear) workerCookieJar.clear();
+    for (const entry of normalizeCookieSyncEntries(message.cookies)) {
+      try {
+        workerCookieJar.setCookies(entry.cookie, new URL(entry.url));
+      } catch (error) {
+        console.warn('[Scramjet] Could not apply a synchronized cookie:', error);
+      }
+    }
+    return;
+  }
+  if (message?.type !== 'scramjet-set-cookie' || !message.url || !message.cookie) return;
   try {
-    workerCookieJar.setCookies([message.cookie], new URL(message.url));
+    workerCookieJar.setCookies(message.cookie, new URL(message.url));
   } catch (error) {
     console.warn('[Scramjet] Could not sync a page cookie:', error);
   }

@@ -1,5 +1,5 @@
 (() => {
-  const workerRelease = '2.7.6';
+  const workerRelease = '2.7.7';
   const scriptPath = '/worker/working.sw.js';
   const scriptUrl = new URL(`${scriptPath}?v=${workerRelease}`, window.location.origin).href;
   let startupPromise;

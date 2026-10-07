@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="/assets/js/core.js"></script>
-    <script src="/assets/js/proxy-service-worker.js?v=2.7.4"></script>
+    <script src="/assets/js/proxy-service-worker.js?v=2.7.7"></script>
     <style>
         :root {
             --glow: #ff0000;
@@ -2986,7 +2986,7 @@
             try {
                 await window.ensureUiqmProxyWorker();
                 proxyReady = true;
-                console.log('Scramjet proxy ready 2.7.4');
+                console.log('Scramjet proxy ready 2.7.7');
             } catch (e) {
                 console.warn('Service Worker initialization note:', e);
             } finally {
