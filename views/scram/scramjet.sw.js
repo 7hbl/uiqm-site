@@ -55,6 +55,17 @@ let workerCookieJar;
 const clientOrigins = new Map();
 const transportBackoffUntil = new Map();
 const TRANSPORT_BACKOFF_MS = 8000;
+const googleVideoServerRoute = {
+  preferUntil: 0,
+  retryAfter: 0,
+};
+const GOOGLE_VIDEO_SERVER_PREFERENCE_MS = 120000;
+const GOOGLE_VIDEO_SERVER_RETRY_MS = 60000;
+
+function isGoogleVideoRequest(url) {
+  return /(^|\.)googlevideo\.com$/i.test(url.hostname) &&
+    url.pathname.startsWith('/videoplayback');
+}
 
 function makeHeaders(input) {
   if (input instanceof Headers) return new Headers(input);
@@ -458,6 +469,25 @@ async function initFetchHandler() {
             const jarCookies = workerCookieJar?.getCookies(currentUrl, false);
             if (jarCookies) requestHeaders.set('cookie', jarCookies);
 
+            const googleVideoRequest = isGoogleVideoRequest(currentUrl);
+            if (googleVideoRequest && googleVideoServerRoute.preferUntil > Date.now()) {
+              try {
+                const serverResponse = await fetchServerProxyResponse(
+                  currentUrl.href,
+                  currentMethod,
+                  requestHeaders,
+                  currentBody
+                );
+                if (serverResponse && [200, 206].includes(serverResponse.status)) {
+                  return responseToTransport(serverResponse, currentUrl.href);
+                }
+              } catch (error) {
+                console.warn('[Scramjet] Preferred Google Video server route failed; trying the direct route.', error);
+              }
+              googleVideoServerRoute.preferUntil = 0;
+              googleVideoServerRoute.retryAfter = Date.now() + GOOGLE_VIDEO_SERVER_RETRY_MS;
+            }
+
             const backoffExpiry = transportBackoffUntil.get(currentUrl.origin) || 0;
             if (backoffExpiry > Date.now()) {
               const error = new Error('The direct transport is cooling down; retrying through the server proxy.');
@@ -482,6 +512,30 @@ async function initFetchHandler() {
 
             response = await normalizeUnityLoaderBlobProgress(response, currentUrl.href);
             const normalized = normalizeHtmlMime(response, currentUrl.href);
+            if (
+              googleVideoRequest &&
+              normalized.status === 403 &&
+              Date.now() >= googleVideoServerRoute.retryAfter
+            ) {
+              try {
+                const serverResponse = await fetchServerProxyResponse(
+                  currentUrl.href,
+                  currentMethod,
+                  requestHeaders,
+                  currentBody
+                );
+                if (serverResponse && [200, 206].includes(serverResponse.status)) {
+                  normalized.body?.cancel?.().catch(() => {});
+                  googleVideoServerRoute.preferUntil = Date.now() + GOOGLE_VIDEO_SERVER_PREFERENCE_MS;
+                  googleVideoServerRoute.retryAfter = 0;
+                  console.info('[Scramjet] Google Video playback switched to the server route after a CDN 403.');
+                  return responseToTransport(serverResponse, currentUrl.href);
+                }
+              } catch (error) {
+                console.warn('[Scramjet] Google Video server fallback failed after a CDN 403.', error);
+              }
+              googleVideoServerRoute.retryAfter = Date.now() + GOOGLE_VIDEO_SERVER_RETRY_MS;
+            }
             const responseHeaders = makeHeaders(normalized.headers);
             const location = responseHeaders.get('location');
             if (normalized.status >= 300 && normalized.status < 400 && normalized.status !== 304) {
