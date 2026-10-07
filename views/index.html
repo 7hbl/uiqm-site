@@ -327,6 +327,8 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
 
         const installYoutubeSearchFallback = () => {
             try {
+                const target = getProxiedTargetUrl();
+                if (!target || !/(^|\.)youtube\.com$/i.test(target.hostname)) return;
                 const doc = frame.contentDocument;
                 if (!doc?.documentElement || doc.documentElement.dataset.uiqmSearchFallback === 'installed') return;
                 doc.documentElement.dataset.uiqmSearchFallback = 'installed';
@@ -356,6 +358,11 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 }, true);
             } catch (_) {}
         };
+
+        // Scramjet does not consistently bubble the proxied document's load event
+        // to the outer iframe. Poll briefly for the live YouTube document so its
+        // search handlers are installed even when that event is absent.
+        setInterval(installYoutubeSearchFallback, 750);
 
         const getProxyRoute = async (engine, url) => {
             if (engine === 'sj') {
