@@ -623,6 +623,9 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       parsedTarget.pathname.startsWith('/youtubei/');
     const isYoutubeTarget =
       parsedTarget.hostname === 'youtube.com' || parsedTarget.hostname.endsWith('.youtube.com');
+    const isYoutubeVideoStream =
+      /(^|\.)googlevideo\.com$/i.test(parsedTarget.hostname) &&
+      parsedTarget.pathname.startsWith('/videoplayback');
     const responseCookies = [];
     const isTopLevelNavigation =
       request.headers['sec-fetch-mode'] === 'navigate' ||
@@ -641,7 +644,8 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       'user-agent', 'accept', 'accept-language', 'content-type', 'content-encoding',
       'authorization', 'x-origin', 'device-memory', 'priority', 'sec-ch-dpr',
       'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform', 'sec-ch-viewport-width',
-      'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'x-client-data'
+      'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'x-client-data',
+      'range', 'if-range'
     ];
     for (const h of headersToCopy) {
       if (request.headers[h]) {
@@ -675,6 +679,25 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       forwardHeaders['origin'] = targetOrigin;
     }
     forwardHeaders['referer'] = targetOrigin + '/';
+    if (isYoutubeVideoStream) {
+      // The browser referrer is encoded in the proxy route. Send the original
+      // YouTube watch URL when available so Google Video sees the player context.
+      let watchReferer = null;
+      try {
+        const browserReferer = new URL(request.headers.referer);
+        const routeMarkers = ['/worker/network/', '/worker/', '/scram/network/', '/scram/'];
+        const marker = routeMarkers.find((value) => browserReferer.pathname.includes(value));
+        if (marker) {
+          const encodedTarget = browserReferer.pathname.split(marker).at(-1);
+          const decodedTarget = new URL(decodeURIComponent(encodedTarget));
+          if (decodedTarget.hostname === 'youtube.com' || decodedTarget.hostname.endsWith('.youtube.com')) {
+            watchReferer = decodedTarget.href;
+          }
+        }
+      } catch (_) {}
+      forwardHeaders['referer'] = watchReferer || 'https://www.youtube.com/';
+      forwardHeaders['sec-fetch-site'] = 'cross-site';
+    }
     if (isYoutubeApi) {
       forwardHeaders['origin'] = targetOrigin;
       forwardHeaders['sec-fetch-site'] = 'same-origin';
