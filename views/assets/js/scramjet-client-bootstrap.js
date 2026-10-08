@@ -1,4 +1,4 @@
-(async () => {
+(() => {
   const { CookieJar, ScramjetClient, defaultConfig, setWasm } = self.$scramjet || {};
   const transportModule = self.EpxMod;
   const EpoxyTransport =
@@ -26,6 +26,7 @@
   delete self.WASM;
 
   const cookieJar = new CookieJar();
+  let cookieJarDirty = false;
   const loadCookieJarSnapshot = () => new Promise((resolve) => {
     const controller = self.navigator.serviceWorker?.controller;
     if (!controller || typeof MessageChannel !== 'function') {
@@ -45,7 +46,9 @@
     const timeoutId = setTimeout(finish, 350);
     channel.port1.onmessage = (event) => {
       try {
-        if (typeof event.data?.cookies === 'string') cookieJar.load(event.data.cookies);
+        if (typeof event.data?.cookies === 'string' && !cookieJarDirty) {
+          cookieJar.load(event.data.cookies);
+        }
       } catch (error) {
         console.warn('[Scramjet] Could not restore the worker cookie snapshot:', error);
       }
@@ -104,13 +107,13 @@
     codecEncode: (value) => encodeURIComponent(String(value)),
     codecDecode,
     getInjectScripts: (_meta, _handler, script) => [
-      script(new URL('/worker/working.all.js?v=2.7.7', origin).href),
-      script(new URL('/worker/scramjet.wasm.js?v=2.7.7', origin).href),
-      script(new URL('/epoch/index.js?v=2.7.7', origin).href),
-      script(new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.7', origin).href),
+      script(new URL('/worker/working.all.js?v=2.7.8', origin).href),
+      script(new URL('/worker/scramjet.wasm.js?v=2.7.8', origin).href),
+      script(new URL('/epoch/index.js?v=2.7.8', origin).href),
+      script(new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.8', origin).href),
     ],
     getWorkerInjectScripts: (_meta, _type, script) =>
-      script(new URL('/worker/working.all.js?v=2.7.7', origin).href),
+      script(new URL('/worker/working.all.js?v=2.7.8', origin).href),
   };
 
   const createContext = (global) => {
@@ -132,6 +135,7 @@
         // Forward the actual upstream URLs so the service worker can keep its
         // cookie jar in sync for the next proxied request.
         if (options?.clear) cookieJar.clear();
+        if (options?.clear || cookies?.length) cookieJarDirty = true;
         const entries = Array.isArray(cookies) ? cookies.flatMap((entry) => {
           if (!entry || typeof entry.cookie !== 'string') return [];
           try {
@@ -156,14 +160,12 @@
   };
 
   try {
-    // Load cookies stored by the service worker before page scripts inspect
-    // document.cookie (for example, during a site's own verification flow).
-    await loadCookieJarSnapshot();
     self.__scramjetClient = createContext(self);
     self.navigator.serviceWorker?.addEventListener('message', (event) => {
       const message = event.data;
       if (message?.type === 'scramjet-cookie-sync') {
         if (message.clear) cookieJar.clear();
+        if (message.clear || message.cookies?.length) cookieJarDirty = true;
         for (const entry of Array.isArray(message.cookies) ? message.cookies : []) {
           if (!entry || typeof entry.cookie !== 'string') continue;
           try {
@@ -177,9 +179,17 @@
       }
       // Keep compatibility with redirect-cookie messages from older workers.
       if (message?.type === 'scramjet-set-cookie' && message.url && message.cookie) {
-        try { cookieJar.setCookies(message.cookie, new URL(message.url)); }
+        try {
+          cookieJar.setCookies(message.cookie, new URL(message.url));
+          cookieJarDirty = true;
+        }
         catch (error) { console.warn('[Scramjet] Could not apply a proxied cookie:', error); }
       }
+    });
+    // Install Scramjet's globals synchronously before upstream page scripts run.
+    // The snapshot is a background enhancement and must never delay those hooks.
+    loadCookieJarSnapshot().catch((error) => {
+      console.warn('[Scramjet] Could not restore the worker cookie snapshot:', error);
     });
   } catch (error) {
     console.error('[Scramjet] Could not initialize the page runtime:', error);

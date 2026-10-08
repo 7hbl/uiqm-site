@@ -1,15 +1,15 @@
 // Scramjet service worker integration.
-importScripts('/worker/working.all.js?v=2.7.7');
-importScripts('/epoch/index.js?v=2.7.7');
+importScripts('/worker/working.all.js?v=2.7.8');
+importScripts('/epoch/index.js?v=2.7.8');
 
 const SCRAM_PREFIX = '/worker/';
 const NETWORK_PREFIX = SCRAM_PREFIX + 'network/';
 const ORIGIN = self.location.origin;
-const RUNTIME_SCRIPT_URL = new URL('/worker/working.all.js?v=2.7.7', ORIGIN).href;
+const RUNTIME_SCRIPT_URL = new URL('/worker/working.all.js?v=2.7.8', ORIGIN).href;
 const WASM_SCRIPT_PATH = '/worker/scramjet.wasm.js';
-const WASM_SCRIPT_URL = new URL(`${WASM_SCRIPT_PATH}?v=2.7.7`, ORIGIN).href;
-const EPOXY_SCRIPT_URL = new URL('/epoch/index.js?v=2.7.7', ORIGIN).href;
-const CLIENT_BOOTSTRAP_URL = new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.7', ORIGIN).href;
+const WASM_SCRIPT_URL = new URL(`${WASM_SCRIPT_PATH}?v=2.7.8`, ORIGIN).href;
+const EPOXY_SCRIPT_URL = new URL('/epoch/index.js?v=2.7.8', ORIGIN).href;
+const CLIENT_BOOTSTRAP_URL = new URL('/assets/js/scramjet-client-bootstrap.js?v=2.7.8', ORIGIN).href;
 const WISP_URL =
   (self.location.protocol === 'https:' ? 'wss' : 'ws') +
   '://' +
@@ -843,7 +843,7 @@ function encodeBase64(buffer) {
 
 async function wasmScriptResponse() {
   if (!wasmScriptPromise) {
-    wasmScriptPromise = fetch(new URL('/worker/working.wasm.wasm?v=2.7.7', ORIGIN), {
+    wasmScriptPromise = fetch(new URL('/worker/working.wasm.wasm?v=2.7.8', ORIGIN), {
       headers: { 'x-scramjet-bypass': '1' },
     }).then(async (response) => {
       if (!response.ok) throw new Error(`Unable to load Scramjet WebAssembly (${response.status}).`);
