@@ -66,6 +66,9 @@ const safeProxyDispatcher = new PublicOnlyProxyAgent({
 const shutdown = fileURLToPath(new URL('./.shutdown', import.meta.url));
 
 const lastUpstreamByIp = new Map();
+const upstreamDiagnosticWindows = new Map();
+const UPSTREAM_DIAGNOSTIC_WINDOW_MS = 15_000;
+const MAX_UPSTREAM_DIAGNOSTIC_KEYS = 256;
 const rh = createRammerhead({ assertPublicProxyTarget, createPublicLookup });
 const rammerheadScopes = [
   '/rammerhead.js',
@@ -591,7 +594,104 @@ const uvXorDecode = (str) => {
   }
 };
 
+const upstreamErrorKinds = new Map([
+  ['ENOTFOUND', 'dns'],
+  ['EAI_AGAIN', 'dns'],
+  ['ECONNREFUSED', 'connect_refused'],
+  ['ECONNRESET', 'connection_reset'],
+  ['EPIPE', 'connection_reset'],
+  ['ETIMEDOUT', 'timeout'],
+  ['UND_ERR_CONNECT_TIMEOUT', 'timeout'],
+  ['UND_ERR_HEADERS_TIMEOUT', 'timeout'],
+  ['UND_ERR_BODY_TIMEOUT', 'timeout'],
+  ['ABORT_ERR', 'timeout'],
+  ['CERT_HAS_EXPIRED', 'tls'],
+  ['DEPTH_ZERO_SELF_SIGNED_CERT', 'tls'],
+  ['ERR_TLS_CERT_ALTNAME_INVALID', 'tls'],
+  ['UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'tls'],
+  ['ERR_TLS_HANDSHAKE_TIMEOUT', 'tls'],
+]);
+
+function classifyUpstreamError(error) {
+  const pending = [error];
+  const seen = new Set();
+  let code = 'UNKNOWN';
+  let name = 'Error';
+  let kind = 'unknown';
+
+  while (pending.length && seen.size < 12) {
+    const current = pending.shift();
+    if (!current || (typeof current !== 'object' && typeof current !== 'function') || seen.has(current)) continue;
+    seen.add(current);
+
+    if (name === 'Error' && typeof current.name === 'string') name = current.name;
+    if (code === 'UNKNOWN' && typeof current.code === 'string') code = current.code;
+    if (kind === 'unknown' && typeof current.code === 'string' && upstreamErrorKinds.has(current.code)) {
+      kind = upstreamErrorKinds.get(current.code);
+    }
+    if (kind === 'unknown' && /^(?:AbortError|TimeoutError)$/.test(current.name || '')) kind = 'timeout';
+
+    if (current.cause) pending.push(current.cause);
+    if (Array.isArray(current.errors)) pending.push(...current.errors.slice(0, 8));
+  }
+
+  return { kind, code, name };
+}
+
+function boundedHeaderValue(value, maxLength = 120) {
+  if (typeof value !== 'string') return null;
+  return value.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').slice(0, maxLength);
+}
+
+function logUpstreamResponse(request, engine, targetHost, response, elapsedMs) {
+  if (response.status < 400 && process.env.PROXY_DEBUG !== '1') return;
+
+  const now = Date.now();
+  const key = `${engine}:${targetHost}:${response.status}`;
+  const previous = upstreamDiagnosticWindows.get(key);
+  if (response.status >= 400 && previous && now - previous.loggedAt < UPSTREAM_DIAGNOSTIC_WINDOW_MS) {
+    previous.suppressed += 1;
+    return;
+  }
+
+  let suppressed = 0;
+  if (response.status >= 400) {
+    suppressed = previous?.suppressed || 0;
+    if (!previous && upstreamDiagnosticWindows.size >= MAX_UPSTREAM_DIAGNOSTIC_KEYS) {
+      const oldestKey = upstreamDiagnosticWindows.keys().next().value;
+      if (oldestKey) upstreamDiagnosticWindows.delete(oldestKey);
+    }
+    upstreamDiagnosticWindows.delete(key);
+    upstreamDiagnosticWindows.set(key, { loggedAt: now, suppressed: 0 });
+  }
+
+  let finalHost = targetHost;
+  try {
+    finalHost = new URL(response.url).host;
+  } catch (_) {}
+
+  const diagnostic = {
+    event: response.status >= 400 ? 'upstream_http_error' : 'upstream_response',
+    requestId: request.id,
+    engine,
+    method: request.method,
+    host: targetHost,
+    finalHost,
+    redirected: response.redirected,
+    status: response.status,
+    elapsedMs,
+    contentType: boundedHeaderValue(response.headers.get('content-type')),
+    retryAfter: boundedHeaderValue(response.headers.get('retry-after')),
+  };
+  if (suppressed) diagnostic.suppressedRecentDuplicates = suppressed;
+
+  const line = `[Proxy diagnostics] ${JSON.stringify(diagnostic)}`;
+  if (response.status >= 400) console.warn(line);
+  else console.info(line);
+}
+
 async function handleProxyRequest(request, reply, engine, wildcard) {
+  const startedAt = Date.now();
   let targetLabel = 'unknown destination';
   try {
     let targetUrlStr = wildcard;
@@ -752,6 +852,7 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     }
 
     const response = await fetch(fetchTarget, fetchOptions);
+    logUpstreamResponse(request, engine, targetLabel, response, Date.now() - startedAt);
 
     const responseHeaders = {};
     const upstreamSetCookies = response.headers.getSetCookie?.() || [];
@@ -824,8 +925,33 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       reply.code(403).type('text/plain').send('Proxy destination is blocked.');
       return;
     }
-    console.error(`[Proxy Server Fallback Error] ${targetLabel}: ${err.code || err.name || 'upstream request failed'}`);
-    reply.code(502).type('text/plain').send('Proxy upstream request failed.');
+    const details = classifyUpstreamError(err);
+    console.error(`[Proxy diagnostics] ${JSON.stringify({
+      event: 'upstream_transport_error',
+      requestId: request.id,
+      engine,
+      method: request.method,
+      host: targetLabel,
+      elapsedMs: Date.now() - startedAt,
+      kind: details.kind,
+      code: details.code,
+      errorName: details.name,
+    })}`);
+
+    const publicMessages = {
+      dns: 'The proxy could not resolve the destination host.',
+      connect_refused: 'The destination refused the proxy connection.',
+      connection_reset: 'The upstream connection closed unexpectedly.',
+      timeout: 'The upstream request timed out.',
+      tls: 'The proxy could not establish a secure connection to the destination.',
+      unknown: 'The proxy could not connect to the destination.',
+    };
+    const gatewayStatus = details.kind === 'timeout' ? 504 : 502;
+    reply
+      .header('x-uiqm-proxy-error', details.kind)
+      .code(gatewayStatus)
+      .type('text/plain; charset=utf-8')
+      .send(publicMessages[details.kind] || publicMessages.unknown);
   }
 }
 
