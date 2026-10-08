@@ -33,6 +33,10 @@
         #proxy-shell { position: absolute; top:0; left:0; width:100%; height:100%; display:none; z-index: 10; background:#000; }
         #proxy-frame { width:100%; height:100%; border:none; }
         #proxy-loading { position:fixed; top:0; left:0; width:100%; height:100%; background:#000; color:#fff; display:none; align-items:center; justify-content:center; font-size:1.5rem; text-shadow: 0 0 10px #ff0000; z-index: 15; pointer-events:none; }
+        #proxy-verification-notice { position:fixed; top:16px; left:50%; transform:translateX(-50%); display:flex; align-items:center; justify-content:center; gap:12px; max-width:min(760px, calc(100vw - 32px)); padding:12px 16px; border:1px solid rgba(255,0,0,.7); border-radius:10px; background:rgba(10,10,10,.94); color:#fff; z-index:1101; box-shadow:0 4px 18px rgba(0,0,0,.65); font:12px/1.45 Arial, sans-serif; }
+        #proxy-verification-notice[hidden] { display:none !important; }
+        #proxy-verification-notice a, #proxy-verification-notice button { flex:0 0 auto; padding:7px 10px; border:1px solid #ff0000; border-radius:6px; background:#111; color:#ff7777; font:inherit; text-decoration:none; white-space:nowrap; cursor:pointer; }
+        #proxy-verification-notice a:hover, #proxy-verification-notice button:hover { background:#240000; color:#fff; }
         #proxy-error { position:absolute; inset:0; display:none; align-items:center; justify-content:center; padding:24px; z-index:20; background:#050505; color:#ff4d4d; text-align:center; }
         #proxy-error[data-visible="true"] { display:flex; }
         #proxy-error-content { max-width:620px; }
@@ -103,6 +107,11 @@
                 </form>
             </div>
             <iframe id="proxy-frame" name="uiqm-proxy-frame" title="UIQM Proxy Frame" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+            <div id="proxy-verification-notice" hidden role="status" aria-live="polite">
+                <span><strong>This site requires verification.</strong> Complete its check if the page allows. UIQM cannot solve or skip it; if it stays stuck, open the site directly.</span>
+                <a id="proxy-direct-link" href="#" target="_blank" rel="noopener noreferrer">Open directly</a>
+                <button type="button" onclick="document.getElementById('proxy-verification-notice').hidden = true">Dismiss</button>
+            </div>
             <div id="proxy-loading"><pre>   CONNECTING TO TUNNEL...</pre></div>
             <div id="proxy-error" role="status" aria-live="polite">
                 <div id="proxy-error-content">
@@ -185,6 +194,8 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         if (pl) pl.style.display = 'none';
         const error = document.getElementById('proxy-error');
         if (error) error.dataset.visible = 'false';
+        const verificationNotice = document.getElementById('proxy-verification-notice');
+        if (verificationNotice) verificationNotice.hidden = true;
         document.getElementById('proxy-frame').src = 'about:blank';
         document.getElementById('term-input').focus();
     }
@@ -194,6 +205,8 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         const terminal = document.getElementById('terminal-shell'), frame = document.getElementById('proxy-frame');
         const loading = document.getElementById('proxy-loading'), proxyShell = document.getElementById('proxy-shell');
         const proxyError = document.getElementById('proxy-error');
+        const verificationNotice = document.getElementById('proxy-verification-notice');
+        const directLink = document.getElementById('proxy-direct-link');
         const statusLine = document.getElementById('status-line'), backBtn = document.getElementById('back-btn');
         const canvas = document.getElementById('matrix-canvas');
 
@@ -449,6 +462,7 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 return;
             }
             window._currentProxyUrl = url;
+            verificationNotice.hidden = true;
             proxyError.dataset.visible = 'false';
             try {
                 const targetOrigin = new URL(url).origin;
@@ -483,8 +497,15 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                     if (outcome === 'cancelled' || navigationId !== proxyNavigationId) return;
                     if (outcome === 'upstream-block') {
                         stopProxyLoading();
+                        try {
+                            const directUrl = new URL(url);
+                            if (directUrl.protocol === 'http:' || directUrl.protocol === 'https:') {
+                                directLink.href = directUrl.href;
+                                verificationNotice.hidden = false;
+                            }
+                        } catch (_) {}
                         setStatus('This site requires verification in its own browser session.', '#ffaa00');
-                        print('The site returned a security check. Automatic retry was stopped; complete verification on the site directly.', 'system');
+                        print('The site returned a security check. Automatic retry was stopped; complete it on the page if possible, or open the site directly.', 'system');
                         return;
                     }
                     if (outcome === 'loaded' || outcome === 'unknown') {
