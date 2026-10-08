@@ -21,7 +21,9 @@ import { fileURLToPath } from 'node:url';
 import { existsSync, unlinkSync, readFileSync } from 'node:fs';
 import {
   assertPublicHttpTarget,
+  assertPublicProxyTarget,
   createPublicLookup,
+  configureWispSecurity,
   isBlockedDestinationError,
   PublicOnlyProxyAgent,
 } from './proxy-security.mjs';
@@ -35,16 +37,7 @@ console.log(serverUrl);
 // Wisp Configuration: Refer to the documentation at https://www.npmjs.com/package/@mercuryworkshop/wisp-js
 
 logging.set_level(logging.NONE);
-wisp.options.allow_udp_streams = false;
-wisp.options.allow_loopback_ips = false;
-wisp.options.allow_private_ips = false;
-wisp.options.hostname_blacklist = [
-  /(^|\.)localhost\.?$/i,
-  /(^|\.)local\.?$/i,
-  /(^|\.)internal\.?$/i,
-  /(^|\.)home\.arpa\.?$/i,
-  /^metadata\.google\.internal\.?$/i,
-];
+configureWispSecurity(wisp.options);
 
 // For security reasons only allow these ports. Any additional regional proxies or default sandboxed Tor ports should be added here.
 wisp.options.port_whitelist = [
@@ -73,7 +66,7 @@ const safeProxyDispatcher = new PublicOnlyProxyAgent({
 const shutdown = fileURLToPath(new URL('./.shutdown', import.meta.url));
 
 const lastUpstreamByIp = new Map();
-const rh = createRammerhead();
+const rh = createRammerhead({ assertPublicProxyTarget, createPublicLookup });
 const rammerheadScopes = [
   '/rammerhead.js',
   '/hammerhead.js',

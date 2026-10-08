@@ -13,8 +13,11 @@ for (const [address, prefix] of [
   ['172.16.0.0', 12],
   ['192.0.0.0', 24],
   ['192.0.2.0', 24],
+  ['192.31.196.0', 24],
+  ['192.52.193.0', 24],
   ['192.88.99.0', 24],
   ['192.168.0.0', 16],
+  ['192.175.48.0', 24],
   ['198.18.0.0', 15],
   ['198.51.100.0', 24],
   ['203.0.113.0', 24],
@@ -25,8 +28,7 @@ for (const [address, prefix] of [
 }
 
 for (const [address, prefix] of [
-  ['::', 128],
-  ['::1', 128],
+  ['::', 96],
   ['64:ff9b::', 96],
   ['64:ff9b:1::', 48],
   ['100::', 64],
@@ -94,8 +96,8 @@ function expandIpv6(address) {
   return [...left, ...Array(missing).fill('0'), ...right].map((part) => Number.parseInt(part, 16));
 }
 
-export function assertPublicHttpTarget(target) {
-  if (!(target instanceof URL) || !['http:', 'https:'].includes(target.protocol)) {
+function assertPublicTargetWithProtocols(target, protocols) {
+  if (!(target instanceof URL) || !protocols.includes(target.protocol)) {
     throw blockedDestinationError();
   }
   if (target.username || target.password) throw blockedDestinationError();
@@ -112,6 +114,31 @@ export function assertPublicHttpTarget(target) {
 
   if (isIP(hostname) && isBlockedAddress(hostname)) throw blockedDestinationError();
   return target;
+}
+
+export function assertPublicHttpTarget(target) {
+  return assertPublicTargetWithProtocols(target, ['http:', 'https:']);
+}
+
+export function assertPublicProxyTarget(target) {
+  return assertPublicTargetWithProtocols(target, ['http:', 'https:', 'ws:', 'wss:']);
+}
+
+export function configureWispSecurity(options) {
+  options.allow_udp_streams = false;
+  // Wisp's bundled IP range checks don't consistently classify every
+  // IPv4-compatible or IPv4-mapped IPv6 literal as private.
+  options.allow_direct_ip = false;
+  options.allow_loopback_ips = false;
+  options.allow_private_ips = false;
+  options.hostname_blacklist = [
+    /(^|\.)localhost\.?$/i,
+    /(^|\.)local\.?$/i,
+    /(^|\.)internal\.?$/i,
+    /(^|\.)home\.arpa\.?$/i,
+    /^metadata\.google\.internal\.?$/i,
+  ];
+  return options;
 }
 
 // Undici calls this resolver at connection time, so DNS answers are checked

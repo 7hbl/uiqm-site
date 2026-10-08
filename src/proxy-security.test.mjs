@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   assertPublicHttpTarget,
+  assertPublicProxyTarget,
+  configureWispSecurity,
   createPublicLookup,
   isBlockedAddress,
   isBlockedDestinationError,
@@ -11,6 +13,7 @@ import {
 test('blocks loopback, private, link-local, and non-public IP ranges', () => {
   for (const address of [
     '127.0.0.1', '10.0.0.8', '172.20.1.2', '192.168.1.1',
+    '192.31.196.1', '192.52.193.1', '192.175.48.1',
     '169.254.169.254', '100.64.0.1', '224.0.0.1', '::1', '::ffff:127.0.0.1', '::ffff:7f00:1',
     'fc00::1', 'fe80::1', '2001:db8::1', '::',
   ]) {
@@ -36,6 +39,24 @@ test('rejects local hostnames, credentials, and unsupported schemes', () => {
   ]) {
     assert.throws(() => assertPublicHttpTarget(new URL(value)), { code: 'ERR_PROXY_DESTINATION_BLOCKED' }, value);
   }
+});
+
+test('allows public websocket destinations while blocking private ones', () => {
+  assert.equal(assertPublicProxyTarget(new URL('wss://example.com/socket')).hostname, 'example.com');
+  assert.throws(() => assertPublicProxyTarget(new URL('ws://[::ffff:7f00:1]/socket')), {
+    code: 'ERR_PROXY_DESTINATION_BLOCKED',
+  });
+});
+
+test('Wisp rejects direct IP, private, loopback, and UDP destinations', () => {
+  const options = configureWispSecurity({});
+
+  assert.equal(options.allow_direct_ip, false);
+  assert.equal(options.allow_private_ips, false);
+  assert.equal(options.allow_loopback_ips, false);
+  assert.equal(options.allow_udp_streams, false);
+  assert.ok(options.hostname_blacklist.some((pattern) => pattern.test('metadata.google.internal')));
+  assert.ok(options.hostname_blacklist.some((pattern) => pattern.test('service.local')));
 });
 
 test('checks every DNS answer and returns only public addresses', async () => {
