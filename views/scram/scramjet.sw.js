@@ -1,4 +1,26 @@
 // Scramjet service worker integration.
+// Chromium intentionally omits object-URL creation/revocation from
+// ServiceWorkerGlobalScope. The shared Scramjet bundle snapshots these APIs at
+// import time, so provide the service-worker-compatible no-op/explicit-failure
+// behavior before loading it instead of letting the entire worker fail to start.
+if (typeof URL.createObjectURL !== 'function') {
+  Object.defineProperty(URL, 'createObjectURL', {
+    configurable: true,
+    value() {
+      throw new DOMException(
+        'Blob URLs cannot be created from a service worker.',
+        'NotSupportedError'
+      );
+    },
+  });
+}
+if (typeof URL.revokeObjectURL !== 'function') {
+  Object.defineProperty(URL, 'revokeObjectURL', {
+    configurable: true,
+    value() {},
+  });
+}
+
 importScripts('/worker/working.all.js?v=2.7.8');
 importScripts('/epoch/index.js?v=2.7.8');
 
