@@ -19,6 +19,12 @@ import {
 import { tryReadFile, preloaded404 } from './templates.mjs';
 import { fileURLToPath } from 'node:url';
 import { existsSync, unlinkSync, readFileSync } from 'node:fs';
+import {
+  assertPublicHttpTarget,
+  createPublicLookup,
+  isBlockedDestinationError,
+  PublicOnlyProxyAgent,
+} from './proxy-security.mjs';
 
 /* Record the server's location as a URL object, including its host and port.
  * The host can be modified at /src/config.json, whereas the ports can be modified
@@ -30,7 +36,15 @@ console.log(serverUrl);
 
 logging.set_level(logging.NONE);
 wisp.options.allow_udp_streams = false;
-wisp.options.allow_loopback_ips = true;
+wisp.options.allow_loopback_ips = false;
+wisp.options.allow_private_ips = false;
+wisp.options.hostname_blacklist = [
+  /(^|\.)localhost\.?$/i,
+  /(^|\.)local\.?$/i,
+  /(^|\.)internal\.?$/i,
+  /(^|\.)home\.arpa\.?$/i,
+  /^metadata\.google\.internal\.?$/i,
+];
 
 // For security reasons only allow these ports. Any additional regional proxies or default sandboxed Tor ports should be added here.
 wisp.options.port_whitelist = [
@@ -50,7 +64,9 @@ wisp.options.port_blacklist = [
   [49152, 65535]
 ];
 
-wisp.options.hostname_blacklist = [];
+const safeProxyDispatcher = new PublicOnlyProxyAgent({
+  connect: { lookup: createPublicLookup() },
+});
 
 // The server will check for the existence of this file when a shutdown is requested.
 // The shutdown script in run-command.js will temporarily produce this file.
@@ -583,6 +599,7 @@ const uvXorDecode = (str) => {
 };
 
 async function handleProxyRequest(request, reply, engine, wildcard) {
+  let targetLabel = 'unknown destination';
   try {
     let targetUrlStr = wildcard;
     
@@ -607,15 +624,16 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       targetUrlStr = 'https://' + targetUrlStr;
     }
 
-    if (process.env.PROXY_DEBUG === '1') {
-      console.log(`[Proxy Server Fallback] Fetching upstream: ${targetUrlStr}`);
-    }
-    
     let parsedTarget;
     try {
       parsedTarget = new URL(targetUrlStr);
     } catch (_) {
       parsedTarget = new URL('https://' + targetUrlStr);
+    }
+    targetLabel = parsedTarget.host;
+    assertPublicHttpTarget(parsedTarget);
+    if (process.env.PROXY_DEBUG === '1') {
+      console.log(`[Proxy Server Fallback] Fetching upstream: ${targetLabel}`);
     }
     const targetOrigin = parsedTarget.origin;
     const isYoutubeApi =
@@ -731,6 +749,7 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       headers: forwardHeaders,
       body: requestBody,
       redirect: 'follow',
+      dispatcher: safeProxyDispatcher,
     };
     if (
       requestBody &&
@@ -807,9 +826,13 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     return;
 
   } catch (err) {
-    const causeMsg = err.cause ? ` (${err.cause.message || err.cause.code || err.cause})` : '';
-    console.error(`[Proxy Server Fallback Error] ${err.message}${causeMsg} for: ${wildcard}`);
-    reply.code(502).type('text/plain').send(`Proxy Error: ${err.message}${causeMsg}`);
+    if (isBlockedDestinationError(err)) {
+      console.warn(`[Proxy Server Fallback] Blocked non-public destination: ${targetLabel}`);
+      reply.code(403).type('text/plain').send('Proxy destination is blocked.');
+      return;
+    }
+    console.error(`[Proxy Server Fallback Error] ${targetLabel}: ${err.code || err.name || 'upstream request failed'}`);
+    reply.code(502).type('text/plain').send('Proxy upstream request failed.');
   }
 }
 
