@@ -349,15 +349,19 @@ function isInternalRequest(url) {
   );
 }
 
-function extractTargetFromScram(value) {
+function extractTargetFromScram(value, fallbackOrigin = null) {
   try {
     const url = value instanceof URL ? value : new URL(value, ORIGIN);
     if (url.origin !== ORIGIN || !url.pathname.startsWith(NETWORK_PREFIX)) return null;
 
     const encodedTarget = url.pathname.slice(NETWORK_PREFIX.length);
     const decodedTarget = decodeURIComponent(encodedTarget);
-    const target = new URL(decodedTarget);
-    if (!['http:', 'https:', 'blob:', 'data:'].includes(target.protocol)) return null;
+    const target = ['http:', 'https:', 'blob:', 'data:'].some((p) => decodedTarget.startsWith(p))
+      ? new URL(decodedTarget)
+      : fallbackOrigin
+        ? new URL(decodedTarget, fallbackOrigin)
+        : null;
+    if (!target || !['http:', 'https:', 'blob:', 'data:'].includes(target.protocol)) return null;
     return target;
   } catch (_) {
     return null;
@@ -944,7 +948,7 @@ self.addEventListener('fetch', (event) => {
 
   let targetUrl;
   if (alreadyProxied) {
-    const target = extractTargetFromScram(requestUrl);
+    const target = extractTargetFromScram(requestUrl, upstreamOrigin);
     if (!target) return;
     targetUrl = target.href;
   } else if (!isSameOrigin) {

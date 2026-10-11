@@ -233,6 +233,19 @@ commands: for (let i = 2; i < process.argv.length; i++)
         console.log('[Build] Custom scramjet.sw.js -> scram/working.sw.js ✅ (overrode npm version)');
       }
 
+      // Keep the project's route-aware UV configuration after module files are
+      // copied. The package's default config points to root-relative `/uv/*`
+      // paths, while this app serves its UV files beneath the `/network/` alias.
+      const customUvConfigSrc = join(rootPath, 'views/uv/uv.config.js');
+      const customUvConfigDest = join(rootPath, 'views/dist/uv/networking.config.js');
+      if (existsSync(customUvConfigSrc)) {
+        writeFileSync(
+          customUvConfigDest,
+          paintSource(readFileSync(customUvConfigSrc, 'utf8'))
+        );
+        console.log('[Build] Custom UV config -> uv/networking.config.js ✅ (overrode npm default)');
+      }
+
       // Minify the scripts and stylesheets upon compiling, if enabled in config.
       if (config.minifyScripts)
         await build({

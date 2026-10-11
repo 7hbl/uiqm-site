@@ -378,7 +378,13 @@ const RammerheadEncode = async (baseUrl) => {
         get(
           '{{route}}{{/api/shuffleDict}}?id=' + encodeURIComponent(id),
           (res) => {
-            callback(JSON.parse(res));
+            try {
+              callback(JSON.parse(res));
+            } catch (_) {
+              // A session with URL shuffling disabled returns an empty or
+              // non-JSON value. The encoder will use the plain session URL.
+              callback(null);
+            }
           }
         );
       },
@@ -472,6 +478,17 @@ const RammerheadEncode = async (baseUrl) => {
       });
     return new Promise((resolve) => {
       api.shuffleDict(id, (shuffleDict) => {
+      // New sessions are intentionally created with URL shuffling disabled.
+      // The server returns JSON null for those sessions, so keep using the
+      // supported plain Rammerhead URL instead of passing null to StrShuffler.
+      if (
+        typeof shuffleDict !== 'string' ||
+        shuffleDict.length !== baseDictionary.length ||
+        new Set(shuffleDict).size !== baseDictionary.length
+      ) {
+        if (id === rhACDict.id) rhACDict.dict = '';
+        return resolve(`{{route}}{{/}}${id}/` + baseUrl);
+      }
         if (id === rhACDict.id) rhACDict.dict = shuffleDict;
         // Encode the URL with Rammerhead's encoding table and return the URL.
         resolve(

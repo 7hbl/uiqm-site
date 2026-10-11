@@ -180,6 +180,38 @@ function isProxyWildcard(wildcard, prefix) {
   return false;
 }
 
+function getProxiedTargetFromReferer(referer) {
+  if (!referer) return null;
+  try {
+    const refUrl = new URL(referer);
+    const routes = [
+      ['/worker/network/', decodeURIComponent],
+      ['/scram/network/', decodeURIComponent],
+      ['/scram/', decodeURIComponent],
+      ['/worker/', decodeURIComponent],
+      ['/network/service/', uvXorDecode],
+      ['/uv/service/', uvXorDecode],
+      ['/service/', uvXorDecode],
+      ['/proxy/', decodeURIComponent],
+    ];
+
+    for (const [prefix, decode] of routes) {
+      const marker = refUrl.pathname.indexOf(prefix);
+      if (marker === -1) continue;
+      const encodedTarget = refUrl.pathname.slice(marker + prefix.length);
+      if (!encodedTarget) continue;
+      const target = new URL(decode(encodedTarget));
+      if (target.protocol === 'http:' || target.protocol === 'https:') return target;
+    }
+
+    const rammerheadTarget = refUrl.pathname.match(
+      /^\/[a-z0-9]{32}(?:![a-z0-9*_-]+)?\/(https?:\/\/[^?#]+)/i
+    );
+    if (rammerheadTarget) return new URL(decodeURIComponent(rammerheadTarget[1]));
+  } catch (_) {}
+  return null;
+}
+
 app.addHook('onRequest', async (request, reply) => {
   const url = new URL(request.url, serverUrl);
   const reqPath = url.pathname;
@@ -474,8 +506,26 @@ if (serverUrl.pathname === '/') {
     for (const item of proxyPrefixes) {
       if (cleanPath.startsWith(item.prefix)) {
         const wildcard = cleanPath.slice(item.prefix.length) + (reqUrl.search || '');
-        return handleProxyRequest(request, reply, item.engine, wildcard);
+        if (isProxyWildcard(wildcard, item.prefix)) {
+          return handleProxyRequest(request, reply, item.engine, wildcard);
+        }
       }
+    }
+
+    // Missing known proxy-engine files must stay local 404s. Other relative
+    // paths beneath a proxy prefix can be legitimate upstream subresources.
+    const isUpstreamProxyPath = [
+      '/proxy/', '/worker/network/', '/scram/network/', '/network/service/',
+      '/uv/service/', '/service/', '/bare/', '/baremux/',
+    ].some((prefix) => cleanPath.startsWith(prefix));
+    const isMissingLocalProxyAsset = !isUpstreamProxyPath &&
+      proxyPrefixes.some((item) => {
+        if (!cleanPath.startsWith(item.prefix)) return false;
+        const filename = cleanPath.slice(item.prefix.length).split('/').pop()?.split('?')[0];
+        return staticAssetFiles.has(filename);
+      });
+    if (isMissingLocalProxyAsset) {
+      return reply.code(404).type(supportedTypes.default).send(preloaded404);
     }
 
     // Subresource proxy fallback: if a proxied site/app requests root-relative assets
@@ -494,7 +544,8 @@ if (serverUrl.pathname === '/') {
           const enc = refUrl.pathname.split('/worker/')[1];
           try {
             const dec = decodeURIComponent(enc);
-            if (dec.includes('://') || dec.includes('.')) {
+            const isInternalWorker = /^(?:working\.(?:all|sw|wasm)\.js|working\.wasm\.wasm|scramjet\.wasm\.js)/i.test(dec);
+            if (!isInternalWorker && (dec.includes('://') || (dec.includes('.') && !dec.includes('/')))) {
               upstreamOrigin = new URL(dec.includes('://') ? dec : 'https://' + dec).origin;
             }
           } catch (_) {}
@@ -712,9 +763,52 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       } catch (_) {}
     }
     
-    // Ensure it starts with http:// or https://
-    if (!targetUrlStr.includes('://')) {
-      targetUrlStr = 'https://' + targetUrlStr;
+    // Scramjet and browser-generated subresource URLs can be relative or
+    // protocol-relative. Resolve them against the active upstream origin
+    // instead of constructing URLs by string concatenation.
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(targetUrlStr)) {
+      const firstSegment = targetUrlStr.split(/[/?#]/, 1)[0];
+      const looksLikeHost =
+        /\./.test(firstSegment) ||
+        /^(?:localhost|\[[0-9a-f:]+\])(?::\d{1,5})?$/i.test(firstSegment);
+      if (targetUrlStr.startsWith('//')) {
+        targetUrlStr = 'https:' + targetUrlStr;
+      } else if (looksLikeHost) {
+        targetUrlStr = 'https://' + targetUrlStr;
+      } else {
+        let relativeBase = getProxiedTargetFromReferer(request.headers.referer)?.href || null;
+        if (request.headers.cookie) {
+          const baseCookie = request.headers.cookie.match(/(?:^|;\s*)__active_proxy_base=([^;]+)/);
+          const originCookie = request.headers.cookie.match(/(?:^|;\s*)__active_proxy_origin=([^;]+)/);
+          if (!relativeBase && baseCookie) {
+            try {
+              const baseUrl = new URL(decodeURIComponent(baseCookie[1]));
+              if (baseUrl.protocol === 'http:' || baseUrl.protocol === 'https:') relativeBase = baseUrl.href;
+            } catch (_) {}
+          }
+          if (!relativeBase && originCookie) {
+            try { relativeBase = decodeURIComponent(originCookie[1]); } catch (_) {}
+          }
+        }
+        if (!relativeBase) {
+          const clientIp = (request.headers['x-forwarded-for'] || '').split(',')[0].trim() || request.socket?.remoteAddress;
+          const cached = lastUpstreamByIp.get(clientIp);
+          if (cached && (Date.now() - cached.timestamp < 3600000)) {
+            relativeBase = cached.base || cached.origin;
+          }
+        }
+        if (relativeBase) {
+          try {
+            const baseUrl = new URL(relativeBase);
+            if (baseUrl.protocol === 'http:' || baseUrl.protocol === 'https:') {
+              targetUrlStr = new URL(targetUrlStr, baseUrl.href).href;
+            }
+          } catch (_) {}
+        }
+        if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(targetUrlStr)) {
+          targetUrlStr = 'https://' + targetUrlStr;
+        }
+      }
     }
 
     let parsedTarget;
@@ -725,9 +819,6 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     }
     targetLabel = parsedTarget.host;
     assertPublicHttpTarget(parsedTarget);
-    if (process.env.PROXY_DEBUG === '1') {
-      console.log(`[Proxy Server Fallback] Fetching upstream: ${targetLabel}`);
-    }
     const targetOrigin = parsedTarget.origin;
     const isYoutubeApi =
       (parsedTarget.hostname === 'youtube.com' || parsedTarget.hostname.endsWith('.youtube.com')) &&
@@ -745,8 +836,13 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     if (isTopLevelNavigation) {
       try {
         const clientIp = (request.headers['x-forwarded-for'] || '').split(',')[0].trim() || request.socket?.remoteAddress;
-        lastUpstreamByIp.set(clientIp, { origin: targetOrigin, timestamp: Date.now() });
+        const activeBase = new URL(parsedTarget.href);
+        activeBase.search = '';
+        activeBase.hash = '';
+        lastUpstreamByIp.set(clientIp, { origin: targetOrigin, base: activeBase.href, timestamp: Date.now() });
         responseCookies.push(`__active_proxy_origin=${encodeURIComponent(targetOrigin)}; Path=/; SameSite=Lax`);
+        const secureCookie = request.protocol === 'https' || request.headers['x-forwarded-proto'] === 'https' || request.socket?.encrypted;
+        responseCookies.push(`__active_proxy_base=${encodeURIComponent(activeBase.href)}; Path=/; SameSite=Lax; Max-Age=3600${secureCookie ? '; Secure' : ''}; HttpOnly`);
       } catch (_) {}
     }
 
@@ -807,7 +903,6 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
         }
       } catch (_) {}
       forwardHeaders['referer'] = watchReferer || 'https://www.youtube.com/';
-      forwardHeaders['sec-fetch-site'] = 'cross-site';
     }
     if (isYoutubeApi) {
       forwardHeaders['origin'] = targetOrigin;
@@ -851,7 +946,35 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
       fetchOptions.duplex = 'half';
     }
 
-    const response = await fetch(fetchTarget, fetchOptions);
+    let response = await fetch(fetchTarget, fetchOptions);
+    if (response.status === 404 && ['GET', 'HEAD'].includes(request.method) && !isYoutubeTarget) {
+      const baseCookie = request.headers.cookie?.match(/(?:^|;\s*)__active_proxy_base=([^;]+)/);
+      if (baseCookie) {
+        try {
+          const activeBase = new URL(decodeURIComponent(baseCookie[1]));
+          const activeBasePath = activeBase.pathname.endsWith('/') ? activeBase.pathname : `${activeBase.pathname}/`;
+          if (
+            (activeBase.protocol === 'http:' || activeBase.protocol === 'https:') &&
+            activeBase.origin === parsedTarget.origin &&
+            activeBase.pathname !== '/' &&
+            !parsedTarget.pathname.startsWith(activeBasePath)
+          ) {
+            const relativePath = parsedTarget.pathname.replace(/^\/+/, '');
+            const relativeTarget = new URL(relativePath, activeBase);
+            relativeTarget.search = parsedTarget.search;
+            assertPublicHttpTarget(relativeTarget);
+            const relativeResponse = await fetch(relativeTarget.href, fetchOptions);
+            if (relativeResponse.status !== 404) {
+              await response.body?.cancel().catch(() => {});
+              response = relativeResponse;
+              parsedTarget = relativeTarget;
+            } else {
+              await relativeResponse.body?.cancel().catch(() => {});
+            }
+          }
+        } catch (_) {}
+      }
+    }
     logUpstreamResponse(request, engine, targetLabel, response, Date.now() - startedAt);
 
     const responseHeaders = {};
@@ -861,24 +984,38 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
         responseCookies.push(cookie.replace(/;\s*domain=[^;]*/ig, ''));
       }
     }
+    const isRangeOrMedia = response.status === 206 ||
+      Boolean(response.headers.get('content-range')) ||
+      /^(?:video|audio)\//i.test(response.headers.get('content-type') || '');
+    const blockedHeaders = [
+      'x-frame-options',
+      'content-security-policy',
+      'content-security-policy-report-only',
+      'cross-origin-opener-policy',
+      'cross-origin-embedder-policy',
+      'cross-origin-resource-policy',
+      'x-content-type-options',
+      'content-encoding',
+      'transfer-encoding',
+    ];
+    if (!isRangeOrMedia) {
+      blockedHeaders.push('content-length');
+    }
     response.headers.forEach((value, key) => {
       if (key.toLowerCase() === 'set-cookie') return;
-      const blockedHeaders = [
-        'x-frame-options',
-        'content-security-policy',
-        'content-security-policy-report-only',
-        'cross-origin-opener-policy',
-        'cross-origin-embedder-policy',
-        'cross-origin-resource-policy',
-        'x-content-type-options',
-        'content-length',
-        'content-encoding',
-        'transfer-encoding',
-      ];
       if (!blockedHeaders.includes(key.toLowerCase())) {
         responseHeaders[key] = value;
       }
     });
+
+    if (isRangeOrMedia) {
+      const contentRange = response.headers.get('content-range');
+      if (contentRange) responseHeaders['content-range'] = contentRange;
+      const acceptRanges = response.headers.get('accept-ranges');
+      if (acceptRanges) responseHeaders['accept-ranges'] = acceptRanges;
+      const contentLength = response.headers.get('content-length');
+      if (contentLength) responseHeaders['content-length'] = contentLength;
+    }
     
     responseHeaders['access-control-allow-origin'] = '*';
     responseHeaders['access-control-allow-methods'] = 'GET, POST, OPTIONS, PUT, DELETE';

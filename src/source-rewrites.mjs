@@ -141,6 +141,16 @@ const regExpEscape = /[-[\]{}()*+?.,\\^$#\s]/g,
               flatAltPaths['prefixes/' + path] || flatAltPaths[path] || path
           )
           .replace(getAbsoluteRoot, serverUrl.pathname),
+  rewriteRoutePairs = (text) =>
+    text.replace(
+      /\{\{route\}\}\s*\{\{([\s\S]*?)\}\}(?:\s*\{\{(inline)\}\})?/g,
+      (_match, path, conditionalRoute) => route(path, conditionalRoute)
+    ),
+  rewriteDirectRouteMacros = (text) =>
+    text.replace(
+      /\{\{route\s+([^{}]*?)\}\}(?:\s*\{\{(inline)\}\})?/g,
+      (_match, path, conditionalRoute) => route(path.trim(), conditionalRoute)
+    ),
   inlineElement = (htmlStr) => {
     let relPath = htmlStr.match(getRoutePath) || htmlStr.match(getAttrPath),
       wrapper = [],
@@ -190,6 +200,57 @@ const regExpEscape = /[-[\]{}()*+?.,\\^$#\s]/g,
     routeConditions.inline
       ? htmlStr.replace(getNodesByLine, inlineElement)
       : htmlStr,
+  rewriteTaggedMacros = (source) => {
+    const transforms = { mask, ifSEO, ifDisguise, inline };
+    let output = '';
+    let cursor = 0;
+
+    while (cursor < source.length) {
+      const marker = source.indexOf('{{', cursor);
+      if (marker === -1) break;
+
+      const tag = source.slice(marker).match(/^\{\{(mask|ifSEO|ifDisguise|inline)\}\}/);
+      if (!tag) {
+        output += source.slice(cursor, marker + 2);
+        cursor = marker + 2;
+        continue;
+      }
+
+      let contentStart = marker + tag[0].length;
+      while (/\s/.test(source[contentStart] || '')) contentStart++;
+      if (!source.startsWith('{{', contentStart)) {
+        output += source.slice(cursor, marker + tag[0].length);
+        cursor = marker + tag[0].length;
+        continue;
+      }
+
+      let depth = 1;
+      let position = contentStart + 2;
+      while (position < source.length && depth > 0) {
+        if (source.startsWith('{{', position)) {
+          depth++;
+          position += 2;
+        } else if (source.startsWith('}}', position)) {
+          depth--;
+          if (depth === 0) break;
+          position += 2;
+        } else {
+          position++;
+        }
+      }
+      if (depth !== 0) {
+        output += source.slice(cursor, marker + tag[0].length);
+        cursor = marker + tag[0].length;
+        continue;
+      }
+
+      const content = rewriteTaggedMacros(source.slice(contentStart + 2, position));
+      output += source.slice(cursor, marker) + transforms[tag[1]](content);
+      cursor = position + 2;
+    }
+
+    return output + source.slice(cursor);
+  },
   insertCharset = (str) => str.replace(charset, getRandomChar),
   getSplash = () => randomListItem(splashRandom)(),
   getCookingText = () =>
@@ -232,21 +293,16 @@ const regExpEscape = /[-[\]{}()*+?.,\\^$#\s]/g,
       .replace(basicStrEscape, '\\$&')
       .replaceAll('\r', '\\r')
       .replaceAll('\n', '\\n'),
-  orderedTransforms = [
-    [getSplash, 0],
-    [route, 2],
-    [route, 1],
-    [ifSEO, 1],
-    [ifDisguise, 1],
-    [mask, 1],
-    [inline, 1],
-  ],
   namedEntries = Object.freeze({
     __uv$config: config.randomizeIdentifiers ? createRandomID() : '__uv$config',
     version: versionValue,
     cacheVal: crypto.getRandomValues(new Uint32Array(1))[0],
     defaultSearch: 'DuckDuckGo',
   }),
+  rewriteNamedMacros = (text) =>
+    text.replace(/\{\{([^{}]+)\}\}/g, (match, name) =>
+      Object.hasOwn(namedEntries, name) ? String(namedEntries[name]) : match
+    ),
   // List of manual censors for unavoidable cases.
   manualCensors = Object.freeze({
     // Google: 'Google', Removed for now due to Securly
@@ -261,14 +317,20 @@ const regExpEscape = /[-[\]{}()*+?.,\\^$#\s]/g,
   }),
   // Apply most obfuscation changes to an entire file's text content.
   prePaint = (str) => {
-    let paintedSource = insertCharset(insertCooking(str));
+    // Resolve named macros while their names are still present. Replacing only
+    // the text inside `{{...}}` first turns values like cacheVal into the
+    // invalid literal `{{123}}`, and leaves identifiers such as __uv$config
+    // wrapped in braces instead of producing a usable JavaScript expression.
+    let paintedSource = rewriteNamedMacros(insertCharset(insertCooking(str)));
     paintedSource = applyMassInsert(
       applyMassInsert(paintedSource, namedEntries),
       manualCensors,
       config.usingSEO
     );
-    for (let i = 0, total = orderedTransforms.length; i < total; i++)
-      paintedSource = applyInsert(paintedSource, ...orderedTransforms[i]);
+    paintedSource = applyInsert(paintedSource, getSplash, 0);
+    paintedSource = rewriteRoutePairs(paintedSource);
+    paintedSource = rewriteDirectRouteMacros(paintedSource);
+    paintedSource = rewriteTaggedMacros(paintedSource);
     return paintedSource;
   },
   // Functionally similar to templates.mjs, but requires more situational formatting.

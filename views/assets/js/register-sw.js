@@ -1,10 +1,8 @@
 (() => {
   const swRoutes = {
       uv: ['{{route /uv/sw.js}}', '{{route /uv/sw-blacklist.js}}'],
-      sj: [
-        '{{route /scram/scramjet.sw.js}}',
-        '{{route /scram/scramjet.sw-blacklist.js}}'
-      ],
+      // Scramjet ships one service worker in this build; there is no blacklist variant.
+      sj: ['{{route /scram/scramjet.sw.js}}'],
     },
     swAllowedHostnames = ['localhost', '127.0.0.1'],
     wispUrl =
@@ -77,14 +75,14 @@
     try {
       // In Scramjet v2, we load the script on the main thread to hook APIs
       const script = document.createElement('script');
-      script.src = '{{route}}{{/scram/scramjet.all.js}}';
+      script.src = '{{route}}{{/scram/scramjet_bundled.js}}';
       document.head.appendChild(script);
       
       script.onload = () => {
           console.log('Scramjet v2 Engine Loaded');
       };
 
-      const sjTarget = swRoutes.sj[readStorage('HideAds') !== false ? 1 : 0];
+      const sjTarget = swRoutes.sj[0];
       const sjReg = await navigator.serviceWorker.register(sjTarget, { scope: '/', updateViaCache: 'none' })
         .catch(() => navigator.serviceWorker.register(sjTarget, { scope: '{{route /scram/}}', updateViaCache: 'none' }));
       // Force the browser to immediately check for a newer SW version
