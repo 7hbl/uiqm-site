@@ -10,6 +10,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="/assets/js/core.js"></script>
     <script src="/assets/js/proxy-service-worker.js?v=2.7.8"></script>
+    <script>
+        // Begin service-worker setup while the large game catalog is parsing.
+        // The hub awaits this same promise before starting a selected game.
+        window._proxyWorkerPromise = window.ensureUiqmProxyWorker();
+        window._proxyWorkerPromise.catch(() => {});
+    </script>
     <style>
         :root {
             --glow: #ff0000;
@@ -297,6 +303,7 @@
             color: var(--glow);
             text-shadow: 0 0 20px var(--glow);
             animation: flash 1s infinite alternate;
+            pointer-events: none;
         }
         @keyframes flash { from { opacity: 0.5; } to { opacity: 1; } }
 
@@ -3100,7 +3107,7 @@
         const initProxy = async () => {
             let proxyReady = false;
             try {
-                await window.ensureUiqmProxyWorker();
+                await (window._proxyWorkerPromise || window.ensureUiqmProxyWorker());
                 proxyReady = true;
                 console.log('Scramjet proxy ready 2.7.8');
             } catch (e) {
@@ -3228,27 +3235,55 @@
         };
         const getFrameLoadStats = () => {
             try {
-                const win = frame.contentWindow;
-                const doc = frame.contentDocument || win?.document;
-                if (!win || !doc) return { count: 0, bytes: 0, percent: null, latest: '', doc: null };
-                const entries = win.performance?.getEntriesByType('resource') || [];
-                const bytes = entries.reduce((sum, entry) => sum + (entry.transferSize || entry.encodedBodySize || 0), 0);
-                const latestEntry = entries.reduce((latest, entry) => !latest || entry.startTime > latest.startTime ? entry : latest, null);
+                const documents = [];
+                const seenWindows = new Set();
+                const resourceKeys = new Set();
+                let count = 0;
+                let bytes = 0;
+                let latestEntry = null;
+                let percent = null;
+                const visitFrame = (win, depth = 0) => {
+                    if (!win || depth > 5 || seenWindows.has(win)) return;
+                    seenWindows.add(win);
+                    let doc;
+                    try { doc = win.document; } catch (_) { return; }
+                    if (!doc) return;
+                    documents.push({ win, doc });
+
+                    const entries = win.performance?.getEntriesByType('resource') || [];
+                    for (const entry of entries) {
+                        const key = `${entry.name}:${entry.startTime}`;
+                        if (resourceKeys.has(key)) continue;
+                        resourceKeys.add(key);
+                        count++;
+                        bytes += entry.transferSize || entry.encodedBodySize || 0;
+                        if (!latestEntry || entry.startTime > latestEntry.startTime) latestEntry = entry;
+                    }
+
+                    const progress = doc.querySelector('progress,[role="progressbar"][aria-valuenow],[id*="progress-bar" i],.progress-bar');
+                    if (progress) {
+                        const max = Number(progress.max || progress.getAttribute('aria-valuemax') || 100);
+                        const value = Number(progress.value ?? progress.getAttribute('aria-valuenow'));
+                        let framePercent = Number.isFinite(max) && max > 0 && Number.isFinite(value)
+                            ? Math.max(0, Math.min(100, value / max * 100))
+                            : null;
+                        if (framePercent === null && progress.style?.width) framePercent = Number.parseFloat(progress.style.width);
+                        if (Number.isFinite(framePercent) && (percent === null || framePercent > percent)) percent = framePercent;
+                    }
+
+                    for (const childFrame of doc.querySelectorAll('iframe,frame')) {
+                        try { visitFrame(childFrame.contentWindow, depth + 1); } catch (_) {}
+                    }
+                };
+                visitFrame(frame.contentWindow);
+                if (!documents.length) return { count: 0, bytes: 0, percent: null, latest: '', doc: null, documents: [] };
                 let latest = '';
                 if (latestEntry?.name) {
                     try { latest = new URL(latestEntry.name).pathname.split('/').pop().split('?')[0].slice(0, 72); } catch (_) {}
                 }
-                const progress = doc.querySelector('progress,[role="progressbar"][aria-valuenow],[id*="progress-bar" i],.progress-bar');
-                let percent = null;
-                if (progress) {
-                    const max = Number(progress.max || progress.getAttribute('aria-valuemax') || 100);
-                    const value = Number(progress.value ?? progress.getAttribute('aria-valuenow'));
-                    if (Number.isFinite(max) && max > 0 && Number.isFinite(value)) percent = Math.max(0, Math.min(100, value / max * 100));
-                    if (percent === null && progress.style?.width) percent = Number.parseFloat(progress.style.width);
-                }
-                return { count: entries.length, bytes, percent, latest, doc };
+                return { count, bytes, percent, latest, doc: documents[0].doc, documents };
             } catch (_) {
-                return { count: 0, bytes: 0, percent: null, latest: '', doc: null };
+                return { count: 0, bytes: 0, percent: null, latest: '', doc: null, documents: [] };
             }
         };
         const loadLuminGameUrl = async luminId => {
@@ -3431,25 +3466,44 @@
                 }
                 if (gameLoaderDetails) gameLoaderDetails.textContent = details.join(' · ');
 
-                const doc = stats.doc;
-                if (doc) {
+                const docs = stats.documents || (stats.doc ? [{ win: frame.contentWindow, doc: stats.doc }] : []);
+                if (docs.length) {
+                    let ruffleReady = false;
+                    let unityGameDetected = false;
+                    let unityReady = false;
+                    let domGameReady = false;
+                    let genericCanvasReady = false;
+                    let pageErrorTitle = '';
+                    let hasVerificationPage = false;
+
+                    for (const { win, doc } of docs) {
                     const pageTitle = doc.title || '';
                     const pageText = doc.body?.innerText?.slice(0, 1600) || '';
                     if (/^(?:error\s*)?(?:403|404|500|502|503|504)\b/i.test(pageTitle) || /^\s*(?:404\s+not found|403\s+forbidden|500\s+internal server error|502\s+bad gateway|503\s+service unavailable|504\s+gateway timeout)\b/i.test(pageText)) {
-                        showGameLoadFailure(`The game host returned an error page (${pageTitle || 'HTTP error'}). Its game file may have moved or been removed.`);
-                        return;
+                        pageErrorTitle = pageTitle || 'HTTP error';
                     }
-                    const canvas = doc.querySelector('canvas');
-                    const domGameReady = Boolean(doc.querySelector('.game-container .tile, [data-game-ready="true"]'));
-                    const gameWindow = doc.defaultView;
+                    const gameWindow = win || doc.defaultView;
                     const unityGame = gameWindow?.unityGame || gameWindow?.gameInstance || gameWindow?.unityInstance;
                     const unityProgress = doc.querySelector('#progress-container');
                     const isUnityGame = Boolean(unityGame || gameWindow?.UnityLoader || doc.querySelector('#unity-container, #unity-loading-bar, #unity-canvas, #progress-container'));
-                    const unityReady = Boolean(unityGame?.Module || unityGame?.SendMessage) && (!unityProgress || unityProgress.classList.contains('done'));
-                    // Canvas presence alone is not a readiness signal: many games
-                    // create an empty canvas before downloading their actual data.
-                    const genericCanvasReady = Boolean(canvas && canvas.width > 100 && canvas.height > 100 && doc.readyState === 'complete' && checks >= 18);
-                    if (isUnityGame ? unityReady : domGameReady || genericCanvasReady) {
+                    unityGameDetected ||= isUnityGame;
+                    if (isUnityGame && Boolean(unityGame?.Module || unityGame?.SendMessage) && (!unityProgress || unityProgress.classList.contains('done'))) unityReady = true;
+                    domGameReady ||= Boolean(doc.querySelector('.game-container .tile, [data-game-ready="true"]'));
+                    const canvas = doc.querySelector('canvas');
+                    genericCanvasReady ||= Boolean(canvas && canvas.width > 100 && canvas.height > 100 && doc.readyState === 'complete' && checks >= 18);
+                    for (const player of doc.querySelectorAll('ruffle-player')) {
+                        const playerCanvas = player.shadowRoot?.querySelector('canvas');
+                        ruffleReady ||= Boolean(playerCanvas && playerCanvas.width > 100 && playerCanvas.height > 100);
+                    }
+                    hasVerificationPage ||= /user .* is blocked|not found|access denied|captcha|verify you are human|security check/i.test(pageText);
+                    }
+
+                    if (pageErrorTitle) {
+                        showGameLoadFailure(`The game host returned an error page (${pageErrorTitle}). Its game file may have moved or been removed.`);
+                        return;
+                    }
+
+                    if (unityGameDetected ? unityReady : domGameReady || ruffleReady || genericCanvasReady) {
                         gameReady = true;
                         if (gameLoaderProgressBar) {
                             gameLoaderProgressBar.style.width = '100%';
@@ -3459,7 +3513,7 @@
                         hideLoader();
                         return;
                     }
-                    if (/user .* is blocked|not found|access denied|captcha|verify you are human|security check/i.test(pageText)) {
+                    if (hasVerificationPage) {
                         showGameLoadFailure('The game host returned a verification or access-denied page. Complete it on the game page if the host allows; UIQM does not solve or skip checks.');
                         return;
                     }

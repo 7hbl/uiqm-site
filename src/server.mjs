@@ -224,23 +224,50 @@ app.addHook('onRequest', async (request, reply) => {
       }
     }
   }
+
+  // Proxied pages can request root-relative paths such as /assets/app.js.
+  // Route those before Fastify's local static mounts get a chance to answer
+  // with a UIQM asset (or a local 404). Some embedded game loaders set
+  // Referrer-Policy: no-referrer, so use the active proxy origin for those
+  // subresource requests when the Referer header is absent.
+  if (
+    !proxyPrefixes.some((item) => reqPath.startsWith(item.prefix)) &&
+    ['GET', 'HEAD'].includes(request.method)
+  ) {
+    const proxiedReferer = getProxiedTargetFromReferer(request.headers.referer);
+    const isNavigation = request.headers['sec-fetch-mode'] === 'navigate' ||
+      request.headers['sec-fetch-dest'] === 'document';
+    let upstreamOrigin = proxiedReferer?.origin || null;
+    if (!upstreamOrigin && !request.headers.referer && !isNavigation) {
+      const originCookie = request.headers.cookie?.match(/(?:^|;\s*)__active_proxy_origin=([^;]+)/);
+      if (originCookie) {
+        try {
+          const candidateOrigin = new URL(decodeURIComponent(originCookie[1]));
+          if (candidateOrigin.protocol === 'http:' || candidateOrigin.protocol === 'https:') {
+            upstreamOrigin = candidateOrigin.origin;
+          }
+        } catch (_) {}
+      }
+    }
+    if (upstreamOrigin) {
+      const upstreamPath = reqPath.startsWith(serverUrl.pathname)
+        ? reqPath.slice(serverUrl.pathname.length - 1)
+        : reqPath;
+      const upstreamTarget = new URL(upstreamPath + (url.search || ''), upstreamOrigin);
+      await handleProxyRequest(request, reply, 'direct', upstreamTarget.href);
+      return;
+    }
+  }
 });
 
 // Apply Helmet middleware for security (with frameguard disabled for proxy iframes).
 app.register(fastifyHelmet, {
   contentSecurityPolicy: false, // Disable CSP
   xFrameOptions: false,
+  crossOriginOpenerPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: false,
   xPoweredBy: false,
-});
-
-app.addHook('onSend', async (request, reply, payload) => {
-  reply.removeHeader('x-frame-options');
-  reply.removeHeader('content-security-policy');
-  reply.removeHeader('content-security-policy-report-only');
-  reply.removeHeader('cross-origin-opener-policy');
-  reply.removeHeader('cross-origin-embedder-policy');
-  reply.removeHeader('cross-origin-resource-policy');
-  return payload;
 });
 
 // Assign server file paths to different paths, for serving content on the website.
@@ -757,7 +784,10 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
 
     if (/^hvtr?s/i.test(targetUrlStr)) {
       targetUrlStr = uvXorDecode(targetUrlStr);
-    } else {
+    } else if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(targetUrlStr)) {
+      // Proxy routes encode the destination URL as a whole, so decode those
+      // once. Already absolute URLs may contain intentionally escaped path or
+      // query bytes; decoding them again changes the upstream request.
       try {
         targetUrlStr = decodeURIComponent(targetUrlStr);
       } catch (_) {}
@@ -947,29 +977,41 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     }
 
     let response = await fetch(fetchTarget, fetchOptions);
+    const isStaticAsset = /\.(?:m?js|cjs|css|wasm|json|svg|png|jpe?g|gif|webp|ico|woff2?|ttf|otf)$/i.test(parsedTarget.pathname) ||
+      ['script', 'style', 'image', 'font', 'media'].includes(request.headers['sec-fetch-dest']);
     if (response.status === 404 && ['GET', 'HEAD'].includes(request.method) && !isYoutubeTarget) {
       const baseCookie = request.headers.cookie?.match(/(?:^|;\s*)__active_proxy_base=([^;]+)/);
       if (baseCookie) {
         try {
           const activeBase = new URL(decodeURIComponent(baseCookie[1]));
-          const activeBasePath = activeBase.pathname.endsWith('/') ? activeBase.pathname : `${activeBase.pathname}/`;
           if (
             (activeBase.protocol === 'http:' || activeBase.protocol === 'https:') &&
             activeBase.origin === parsedTarget.origin &&
             activeBase.pathname !== '/' &&
-            !parsedTarget.pathname.startsWith(activeBasePath)
+            !parsedTarget.pathname.startsWith(activeBase.pathname.endsWith('/') ? activeBase.pathname : `${activeBase.pathname}/`)
           ) {
             const relativePath = parsedTarget.pathname.replace(/^\/+/, '');
-            const relativeTarget = new URL(relativePath, activeBase);
-            relativeTarget.search = parsedTarget.search;
-            assertPublicHttpTarget(relativeTarget);
-            const relativeResponse = await fetch(relativeTarget.href, fetchOptions);
-            if (relativeResponse.status !== 404) {
-              await response.body?.cancel().catch(() => {});
-              response = relativeResponse;
-              parsedTarget = relativeTarget;
-            } else {
-              await relativeResponse.body?.cancel().catch(() => {});
+            let candidateBase = new URL('.', activeBase);
+            const maxParentPaths = isStaticAsset ? 4 : 0;
+            for (let depth = 0; depth <= maxParentPaths; depth++) {
+              const candidate = new URL(relativePath, candidateBase);
+              candidate.search = parsedTarget.search;
+              if (candidate.href !== parsedTarget.href) {
+                assertPublicHttpTarget(candidate);
+                const candidateResponse = await fetch(candidate.href, fetchOptions);
+                if (candidateResponse.status !== 404) {
+                  await response.body?.cancel().catch(() => {});
+                  response = candidateResponse;
+                  parsedTarget = candidate;
+                  break;
+                }
+                await candidateResponse.body?.cancel().catch(() => {});
+              }
+              if (depth < maxParentPaths) {
+                const parentBase = new URL('../', candidateBase);
+                if (parentBase.href === candidateBase.href) break;
+                candidateBase = parentBase;
+              }
             }
           }
         } catch (_) {}
@@ -1054,6 +1096,9 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     reply.headers(responseHeaders);
     reply.code(response.status);
     reply.send(response.body ? Readable.fromWeb(response.body) : null);
+    // Keep Fastify from completing an async not-found handler with an empty
+    // payload before this streamed upstream body has finished flowing.
+    reply.hijack();
     return;
 
   } catch (err) {
