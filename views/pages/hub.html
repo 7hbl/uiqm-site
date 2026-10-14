@@ -244,6 +244,17 @@
             text-shadow: 0 0 20px var(--glow);
             animation: flash 1s infinite alternate;
         }
+        .game-loader-subtext, .game-loader-details { max-width: min(720px, 90vw); color: #ddd; text-align: center; font: 13px/1.5 Arial, sans-serif; letter-spacing: .02em; }
+        .game-loader-details { color: #aaa; font-size: 12px; }
+        .game-loader-progress { width: min(360px, 72vw); height: 5px; overflow: hidden; border-radius: 999px; background: #292929; }
+        .game-loader-progress span { display: block; width: 34%; height: 100%; border-radius: inherit; background: var(--glow); box-shadow: 0 0 14px var(--glow); animation: game-progress 1.35s ease-in-out infinite; }
+        #game-loader[data-state="failed"] .game-loader-progress { display: none; }
+        #game-loader[data-state="failed"] .game-loader-spinner { display: none; }
+        @keyframes game-progress { from { transform: translateX(-110%); } to { transform: translateX(320%); } }
+        .game-load-retry { display: none; border: 1px solid var(--glow); border-radius: 9px; background: #111; color: var(--glow); padding: 9px 16px; font-weight: 800; cursor: pointer; pointer-events: auto; }
+        #game-loader[data-state="failed"] .game-load-retry { display: inline-flex; }
+        .catalog-more { grid-column: 1 / -1; justify-self: center; margin: 20px 0 40px; padding: 11px 22px; border: 1px solid var(--glow); border-radius: 10px; background: #111; color: var(--glow); font-weight: 800; cursor: pointer; }
+        .catalog-more:hover { background: var(--glow); color: #000; }
 
         /* Settings Modal */
         #settings-modal {
@@ -325,8 +336,11 @@
     <div id="proxy-overlay">
         <div id="game-loader">
             <div class="game-loader-spinner"></div>
-            <div class="game-loader-text">DOWNLOADING ASSETS...</div>
-            <div style="font-size: 13px; color: #ff3333; margin-top: 10px; font-weight: bold; letter-spacing: 1px;">INITIALIZING ENGINE & UNPACKING DATA...</div>
+            <div class="game-loader-text">PREPARING GAME...</div>
+            <div class="game-loader-progress" aria-hidden="true"><span></span></div>
+            <div class="game-loader-subtext">Connecting to the game host…</div>
+            <div id="game-loader-details" class="game-loader-details" aria-live="polite">Waiting for the game page to start.</div>
+            <button class="game-load-retry" type="button" onclick="window.retryCurrentGame?.()">Retry this game</button>
         </div>
         <div class="overlay-tools">
             <button class="tool-btn" onclick="toggleFullscreen()">FULLSCREEN</button>
@@ -3073,14 +3087,14 @@
             const gl = document.getElementById('game-loader');
             const spinner = gl?.querySelector('.game-loader-spinner');
             const title = gl?.querySelector('.game-loader-text');
-            const statusSub = gl?.querySelector('div[style*="letter-spacing: 1px"]');
+            const statusSub = gl?.querySelector('.game-loader-subtext');
+            const details = gl?.querySelector('.game-loader-details');
             if (spinner) spinner.style.display = 'none';
+            if (gl) gl.dataset.state = 'failed';
             if (title) title.textContent = 'UNITY GAME COULD NOT START';
-            if (statusSub) statusSub.textContent = 'This game could not use the required WebGL runtime or load a required asset. Try another title or press EXIT.';
-            if (window._gameLoadTimer) {
-                clearTimeout(window._gameLoadTimer);
-                window._gameLoadTimer = null;
-            }
+            if (statusSub) statusSub.textContent = 'The required WebGL runtime or a game asset did not start. Retry this title or pick another.';
+            if (details) details.textContent = 'A site verification page, missing file, or unsupported browser feature may be blocking this game.';
+            if (window._stopCurrentGameWatchers) window._stopCurrentGameWatchers();
         };
 
         const initProxy = async () => {
@@ -3111,15 +3125,23 @@
             return session;
         };
 
-        const renderGames = (filter = '') => {
-            grid.innerHTML = '';
-            const q = (filter || '').toLowerCase();
-            const filtered = games.filter(g => g.title && g.title.toLowerCase().includes(q));
-            search.placeholder = filter
-                ? (filtered.length + ' of ' + games.length + ' games...')
+        const gamePageSize = 72;
+        let visibleGameCount = gamePageSize;
+        const renderGames = (filter = '', append = false) => {
+            if (!append) {
+                visibleGameCount = gamePageSize;
+                grid.innerHTML = '';
+            } else {
+                grid.querySelector('.catalog-more')?.remove();
+            }
+            const q = (filter || '').trim().toLowerCase();
+            const filtered = games.filter(g => g.title && `${g.title} ${g.desc || ''}`.toLowerCase().includes(q));
+            search.placeholder = q
+                ? (filtered.length + ' matching games')
                 : ('Search ' + games.length + ' games...');
-            filtered.forEach(game => {
-                if (!game.title || !game.url) return;
+            const startAt = append ? Math.max(0, visibleGameCount - gamePageSize) : 0;
+            filtered.slice(startAt, visibleGameCount).forEach(game => {
+                if (!game.title || (!game.url && !game.luminId)) return;
                 const card = document.createElement('div');
                 card.className = 'game-card';
                 const img = document.createElement('img');
@@ -3143,189 +3165,327 @@
                 const btn = document.createElement('button');
                 btn.className = 'launch-btn';
                 btn.textContent = 'Launch Game';
-                btn.onclick = function(e) { e.stopPropagation(); launchGame(game.url); };
+                btn.onclick = function(e) { e.stopPropagation(); launchGame(game); };
                 content.appendChild(titleEl);
                 content.appendChild(descEl);
                 content.appendChild(btn);
                 card.appendChild(img);
                 card.appendChild(content);
-                card.onclick = (e) => { if (e.target !== btn) launchGame(game.url); };
+                card.onclick = (e) => { if (e.target !== btn) launchGame(game); };
                 grid.appendChild(card);
             });
+            if (filtered.length > visibleGameCount) {
+                const more = document.createElement('button');
+                more.className = 'catalog-more';
+                more.type = 'button';
+                more.textContent = `Load ${Math.min(gamePageSize, filtered.length - visibleGameCount)} more games (${visibleGameCount} of ${filtered.length})`;
+                more.onclick = () => {
+                    visibleGameCount = Math.min(visibleGameCount + gamePageSize, filtered.length);
+                    renderGames(filter, true);
+                };
+                grid.appendChild(more);
+            }
         };
 
         let _canvasCheckInterval = null;
+        let _gameStatusInterval = null;
         let gameLoadSequence = 0;
+        let activeGame = null;
+        let activeFrameLoadHandler = null;
+        let luminSdkPromise = null;
+        const gameLoader = document.getElementById('game-loader');
+        const gameLoaderTitle = gameLoader?.querySelector('.game-loader-text');
+        const gameLoaderSubtext = gameLoader?.querySelector('.game-loader-subtext');
+        const gameLoaderDetails = document.getElementById('game-loader-details');
+        const gameLoaderProgressBar = gameLoader?.querySelector('.game-loader-progress span');
+        const formatBytes = bytes => bytes < 1024 * 1024
+            ? `${Math.max(0, bytes / 1024).toFixed(0)} KB`
+            : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+        const stopGameLoadWatchers = () => {
+            if (_canvasCheckInterval) clearInterval(_canvasCheckInterval);
+            if (_gameStatusInterval) clearInterval(_gameStatusInterval);
+            if (window._gameLoadTimer) clearTimeout(window._gameLoadTimer);
+            if (activeFrameLoadHandler) frame.removeEventListener('load', activeFrameLoadHandler);
+            _canvasCheckInterval = _gameStatusInterval = window._gameLoadTimer = activeFrameLoadHandler = null;
+        };
+        const setGameLoader = (state, title, message, details = '') => {
+            if (!gameLoader) return;
+            gameLoader.dataset.state = state;
+            if (gameLoaderTitle) gameLoaderTitle.textContent = title;
+            if (gameLoaderSubtext) gameLoaderSubtext.textContent = message;
+            if (gameLoaderDetails) gameLoaderDetails.textContent = details;
+        };
         const hideLoader = () => {
-            if (_canvasCheckInterval) {
-                clearInterval(_canvasCheckInterval);
-                _canvasCheckInterval = null;
-            }
-            if (window._gameLoadTimer) {
-                clearTimeout(window._gameLoadTimer);
-                window._gameLoadTimer = null;
-            }
-            const gl = document.getElementById('game-loader');
-            if (gl) {
-                gl.style.transition = 'opacity 0.5s ease';
-                gl.style.opacity = '0';
+            stopGameLoadWatchers();
+            if (gameLoader) {
+                gameLoader.dataset.state = 'ready';
+                gameLoader.style.transition = 'opacity 0.35s ease';
+                gameLoader.style.opacity = '0';
                 setTimeout(() => {
-                    if (gl && gl.style.opacity === '0') gl.style.display = 'none';
-                }, 500);
+                    if (gameLoader && gameLoader.style.opacity === '0') gameLoader.style.display = 'none';
+                }, 350);
             }
         };
-
-        const launchGame = async (url) => {
-            const gameLoadId = ++gameLoadSequence;
-            let gameRoute = 'scramjet';
+        const getFrameLoadStats = () => {
             try {
-                if (window._proxyReady && !(await window._proxyReady)) throw new Error('Scramjet did not start.');
+                const win = frame.contentWindow;
+                const doc = frame.contentDocument || win?.document;
+                if (!win || !doc) return { count: 0, bytes: 0, percent: null, latest: '', doc: null };
+                const entries = win.performance?.getEntriesByType('resource') || [];
+                const bytes = entries.reduce((sum, entry) => sum + (entry.transferSize || entry.encodedBodySize || 0), 0);
+                const latestEntry = entries.reduce((latest, entry) => !latest || entry.startTime > latest.startTime ? entry : latest, null);
+                let latest = '';
+                if (latestEntry?.name) {
+                    try { latest = new URL(latestEntry.name).pathname.split('/').pop().split('?')[0].slice(0, 72); } catch (_) {}
+                }
+                const progress = doc.querySelector('progress,[role="progressbar"][aria-valuenow],[id*="progress-bar" i],.progress-bar');
+                let percent = null;
+                if (progress) {
+                    const max = Number(progress.max || progress.getAttribute('aria-valuemax') || 100);
+                    const value = Number(progress.value ?? progress.getAttribute('aria-valuenow'));
+                    if (Number.isFinite(max) && max > 0 && Number.isFinite(value)) percent = Math.max(0, Math.min(100, value / max * 100));
+                    if (percent === null && progress.style?.width) percent = Number.parseFloat(progress.style.width);
+                }
+                return { count: entries.length, bytes, percent, latest, doc };
+            } catch (_) {
+                return { count: 0, bytes: 0, percent: null, latest: '', doc: null };
+            }
+        };
+        const loadLuminGameUrl = async luminId => {
+            if (!luminSdkPromise) {
+                luminSdkPromise = new Promise((resolve, reject) => {
+                    if (window.Lumin?.getGameUrl) return resolve(window.Lumin);
+                    const script = document.createElement('script');
+                    script.src = 'https://gsnbeta.b-cdn.net/releases/beta-20261002-1/assets/lumin-sdk.js';
+                    script.onload = () => window.Lumin?.getGameUrl ? resolve(window.Lumin) : reject(new Error('The game catalog service did not initialize.'));
+                    script.onerror = () => reject(new Error('The game catalog service could not be reached.'));
+                    document.head.appendChild(script);
+                }).catch(error => {
+                    luminSdkPromise = null;
+                    throw error;
+                });
+            }
+            const lumin = await luminSdkPromise;
+            if (!window._uiqmLuminReady) window._uiqmLuminReady = lumin.init({ headless: true });
+            await window._uiqmLuminReady;
+            const response = await lumin.getGameUrl(luminId);
+            const gameUrl = new URL(response?.url || '');
+            if (gameUrl.protocol !== 'https:' || gameUrl.hostname !== 'a.luminsdk.com') {
+                throw new Error('The catalog returned an invalid game address.');
+            }
+            return gameUrl.href;
+        };
+
+        const launchGame = async gameOrUrl => {
+            const game = typeof gameOrUrl === 'string' ? { url: gameOrUrl } : gameOrUrl;
+            const gameLoadId = ++gameLoadSequence;
+            activeGame = game;
+            stopGameLoadWatchers();
+            if (activeFrameLoadHandler) frame.removeEventListener('load', activeFrameLoadHandler);
+            frame.removeAttribute('srcdoc');
+            frame.src = 'about:blank';
+            overlay.style.display = 'block';
+            gameLoader.style.transition = 'none';
+            gameLoader.style.opacity = '1';
+            gameLoader.style.display = 'flex';
+            if (gameLoaderProgressBar) {
+                gameLoaderProgressBar.style.width = '34%';
+                gameLoaderProgressBar.style.animation = '';
+            }
+            setGameLoader('loading', 'PREPARING GAME', 'Connecting to the game host…', 'No download estimate is available until the host exposes file progress.');
+
+            const startedAt = Date.now();
+            let gameReady = false;
+            let gameRoute = 'scramjet';
+            let checks = 0;
+            let lastPercent = null;
+            let lastPercentAt = 0;
+            let progressRate = 0;
+            let lastActivityAt = startedAt;
+            let resourceSignature = '';
+            let backupAttempted = false;
+            let switchingProxy = false;
+            let navigationStarted = false;
+            let url = '';
+
+            const showGameLoadFailure = (message = 'The game did not finish starting. Its host may be unavailable or may have refused a required file.') => {
+                if (gameLoadSequence !== gameLoadId || gameReady) return;
+                stopGameLoadWatchers();
+                setGameLoader('failed', 'GAME COULD NOT START', message, `UIQM tried ${backupAttempted ? 'both proxy routes' : 'the available proxy route'}; you can retry this title or exit and pick another.`);
+            };
+
+            const retryWithBackupProxy = async () => {
+                if (backupAttempted || gameLoadSequence !== gameLoadId || gameReady || switchingProxy) return false;
+                switchingProxy = true;
+                setGameLoader('loading', 'SWITCHING PROXY ROUTE', 'The first route stopped making progress. Restarting this title once…', 'The current page is being cancelled before the backup route starts.');
+                try {
+                    const session = await ensureRammerheadSession();
+                    if (gameLoadSequence !== gameLoadId || gameReady) return false;
+                    backupAttempted = true;
+                    gameRoute = `/${session}/`;
+                    navigationStarted = false;
+                    frame.src = 'about:blank';
+                    await new Promise(resolve => setTimeout(resolve, 75));
+                    if (gameLoadSequence !== gameLoadId || gameReady) return false;
+                    setGameLoader('loading', 'RESTARTING GAME', 'Trying the backup route…', 'Progress and the elapsed timer continue from this attempt.');
+                    navigationStarted = true;
+                    frame.src = gameRoute + url;
+                    lastActivityAt = Date.now();
+                    return true;
+                } catch (error) {
+                    console.warn('The backup game route could not start.', error);
+                    showGameLoadFailure('The first proxy route stalled and the backup route could not be started.');
+                    return false;
+                } finally {
+                    switchingProxy = false;
+                }
+            };
+
+            try {
+                if (game.luminId) {
+                    setGameLoader('loading', 'PREPARING GAME', 'Requesting a current launch address from the game catalog…', 'Game addresses are temporary and are requested again each time you launch.');
+                    url = await loadLuminGameUrl(game.luminId);
+                } else {
+                    url = game.url;
+                }
+                if (gameLoadSequence !== gameLoadId) return;
+                const target = new URL(url);
+                if (!['http:', 'https:'].includes(target.protocol)) throw new Error('This game has an unsupported address.');
+                url = target.href;
             } catch (error) {
+                showGameLoadFailure(error.message || 'The game address could not be prepared.');
+                return;
+            }
+
+            try {
+                if (!window._proxyReady || !(await window._proxyReady)) throw new Error('The primary proxy route is not ready.');
+            } catch (error) {
+                if (gameLoadSequence !== gameLoadId) return;
                 try {
                     const session = await ensureRammerheadSession();
                     gameRoute = `/${session}/`;
-                    console.warn('Scramjet could not start; opening this game through the alternate route.', error);
+                    backupAttempted = true;
+                    console.warn('Primary game route unavailable; using the backup route.', error);
                 } catch (fallbackError) {
-                    alert(`The game proxy could not start. ${fallbackError.message}`);
+                    showGameLoadFailure('Neither proxy route could be initialized. Refresh the Games page and retry.');
                     return;
                 }
             }
             if (gameLoadSequence !== gameLoadId) return;
 
-            overlay.style.display = 'block';
-            const gl = document.getElementById('game-loader');
-            if (gl) {
-                gl.style.transition = 'none';
-                gl.style.opacity = '1';
-                gl.style.display = 'flex';
-                const statusSub = gl.querySelector('div[style*="letter-spacing: 1px"]');
-                if (statusSub) statusSub.textContent = 'INITIALIZING ENGINE & UNPACKING DATA...';
-            }
-
-            if (_canvasCheckInterval) clearInterval(_canvasCheckInterval);
-            if (window._gameLoadTimer) clearTimeout(window._gameLoadTimer);
-
-            let gameReady = false;
-            const showGameLoadFailure = () => {
-                if (gameLoadSequence !== gameLoadId || gameReady) return;
-                if (_canvasCheckInterval) {
-                    clearInterval(_canvasCheckInterval);
-                    _canvasCheckInterval = null;
-                }
-                const spinner = document.querySelector('#game-loader .game-loader-spinner');
-                const title = document.querySelector('#game-loader .game-loader-text');
-                const statusSub = gl?.querySelector('div[style*="letter-spacing: 1px"]');
-                if (spinner) spinner.style.display = 'none';
-                if (title) title.textContent = 'THIS GAME DID NOT START';
-                if (statusSub) statusSub.textContent = 'A required game file may be unavailable. The game host can block or remove assets; try another title or press EXIT.';
-                window._gameLoadTimer = null;
-            };
-
-            const retryWithBackupProxy = async () => {
-                if (gameRoute !== 'scramjet' || gameLoadSequence !== gameLoadId || gameReady) return false;
-                const title = document.querySelector('#game-loader .game-loader-text');
-                const statusSub = gl?.querySelector('div[style*="letter-spacing: 1px"]');
-                if (title) title.textContent = 'RETRYING THROUGH BACKUP PROXY';
-                if (statusSub) statusSub.textContent = 'The first route stalled. Switching engines once...';
-                try {
-                    const session = await ensureRammerheadSession();
-                    if (gameLoadSequence !== gameLoadId || gameReady) return false;
-                    gameRoute = `/${session}/`;
-                    checks = 0;
-                    frame.src = gameRoute + url;
-                    window._gameLoadTimer = setTimeout(showGameLoadFailure, 90000);
-                    return true;
-                } catch (error) {
-                    console.warn('The game stalled on Scramjet and the backup proxy could not start.', error);
-                    return false;
-                }
-            };
-
-            // Allow large WebGL downloads time to finish, then retry one time on
-            // the alternate engine before showing the failure message.
-            window._gameLoadTimer = setTimeout(async () => {
-                if (await retryWithBackupProxy()) return;
-                showGameLoadFailure();
-            }, 60000);
-
-            // Poll every 300ms to detect when canvas renders or game is ready
-            let checks = 0;
-            _canvasCheckInterval = setInterval(() => {
-                checks++;
-                try {
-                    const doc = frame.contentDocument || frame.contentWindow?.document;
-                    if (doc) {
-                        const canvas = doc.querySelector('canvas');
-                        const domGameReady = Boolean(
-                            doc.querySelector('.game-container .tile, [data-game-ready="true"]')
-                        );
-                        const gameWindow = doc.defaultView;
-                        const unityGame = gameWindow?.unityGame || gameWindow?.gameInstance || gameWindow?.unityInstance;
-                        const unityProgress = doc.querySelector('#progress-container');
-                        const isUnityGame = Boolean(
-                            unityGame || gameWindow?.UnityLoader ||
-                            doc.querySelector('#unity-container, #unity-loading-bar, #unity-canvas, #progress-container')
-                        );
-                        const unityReady = Boolean(unityGame?.Module || unityGame?.SendMessage) &&
-                            (!unityProgress || unityProgress.classList.contains('done'));
-                        if (isUnityGame ? unityReady : domGameReady || canvas && (canvas.width > 50 || canvas.height > 50 || checks > 10)) {
-                            gameReady = true;
-                            hideLoader();
-                            return;
-                        }
-                        if (doc.body?.innerText && /user .* is blocked|not found|access denied/i.test(doc.body.innerText.slice(0, 1200))) {
-                            const spinner = document.querySelector('#game-loader .game-loader-spinner');
-                            const title = document.querySelector('#game-loader .game-loader-text');
-                            const statusSub = gl?.querySelector('div[style*="letter-spacing: 1px"]');
-                            if (spinner) spinner.style.display = 'none';
-                            if (title) title.textContent = 'GAME HOST DENIED THE REQUEST';
-                            if (statusSub) statusSub.textContent = 'This title’s host is refusing its files. Try another title or press EXIT.';
-                            clearInterval(_canvasCheckInterval);
-                            _canvasCheckInterval = null;
-                            clearTimeout(window._gameLoadTimer);
-                            window._gameLoadTimer = null;
-                            return;
-                        }
-                    }
-                } catch(_) {}
-
-                // If loading takes > 4s, inform user about large asset downloads
-                if (checks === 14 && gl) {
-                    const statusSub = gl.querySelector('div[style*="letter-spacing: 1px"]');
-                    if (statusSub) statusSub.textContent = 'DOWNLOADING ASSETS (Large WebGL game unpacking in memory)...';
-                }
-            }, 300);
-
-            // Set cookie for active proxy origin
             try {
                 const targetUrl = new URL(url);
-                const targetOrigin = targetUrl.origin;
-                document.cookie = '__active_proxy_origin=' + encodeURIComponent(targetOrigin) + '; Path=/; SameSite=Lax';
+                document.cookie = '__active_proxy_origin=' + encodeURIComponent(targetUrl.origin) + '; Path=/; SameSite=Lax';
                 targetUrl.search = '';
                 targetUrl.hash = '';
                 document.cookie = '__active_proxy_base=' + encodeURIComponent(targetUrl.href) + '; Path=/; SameSite=Lax' + (location.protocol === 'https:' ? '; Secure' : '');
-            } catch(_) {}
+            } catch (_) {}
 
-            frame.removeAttribute('srcdoc');
+            activeFrameLoadHandler = () => {
+                if (gameLoadSequence !== gameLoadId || gameReady || !navigationStarted) return;
+                setGameLoader('loading', 'STARTING GAME', 'The game page responded; waiting for its first playable view…', 'Large games may need more time to unpack assets.');
+                lastActivityAt = Date.now();
+            };
+            frame.addEventListener('load', activeFrameLoadHandler);
+            setGameLoader('loading', 'CONNECTING TO GAME HOST', 'Opening the game through the selected proxy route…', 'The total size is not published by this game host, so an accurate ETA is not available yet.');
+            navigationStarted = true;
             frame.src = gameRoute === 'scramjet' ? sjEncode(url) : gameRoute + url;
+
+            _gameStatusInterval = setInterval(() => {
+                if (gameLoadSequence !== gameLoadId || gameReady) return;
+                checks++;
+                const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+                const stats = getFrameLoadStats();
+                const signature = `${stats.count}:${stats.bytes}`;
+                if (signature !== resourceSignature) {
+                    resourceSignature = signature;
+                    lastActivityAt = Date.now();
+                }
+                if (stats.percent !== null && stats.percent > 0) {
+                    const now = Date.now();
+                    if (lastPercent !== null && stats.percent > lastPercent && now > lastPercentAt) {
+                        const currentRate = (stats.percent - lastPercent) / ((now - lastPercentAt) / 1000);
+                        progressRate = progressRate ? progressRate * 0.55 + currentRate * 0.45 : currentRate;
+                    }
+                    lastPercent = stats.percent;
+                    lastPercentAt = now;
+                }
+                const details = [];
+                if (stats.count) details.push(`${stats.count} asset requests`);
+                if (stats.bytes) details.push(`${formatBytes(stats.bytes)} observed`);
+                if (stats.latest) details.push(`latest file: ${stats.latest.length > 48 || /^[A-Z0-9_-]{32,}$/i.test(stats.latest) ? 'asset' : stats.latest}`);
+                details.push(`elapsed ${elapsed}s`);
+                if (stats.percent !== null && stats.percent > 0 && stats.percent < 100 && progressRate > 0.05) {
+                    details.push(`about ${Math.ceil((100 - stats.percent) / progressRate)}s remaining`);
+                } else {
+                    details.push('ETA unavailable until the game reports total progress');
+                }
+                if (gameLoaderProgressBar) {
+                    if (stats.percent !== null) {
+                        gameLoaderProgressBar.style.width = `${stats.percent}%`;
+                        gameLoaderProgressBar.style.animation = 'none';
+                    } else {
+                        gameLoaderProgressBar.style.width = '34%';
+                        gameLoaderProgressBar.style.animation = '';
+                    }
+                }
+                if (gameLoaderDetails) gameLoaderDetails.textContent = details.join(' · ');
+
+                const doc = stats.doc;
+                if (doc) {
+                    const pageTitle = doc.title || '';
+                    const pageText = doc.body?.innerText?.slice(0, 1600) || '';
+                    if (/^(?:error\s*)?(?:403|404|500|502|503|504)\b/i.test(pageTitle) || /^\s*(?:404\s+not found|403\s+forbidden|500\s+internal server error|502\s+bad gateway|503\s+service unavailable|504\s+gateway timeout)\b/i.test(pageText)) {
+                        showGameLoadFailure(`The game host returned an error page (${pageTitle || 'HTTP error'}). Its game file may have moved or been removed.`);
+                        return;
+                    }
+                    const canvas = doc.querySelector('canvas');
+                    const domGameReady = Boolean(doc.querySelector('.game-container .tile, [data-game-ready="true"]'));
+                    const gameWindow = doc.defaultView;
+                    const unityGame = gameWindow?.unityGame || gameWindow?.gameInstance || gameWindow?.unityInstance;
+                    const unityProgress = doc.querySelector('#progress-container');
+                    const isUnityGame = Boolean(unityGame || gameWindow?.UnityLoader || doc.querySelector('#unity-container, #unity-loading-bar, #unity-canvas, #progress-container'));
+                    const unityReady = Boolean(unityGame?.Module || unityGame?.SendMessage) && (!unityProgress || unityProgress.classList.contains('done'));
+                    // Canvas presence alone is not a readiness signal: many games
+                    // create an empty canvas before downloading their actual data.
+                    const genericCanvasReady = Boolean(canvas && canvas.width > 100 && canvas.height > 100 && doc.readyState === 'complete' && checks >= 18);
+                    if (isUnityGame ? unityReady : domGameReady || genericCanvasReady) {
+                        gameReady = true;
+                        if (gameLoaderProgressBar) {
+                            gameLoaderProgressBar.style.width = '100%';
+                            gameLoaderProgressBar.style.animation = 'none';
+                        }
+                        setGameLoader('ready', 'GAME READY', 'The playable game view is running.', `${stats.count} asset requests observed · ${formatBytes(stats.bytes)} transferred · ${elapsed}s elapsed`);
+                        hideLoader();
+                        return;
+                    }
+                    if (/user .* is blocked|not found|access denied|captcha|verify you are human|security check/i.test(pageText)) {
+                        showGameLoadFailure('The game host returned a verification or access-denied page. Complete it on the game page if the host allows; UIQM does not solve or skip checks.');
+                        return;
+                    }
+                }
+
+                const inactiveFor = Date.now() - lastActivityAt;
+                if (gameRoute === 'scramjet' && elapsed >= 45 && (inactiveFor >= 12000 || elapsed >= 75)) {
+                    retryWithBackupProxy();
+                } else if (gameRoute !== 'scramjet' && elapsed >= 105 && (inactiveFor >= 18000 || elapsed >= 135)) {
+                    showGameLoadFailure();
+                }
+            }, 1000);
         };
         window.launchGame = launchGame;
+        window.retryCurrentGame = () => activeGame && launchGame(activeGame);
+        window._stopCurrentGameWatchers = stopGameLoadWatchers;
 
         const closeGame = () => {
             gameLoadSequence++;
-            if (_canvasCheckInterval) {
-                clearInterval(_canvasCheckInterval);
-                _canvasCheckInterval = null;
-            }
-            if (window._gameLoadTimer) {
-                clearTimeout(window._gameLoadTimer);
-                window._gameLoadTimer = null;
-            }
+            stopGameLoadWatchers();
             overlay.style.display = 'none';
             const gl = document.getElementById('game-loader');
             if (gl) {
                 gl.style.display = 'none';
                 gl.style.opacity = '1';
+                gl.dataset.state = 'loading';
             }
             frame.removeAttribute('srcdoc');
             frame.src = 'about:blank';
@@ -3401,46 +3561,51 @@
             }
         };
 
-        const loadFrivGames = async () => {
-            try {
-                const response = await fetch('/assets/json/friv-games.json', { cache: 'force-cache' });
-                if (!response.ok) throw new Error(`Friv game list request failed (${response.status}).`);
-                const additions = await response.json();
-                if (!Array.isArray(additions)) throw new Error('Friv game list has an invalid format.');
+        const loadGameCatalogs = async () => {
+            const sources = [
+                { label: 'Friv', url: '/assets/json/friv-games.json' },
+                { label: 'GSN', url: '/assets/json/gsn-games.json' }
+            ];
+            const results = await Promise.allSettled(sources.map(async source => {
+                const response = await fetch(source.url, { cache: 'force-cache' });
+                if (!response.ok) throw new Error(`${source.label} catalog request failed (${response.status}).`);
+                const data = await response.json();
+                if (!Array.isArray(data)) throw new Error(`${source.label} catalog has an invalid format.`);
+                return data;
+            }));
+            const additions = [];
+            results.forEach((result, index) => {
+                if (result.status === 'fulfilled') additions.push(...result.value);
+                else console.warn(`${sources[index].label} games could not be added.`, result.reason);
+            });
 
-                const seenTitles = new Set();
-                const seenUrls = new Set();
-                const originalGames = games.filter(game => {
-                    const titleKey = normalizeGameTitle(game.title);
-                    const urlKey = normalizeGameUrl(game.url);
-                    if (!titleKey || !urlKey || seenTitles.has(titleKey) || seenUrls.has(urlKey)) return false;
-                    seenTitles.add(titleKey);
-                    seenUrls.add(urlKey);
-                    return true;
-                });
-                const frivGames = additions.filter(game => {
-                    const titleKey = normalizeGameTitle(game?.title);
-                    const urlKey = normalizeGameUrl(game?.url);
-                    if (!titleKey || !urlKey || seenTitles.has(titleKey) || seenUrls.has(urlKey)) return false;
-                    seenTitles.add(titleKey);
-                    seenUrls.add(urlKey);
-                    return true;
-                });
+            const seenTitles = new Set();
+            const seenUrls = new Set();
+            const isUnique = game => {
+                const titleKey = normalizeGameTitle(game?.title);
+                const urlKey = game?.luminId
+                    ? `lumin:${String(game.luminId).toLowerCase()}`
+                    : normalizeGameUrl(game?.url);
+                if (!titleKey || !urlKey || seenTitles.has(titleKey) || seenUrls.has(urlKey)) return false;
+                seenTitles.add(titleKey);
+                seenUrls.add(urlKey);
+                return true;
+            };
 
-                const mixedGames = [];
-                let nextFrivGame = 0;
-                originalGames.forEach((game, index) => {
-                    mixedGames.push(game);
-                    const targetFrivCount = Math.floor(((index + 1) * frivGames.length) / originalGames.length);
-                    while (nextFrivGame < targetFrivCount) mixedGames.push(frivGames[nextFrivGame++]);
-                });
-                while (nextFrivGame < frivGames.length) mixedGames.push(frivGames[nextFrivGame++]);
+            const originalGames = games.filter(isUnique);
+            const uniqueAdditions = additions.filter(isUnique);
+            const mixedGames = [];
+            let nextAddition = 0;
+            originalGames.forEach((game, index) => {
+                mixedGames.push(game);
+                const targetCount = Math.floor(((index + 1) * uniqueAdditions.length) / originalGames.length);
+                while (nextAddition < targetCount) mixedGames.push(uniqueAdditions[nextAddition++]);
+            });
+            while (nextAddition < uniqueAdditions.length) mixedGames.push(uniqueAdditions[nextAddition++]);
 
-                games.splice(0, games.length, ...mixedGames);
-                renderGames(search.value);
-            } catch (error) {
-                console.warn('Friv games could not be added to the catalog; showing the built-in games.', error);
-            }
+            games.splice(0, games.length, ...mixedGames);
+            renderGames(search.value);
+            console.info(`Games ready: ${games.length} unique titles (${uniqueAdditions.length} added from partner catalogs).`);
         };
 
         // Live users
@@ -3470,7 +3635,7 @@
         }
 
         renderGames();
-        loadFrivGames();
+        loadGameCatalogs();
         window._proxyReady = initProxy();
     </script>
 </body>

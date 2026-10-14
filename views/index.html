@@ -42,11 +42,27 @@
         #proxy-error-content { max-width:620px; }
         #proxy-error h2 { margin-bottom:12px; font-size:clamp(20px,3vw,30px); }
         #proxy-error p { margin-bottom:18px; color:#ddd; line-height:1.5; }
+        #proxy-error-direct-link { display:inline-block; margin:0 0 18px; color:#ff9a9a; font:inherit; }
         #proxy-error button { margin:0 6px; padding:8px 14px; border:1px solid #ff0000; border-radius:6px; background:#111; color:#ff5555; font:inherit; cursor:pointer; }
         #back-btn { position: fixed; bottom: 12px; right: 15px; top: auto; padding: 5px 12px; font-size: 11px; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); border: 1px solid #ff0000; border-radius: 16px; color: #ff0000; cursor: pointer; z-index: 1001; font-family: inherit; font-weight: bold; text-shadow: 0 0 5px #ff0000; box-shadow: 0 2px 12px rgba(0,0,0,0.6); transition: all 0.2s; display: none; }
         #back-btn:hover { background: #ff0000; color: #fff; box-shadow: 0 0 15px #ff0000; }
         #terminal-shell { padding: 20px; height: 100%; overflow-y: auto; position: relative; z-index: 5; text-shadow: 0 0 5px currentColor; }
         .live-status { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 10px; font-weight: bold; }
+        #term-settings-button { margin-left: auto; width: 34px; height: 34px; display: inline-grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; background: #111; color: inherit; cursor: pointer; font-size: 15px; text-shadow: none; }
+        #term-settings-button:hover { background: #251010; box-shadow: 0 0 12px currentColor; }
+        #terminal-settings-backdrop { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: start end; padding: 58px 18px 18px; background: rgba(0,0,0,.46); font: 14px/1.45 Arial, sans-serif; text-shadow: none; }
+        #terminal-settings-backdrop[hidden] { display: none; }
+        #terminal-settings-modal { width: min(360px, calc(100vw - 32px)); max-height: calc(100vh - 80px); overflow: auto; padding: 20px; border: 1px solid rgba(255,0,0,.55); border-radius: 16px; background: #151313; color: #f2eeee; box-shadow: 0 16px 50px rgba(0,0,0,.55); }
+        .terminal-settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+        .terminal-settings-head h2 { color: #fff; font-size: 18px; }
+        .terminal-settings-head button { border: 0; background: transparent; color: #ddd; cursor: pointer; font-size: 22px; }
+        .terminal-setting { display: grid; gap: 7px; margin: 14px 0; color: #ddd; font-size: 12px; }
+        .terminal-setting input, .terminal-setting select { width: 100%; padding: 9px 10px; border: 1px solid #544; border-radius: 8px; background: #0b0b0b; color: #fff; font: 13px Arial, sans-serif; }
+        .terminal-setting input:focus, .terminal-setting select:focus { outline: 2px solid rgba(255,0,0,.45); }
+        .terminal-settings-actions { display: flex; gap: 8px; margin-top: 15px; }
+        .terminal-settings-actions button { flex: 1; padding: 9px 10px; border: 1px solid #a33; border-radius: 8px; background: #211313; color: #ff9a9a; cursor: pointer; font-weight: 700; }
+        .terminal-settings-actions button:hover { background: #341818; color: #fff; }
+        .terminal-settings-note { margin-top: 12px; color: #aaa; font-size: 11px; }
         .pulse-ball { width: 10px; height: 10px; background: #00ff00; border-radius: 50%; box-shadow: 0 0 10px #00ff00; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.2); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
         .ascii-art { white-space: pre; font-size: 8px; line-height: 8px; margin-bottom: 20px; opacity: 0.9; }
@@ -116,7 +132,8 @@
             <div id="proxy-error" role="status" aria-live="polite">
                 <div id="proxy-error-content">
                     <h2>Page did not load</h2>
-                    <p>The proxy received an empty or blocked response. You can retry this address or return to the terminal.</p>
+                    <p id="proxy-error-message">The proxy received an empty or blocked response. You can retry this address or return to the terminal.</p>
+                    <a id="proxy-error-direct-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open this address directly</a>
                     <button type="button" onclick="window.retryProxyPage()">Retry</button>
                     <button type="button" onclick="closeProxy()">Return to terminal</button>
                 </div>
@@ -127,6 +144,7 @@
                 <div class="pulse-ball"></div>
                 <span style="color: #ff0000;">LIVE USERS: <span id="user-count">1</span></span>
                 <span id="live-clock" style="color: #ff0000; margin-left: 20px;">--:--:-- --</span>
+                <button id="term-settings-button" type="button" title="Settings" aria-label="Open settings" onclick="window.openTerminalSettings()"><i class="fas fa-gear" aria-hidden="true"></i></button>
             </div>
             <div class="ascii-art">
                       $$\                                                       $$\                                                               
@@ -150,6 +168,38 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 <span class="term-prefix">root@uiqm:~$</span>
                 <input type="text" id="term-input" autofocus spellcheck="false" autocomplete="off">
             </form>
+        </div>
+        <div id="terminal-settings-backdrop" hidden>
+            <section id="terminal-settings-modal" role="dialog" aria-modal="true" aria-labelledby="terminal-settings-title">
+                <div class="terminal-settings-head">
+                    <h2 id="terminal-settings-title">Terminal settings</h2>
+                    <button type="button" aria-label="Close settings" onclick="window.closeTerminalSettings()">&times;</button>
+                </div>
+                <label class="terminal-setting" for="terminal-theme-select">Accent theme
+                    <select id="terminal-theme-select">
+                        <option value="default">Red</option><option value="green">Green</option><option value="blue">Blue</option>
+                        <option value="white">White</option><option value="pink">Pink</option><option value="purple">Purple</option>
+                        <option value="cyan">Cyan</option><option value="hacker">Matrix</option>
+                    </select>
+                </label>
+                <label class="terminal-setting" for="cloak-preset-select">Tab title and icon preset
+                    <select id="cloak-preset-select"><option value="">Choose a preset…</option></select>
+                </label>
+                <div class="terminal-settings-actions">
+                    <button id="apply-cloak-preset" type="button">Apply preset</button>
+                    <button id="reset-terminal-cloak" type="button">Reset tab</button>
+                </div>
+                <form id="custom-cloak-form">
+                    <label class="terminal-setting" for="custom-cloak-title">Custom tab title
+                        <input id="custom-cloak-title" type="text" maxlength="80" placeholder="UIQM Web Proxy">
+                    </label>
+                    <label class="terminal-setting" for="custom-cloak-icon">Custom favicon URL
+                        <input id="custom-cloak-icon" type="url" placeholder="https://example.com/favicon.ico">
+                    </label>
+                    <div class="terminal-settings-actions"><button type="submit">Apply custom tab</button></div>
+                </form>
+                <p class="terminal-settings-note">Theme and tab settings are saved in this browser. Tab appearance does not change the address bar. Sites may still require their own verification.</p>
+            </section>
         </div>
         <canvas id="matrix-canvas" style="position: fixed; top: 0; left: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 1s;"></canvas>
     </div>
@@ -197,6 +247,7 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         const verificationNotice = document.getElementById('proxy-verification-notice');
         if (verificationNotice) verificationNotice.hidden = true;
         document.getElementById('proxy-frame').src = 'about:blank';
+        if (location.pathname.replace(/\/+$/, '') === '/movies') history.replaceState(null, '', '/');
         document.getElementById('term-input').focus();
     }
     document.addEventListener('DOMContentLoaded', async () => {
@@ -209,6 +260,100 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         const directLink = document.getElementById('proxy-direct-link');
         const statusLine = document.getElementById('status-line'), backBtn = document.getElementById('back-btn');
         const canvas = document.getElementById('matrix-canvas');
+        const settingsBackdrop = document.getElementById('terminal-settings-backdrop');
+        const themeSelect = document.getElementById('terminal-theme-select');
+        const cloakSelect = document.getElementById('cloak-preset-select');
+        let settingsReturnFocus = null;
+
+        const terminalCloaks = [
+            { name: 'Default', title: 'andy web proxy | private terminal', icon: document.querySelector("link[rel*='icon']")?.href || '' },
+            { name: 'Google', title: 'Google', icon: 'https://www.google.com/favicon.ico' },
+            { name: 'Drive', title: 'My Drive - Google Drive', icon: 'https://ssl.gstatic.com/docs/doclist/images/drive_2022q3_32dp.png' },
+            { name: 'Classroom', title: 'Classes', icon: 'https://www.gstatic.com/classroom/favicon.png' },
+            { name: 'Gmail', title: 'Gmail', icon: 'https://ssl.gstatic.com/ui/v1/icons/mail/images/2023q1/favicon_gmail_general_32dp.png' },
+            { name: 'Canvas', title: 'Canvas', icon: 'https://www.instructure.com/favicon.ico' },
+            { name: 'Schoology', title: 'Home | Schoology', icon: 'https://www.schoology.com/favicon.ico' },
+            { name: 'PowerSchool', title: 'PowerSchool', icon: 'https://www.powerschool.com/favicon.ico' },
+            { name: 'Wikipedia', title: 'Wikipedia', icon: 'https://en.wikipedia.org/favicon.ico' },
+            { name: 'YouTube', title: 'YouTube', icon: 'https://www.youtube.com/favicon.ico' },
+            { name: 'Outlook', title: 'Outlook', icon: 'https://outlook.live.com/favicon.ico' },
+            { name: 'Discord', title: 'Discord | Friends', icon: 'https://discord.com/favicon.ico' },
+            { name: 'Teams', title: 'Microsoft Teams', icon: 'https://statics.teams.cdn.office.net/evergreen-assets/apps/teams_32x32.png' },
+            { name: 'Zoom', title: 'Zoom Meetings', icon: 'https://st1.zoom.us/zoom.ico' },
+            { name: 'Canva', title: 'Canva', icon: 'https://www.canva.com/favicon.ico' },
+            { name: 'Pinterest', title: 'Pinterest', icon: 'https://www.pinterest.com/favicon.ico' },
+            { name: 'Twitch', title: 'Twitch', icon: 'https://static.twitchcdn.net/assets/favicon-32-d6025c14e900565d6177.png' },
+            { name: 'GitHub', title: 'GitHub', icon: 'https://github.com/favicon.ico' },
+            { name: 'Reddit', title: 'Reddit', icon: 'https://www.redditstatic.com/desktop2x/img/favicon/favicon-32x32.png' }
+        ];
+
+        terminalCloaks.forEach((cloak, index) => {
+            const option = document.createElement('option');
+            option.value = String(index);
+            option.textContent = cloak.name;
+            cloakSelect.appendChild(option);
+        });
+
+        const applyTerminalTheme = theme => {
+            const themes = ['default', 'green', 'blue', 'white', 'pink', 'purple', 'cyan', 'hacker'];
+            const chosen = themes.includes(theme) ? theme : 'default';
+            document.body.setAttribute('data-theme', chosen);
+            canvas.style.opacity = chosen === 'hacker' ? '0.3' : '0';
+            themeSelect.value = chosen;
+            try { localStorage.setItem('uiqm-terminal-theme', chosen); } catch (_) {}
+        };
+
+        window.openTerminalSettings = () => {
+            settingsReturnFocus = document.activeElement;
+            settingsBackdrop.hidden = false;
+            themeSelect.focus();
+        };
+        window.closeTerminalSettings = () => {
+            settingsBackdrop.hidden = true;
+            if (settingsReturnFocus instanceof HTMLElement) settingsReturnFocus.focus();
+        };
+        themeSelect.addEventListener('change', () => applyTerminalTheme(themeSelect.value));
+        settingsBackdrop.addEventListener('click', event => {
+            if (event.target === settingsBackdrop) window.closeTerminalSettings();
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && !settingsBackdrop.hidden) window.closeTerminalSettings();
+        });
+        document.getElementById('apply-cloak-preset').addEventListener('click', () => {
+            const cloak = terminalCloaks[Number(cloakSelect.value)];
+            if (cloak) window.setCloak(cloak.title, cloak.icon);
+        });
+        document.getElementById('reset-terminal-cloak').addEventListener('click', () => {
+            try {
+                localStorage.removeItem('term-cloak-title');
+                localStorage.removeItem('term-cloak-icon');
+            } catch (_) {}
+            const fallback = terminalCloaks[0];
+            document.title = fallback.title;
+            const icon = document.querySelector("link[rel*='icon']");
+            if (icon && fallback.icon) icon.href = fallback.icon;
+            cloakSelect.value = '';
+            print('Tab title and icon restored.', 'system');
+        });
+        document.getElementById('custom-cloak-form').addEventListener('submit', event => {
+            event.preventDefault();
+            const title = document.getElementById('custom-cloak-title').value.trim();
+            const iconInput = document.getElementById('custom-cloak-icon').value.trim();
+            const currentIcon = document.querySelector("link[rel*='icon']")?.href || terminalCloaks[0].icon;
+            let icon = currentIcon;
+            if (iconInput) {
+                try {
+                    const parsed = new URL(iconInput, location.href);
+                    if (!['https:', 'data:'].includes(parsed.protocol)) throw new Error('Use an HTTPS or image data URL.');
+                    icon = parsed.href;
+                } catch (error) {
+                    print(error.message || 'Enter a valid favicon URL.', 'system');
+                    return;
+                }
+            }
+            window.setCloak(title || 'andy web proxy | private terminal', icon);
+        });
+        try { applyTerminalTheme(localStorage.getItem('uiqm-terminal-theme') || 'default'); } catch (_) { applyTerminalTheme('default'); }
 
         const WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
         const BARE_MUX_WORKER = '/gmt/worker.js';
@@ -262,10 +407,10 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 }
                 window._swPromise = window.ensureUiqmProxyWorker();
                 await window._swPromise;
-                setStatus('Secure Channel Active. System ready.', '#00ff00');
+                if (proxyShell.style.display === 'none') setStatus('Secure Channel Active. System ready.', '#00ff00');
             } catch (e) {
                 console.warn('Proxy init:', e);
-                setStatus('Proxy worker failed to update. Refresh and try again.', '#ff4444');
+                if (proxyShell.style.display === 'none') setStatus('Proxy worker failed to update. Refresh and try again.', '#ff4444');
             }
         };
 
@@ -299,9 +444,20 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                     doc.querySelector('#challenge-form, [id^="cf-chl-"], .cf-turnstile, iframe[src*="challenges.cloudflare.com"]') ||
                     /captcha.{0,50}(?:verify|robot|human)|recaptcha|i(?:'| a)m not a robot|(?:verify|prove) (?:that )?you are (?:a )?(?:human|person|not a robot)|unusual traffic|checking your browser|verifying your browser|complete the security check|access denied|403 forbidden|too many requests|attention required.{0,40}cloudflare/i.test(text)
                 ) return 'upstream-block';
+                if (/^\s*(?:404\s*not found|403\s*forbidden|500\s*internal server error|502\s*bad gateway|503\s*service unavailable|504\s*gateway timeout)\b/i.test(text)) return 'upstream-error';
                 if (/^\s*(?:Proxy Error:|The proxy could not load this site\.|Scramjet WebAssembly could not be loaded\.)/im.test(text)) return 'proxy-error';
                 if (!doc.location?.href || doc.location.href === 'about:blank') return 'blank';
                 if (!doc.body || (!doc.body.children.length && !doc.body.textContent.trim())) return 'blank';
+                const hasVisibleContent = Boolean(doc.body.innerText?.trim()) || Boolean(doc.querySelector('canvas,video,audio,img[src],iframe,object,embed'));
+                if (!hasVisibleContent) {
+                    const resources = doc.defaultView?.performance?.getEntriesByType('resource') || [];
+                    const failedScript = resources.some(resource => {
+                        if (!(resource.responseStatus >= 400)) return false;
+                        try { return /\.(?:m?js)$/i.test(new URL(resource.name).pathname); } catch (_) { return false; }
+                    });
+                    if (failedScript) return 'upstream-error';
+                    if (doc.querySelector('script[src],script[type="module"]')) return 'pending';
+                }
                 return 'loaded';
             } catch (_) {
                 // A frame the browser treats as cross-origin is already beyond our safe inspection boundary.
@@ -413,7 +569,16 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                     } catch (_) {}
                     installYoutubeSearchFallback();
                     clearTimeout(loadTimer);
-                    inspectTimer = setTimeout(() => finish(inspectProxyFrame()), 180);
+                    // Wait only on empty client-rendered shells; ordinary pages can
+                    // report success as soon as their first document load settles.
+                    const inspectLoadedDocument = () => {
+                        const outcome = inspectProxyFrame();
+                        if (outcome !== 'pending') { finish(outcome); return; }
+                        if (Date.now() - loadedAt >= 5000) { finish('blank'); return; }
+                        inspectTimer = setTimeout(inspectLoadedDocument, 250);
+                    };
+                    const loadedAt = Date.now();
+                    inspectTimer = setTimeout(inspectLoadedDocument, 450);
                 };
                 const onError = () => finish('proxy-error');
 
@@ -461,6 +626,9 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 print('Enter a valid HTTP or HTTPS address and try again.', 'system');
                 return;
             }
+            if (location.pathname.replace(/\/+$/, '') === '/movies' && new URL(url).hostname !== 'www.cinejoy.pk' && new URL(url).hostname !== 'cinejoy.pk') {
+                history.replaceState(null, '', '/');
+            }
             window._currentProxyUrl = url;
             verificationNotice.hidden = true;
             proxyError.dataset.visible = 'false';
@@ -485,6 +653,7 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
             try { savedEngine = localStorage.getItem('uiqm-auto-proxy-engine') || ''; } catch (_) {}
             const engineOrder = [...new Set([savedEngine, ...proxyEngineOrder])].filter(engine => proxyEngineOrder.includes(engine));
             let lastError;
+            let destinationErrorSeen = false;
 
             for (const [index, engine] of engineOrder.entries()) {
                 if (navigationId !== proxyNavigationId) return;
@@ -508,6 +677,22 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                         print('The site returned a security check. Automatic retry was stopped; complete it on the page if possible, or open the site directly.', 'system');
                         return;
                     }
+                    if (outcome === 'upstream-error') {
+                        destinationErrorSeen = true;
+                        lastError = new Error(`${engine} reached the destination, but it returned an error page.`);
+                        if (index < engineOrder.length - 1) continue;
+                        stopProxyLoading();
+                        const errorMessage = document.getElementById('proxy-error-message');
+                        const errorLink = document.getElementById('proxy-error-direct-link');
+                        if (errorMessage) errorMessage.textContent = 'The destination returned an error page through the proxy. Its host may block server-side traffic or require a browser session; UIQM cannot bypass that restriction.';
+                        try {
+                            if (errorLink) { errorLink.href = url; errorLink.hidden = false; }
+                        } catch (_) {}
+                        proxyError.dataset.visible = 'true';
+                        setStatus('The destination rejected the proxy request. Open it directly to continue.', '#ffaa00');
+                        print('Proxy fallback stopped after the destination returned an error. Use the direct link if you need to complete its own checks.', 'system');
+                        return;
+                    }
                     if (outcome === 'loaded' || outcome === 'unknown') {
                         try { localStorage.setItem('uiqm-auto-proxy-engine', engine); } catch (_) {}
                         stopProxyLoading();
@@ -524,7 +709,15 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
             if (navigationId !== proxyNavigationId) return;
             stopProxyLoading();
             proxyError.dataset.visible = 'true';
-            setStatus('Could not establish a proxy connection.', '#ff4444');
+            setStatus(destinationErrorSeen ? 'The destination rejected proxy traffic. Open it directly to continue.' : 'Could not establish a proxy connection.', destinationErrorSeen ? '#ffaa00' : '#ff4444');
+            const errorMessage = document.getElementById('proxy-error-message');
+            const errorLink = document.getElementById('proxy-error-direct-link');
+            if (errorMessage) errorMessage.textContent = destinationErrorSeen
+                ? 'The destination returned an error through the proxy. Its host may block proxy traffic or require a browser session; UIQM cannot bypass that restriction.'
+                : `Automatic proxy routes could not load this address. ${lastError?.message || 'No proxy route responded.'}`;
+            try {
+                if (errorLink) { errorLink.href = url; errorLink.hidden = false; }
+            } catch (_) {}
             print(`Automatic connection attempts failed: ${lastError?.message || 'no proxy route responded'}`, 'system');
         };
 
@@ -538,7 +731,7 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 return;
             }
             if (base === 'help') {
-                print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">cloak</span> &nbsp; <span style="color:white">aboutblank</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">fix</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
+                print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">movies</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">fix</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
                 return;
             }
             if (base === 'fix') {
@@ -557,57 +750,8 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 print('this message is for maykol that dosent believe luis made this', 'system');
                 return;
             }
-            if (base === 'aboutblank') {
-                print('Deploying about:blank cloak...', 'system');
-                try {
-                    const w = window.open('about:blank', '_blank');
-                    if (!w) {
-                        print('Popup blocked by browser. Please allow popups for this site.', 'system');
-                        return;
-                    }
-                    const d = w.document;
-                    d.open();
-                    d.write(`<!DOCTYPE html><html><head><title>${document.title}</title><link rel="icon" href="${document.querySelector("link[rel*='icon']")?.href || ''}"><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000;}iframe{border:none;width:100%;height:100%;}</style></head><body><iframe src="${location.href}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe></body></html>`);
-                    d.close();
-                    location.replace('https://google.com');
-                } catch(e) {
-                    print('Cloak error: ' + e.message, 'system');
-                }
-                return;
-            }
             if (base === 'creds') { 
                 print('skidded by yours truly @uiqm &lt;3', 'system');
-                return;
-            }
-            if (base === 'cloak') {
-                print('Select a cloak to disguise this tab:', 'system');
-                const cloaks = [
-                    { name: 'Default', title: 'andy web proxy | private terminal', icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>' },
-                    { name: 'Google', title: 'Google', icon: 'https://www.google.com/favicon.ico' },
-                    { name: 'Drive', title: 'My Drive - Google Drive', icon: 'https://ssl.gstatic.com/docs/doclist/images/drive_2022q3_32dp.png' },
-                    { name: 'Classroom', title: 'Classes', icon: 'https://www.gstatic.com/classroom/favicon.png' },
-                    { name: 'Gmail', title: 'Gmail', icon: 'https://ssl.gstatic.com/ui/v1/icons/mail/images/2023q1/favicon_gmail_general_32dp.png' },
-                    { name: 'Canvas', title: 'Canvas', icon: 'https://www.instructure.com/favicon.ico' },
-                    { name: 'Schoology', title: 'Home | Schoology', icon: 'https://www.schoology.com/favicon.ico' },
-                    { name: 'PowerSchool', title: 'PowerSchool', icon: 'https://www.powerschool.com/favicon.ico' },
-                    { name: 'Wikipedia', title: 'Wikipedia', icon: 'https://en.wikipedia.org/favicon.ico' },
-                    { name: 'Youtube', title: 'YouTube', icon: 'https://www.youtube.com/favicon.ico' },
-                    { name: 'Outlook', title: 'Outlook', icon: 'https://outlook.live.com/favicon.ico' },
-                    { name: 'Discord', title: 'Discord | Friends', icon: 'https://discord.com/favicon.ico' },
-                    { name: 'Teams', title: 'Microsoft Teams', icon: 'https://statics.teams.cdn.office.net/evergreen-assets/apps/teams_32x32.png' },
-                    { name: 'Zoom', title: 'Zoom Meetings', icon: 'https://st1.zoom.us/zoom.ico' },
-                    { name: 'Canva', title: 'Canva', icon: 'https://www.canva.com/favicon.ico' },
-                    { name: 'Pinterest', title: 'Pinterest', icon: 'https://www.pinterest.com/favicon.ico' },
-                    { name: 'Twitch', title: 'Twitch', icon: 'https://static.twitchcdn.net/assets/favicon-32-d6025c14e900565d6177.png' },
-                    { name: 'Github', title: 'GitHub', icon: 'https://github.com/favicon.ico' },
-                    { name: 'Reddit', title: 'Reddit', icon: 'https://www.redditstatic.com/desktop2x/img/favicon/favicon-32x32.png' }
-                ];
-                let h = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:10px;">';
-                cloaks.forEach(c => {
-                    h += `<a href="#" onclick="window.setCloak('${c.title}','${c.icon}');return false;" style="color:#ff0000;text-decoration:none;font-size:12px;background:#111;padding:5px;text-align:center;border-radius:4px;border:1px solid #333;">${c.name}</a>`;
-                });
-                h += '</div>';
-                print(h);
                 return;
             }
             if (base === 'clear') {
@@ -619,14 +763,10 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 location.href = '/games';
                 return;
             }
-            if (base === 'theme') { 
-                const c = args[0]?.toLowerCase(), v = ['red','green','blue','white','pink','purple','cyan','hacker']; 
-                if (v.includes(c)) { 
-                    document.body.setAttribute('data-theme', c==='red'?'default':c); 
-                    if (c === 'hacker') canvas.style.opacity = '0.3';
-                    else canvas.style.opacity = '0';
-                    print(`Theme: ${c}`, 'system'); 
-                } 
+            if (base === 'movies') {
+                print('Opening Cinejoy through the standard proxy route. Site ads and verification are unchanged.', 'system');
+                if (location.pathname.replace(/\/+$/, '') !== '/movies') history.pushState(null, '', '/movies');
+                launchProxyUrl('https://www.cinejoy.pk/movies');
                 return;
             }
             if (base === 'youtube' || base === 'yt') {
@@ -647,7 +787,9 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
 
 
         input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runCommand(input.value); input.value = ''; } });
-        document.addEventListener('click', () => { if (!input.disabled) input.focus(); });
+        document.addEventListener('click', event => {
+            if (!input.disabled && !event.target.closest('#terminal-settings-modal, #term-settings-button')) input.focus();
+        });
         const updateUsers = () => {
             const count = Math.floor(Math.random() * (3 - 1) + 1);
             const el = document.getElementById('user-count');
@@ -664,12 +806,16 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         updateClock(); setInterval(updateClock, 1000);
         
         window.setCloak = (t, i) => {
+            t = String(t || '').trim().slice(0, 80);
+            if (!t) t = 'andy web proxy | private terminal';
             document.title = t;
             const l = document.querySelector("link[rel*='icon']") || document.createElement('link');
-            l.type = 'image/x-icon'; l.rel = 'shortcut icon'; l.href = i;
+            l.type = 'image/x-icon'; l.rel = 'shortcut icon'; l.href = String(i || terminalCloaks[0].icon);
             document.getElementsByTagName('head')[0].appendChild(l);
-            localStorage.setItem('term-cloak-title', t);
-            localStorage.setItem('term-cloak-icon', i);
+            try {
+                localStorage.setItem('term-cloak-title', t);
+                localStorage.setItem('term-cloak-icon', l.href);
+            } catch (_) {}
             if (typeof print === 'function') print(`Cloak applied: ${t}`, 'system');
         };
 
@@ -683,6 +829,10 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         if (savedIcon) window.setCloak(savedTitle || 'andy web proxy | private terminal', savedIcon);
 
         initProxy();
+        if (location.pathname.replace(/\/+$/, '') === '/movies') {
+            print('Opening Cinejoy through the standard proxy route. Site ads and verification are unchanged.', 'system');
+            launchProxyUrl('https://www.cinejoy.pk/movies');
+        }
     });
     </script>
 </body>

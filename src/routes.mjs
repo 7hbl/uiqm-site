@@ -73,6 +73,9 @@ let pages = {
   /* Proxy Presets */
   youtube: 'pages/proxnav/preset/youtube.html',
   apps: 'pages/proxnav/preset/applications.html',
+  // Keep the movies shortcut on this app's URL while opening its destination
+  // through the same ordinary proxy flow as other terminal addresses.
+  movies: 'index.html',
   /* Misc */
   flash: 'archive/gfiles/flash/index.html',
   webretro: 'archive/gfiles/rarch/index.html',
