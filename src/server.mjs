@@ -980,6 +980,19 @@ async function handleProxyRequest(request, reply, engine, wildcard) {
     }
 
     let response = await fetch(fetchTarget, fetchOptions);
+    // Anti-bot edges (DDoS-Guard, Google) intermittently serve 403/429/503
+    // challenge or throttle pages to datacenter IPs. Retry document loads a
+    // couple of times so transient blocks don't surface as hard failures.
+    const isDocumentRequest = ['GET', 'HEAD'].includes(request.method) &&
+      (request.headers['sec-fetch-dest'] === 'document' ||
+       request.headers['sec-fetch-mode'] === 'navigate' ||
+       (!request.headers['sec-fetch-dest'] && request.method === 'GET'));
+    for (let attempt = 0; attempt < 2 && isDocumentRequest &&
+      [403, 429, 502, 503, 504].includes(response.status); attempt++) {
+      await response.body?.cancel().catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+      response = await fetch(fetchTarget, fetchOptions);
+    }
     const isStaticAsset = /\.(?:m?js|cjs|css|wasm|json|svg|png|jpe?g|gif|webp|ico|woff2?|ttf|otf)$/i.test(parsedTarget.pathname) ||
       ['script', 'style', 'image', 'font', 'media'].includes(request.headers['sec-fetch-dest']);
     if (response.status === 404 && ['GET', 'HEAD'].includes(request.method) && !isYoutubeTarget) {
