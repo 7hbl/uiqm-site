@@ -17,4 +17,7 @@ lib/rammerhead/src/client/hammerhead.min.js
 lib/rammerhead/src/client/rammerhead.min.js
 views/archive/gfiles/rarch/roms
 .idea
-tools/maintenance/*.png
+tools/maintenance/*.png
+# Local runtime artifacts
+server_run.log
+*.log
