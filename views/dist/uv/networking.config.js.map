@@ -1,7 +1,7 @@
 {
   "version": 3,
   "sources": ["networking.config.js"],
-  "sourcesContent": ["/*global Ultraviolet*/\nself.__uv$config = {\n    prefix: '/service/',\n    encodeUrl: Ultraviolet.codec.xor.encode,\n    decodeUrl: Ultraviolet.codec.xor.decode,\n    handler: '/uv.handler.js',\n    client: '/uv.client.js',\n    bundle: '/uv.bundle.js',\n    config: '/uv.config.js',\n    sw: '/uv.sw.js',\n};\n"],
-  "mappings": "AACA,KAAK,YAAc,CACf,OAAQ,YACR,UAAW,YAAY,MAAM,IAAI,OACjC,UAAW,YAAY,MAAM,IAAI,OACjC,QAAS,iBACT,OAAQ,gBACR,OAAQ,gBACR,OAAQ,gBACR,GAAI,WACR",
+  "sourcesContent": ["// This file overwrites the stock UV config.js\n\nself['__uv$config'] = {\n  prefix: '/network/service/',\n  encodeUrl: Ultraviolet.codec.xor.encode,\n  decodeUrl: Ultraviolet.codec.xor.decode,\n  handler: '/network/networking.handler.js',\n  client: '/network/networking.client.js',\n  bundle: '/network/networking.bundle.js',\n  config: '/network/networking.config.js',\n  sw: '/network/networking.sw.js',\n};\n"],
+  "mappings": "AAEA,KAAK,YAAiB,CACpB,OAAQ,oBACR,UAAW,YAAY,MAAM,IAAI,OACjC,UAAW,YAAY,MAAM,IAAI,OACjC,QAAS,iCACT,OAAQ,gCACR,OAAQ,gCACR,OAAQ,gCACR,GAAI,2BACN",
   "names": []
 }

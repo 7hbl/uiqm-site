@@ -33,10 +33,36 @@
         #proxy-shell { position: absolute; top:0; left:0; width:100%; height:100%; display:none; z-index: 10; background:#000; }
         #proxy-frame { width:100%; height:100%; border:none; }
         #proxy-loading { position:fixed; top:0; left:0; width:100%; height:100%; background:#000; color:#fff; display:none; align-items:center; justify-content:center; font-size:1.5rem; text-shadow: 0 0 10px #ff0000; z-index: 15; pointer-events:none; }
+        #proxy-verification-notice { position:fixed; top:16px; left:50%; transform:translateX(-50%); display:flex; align-items:center; justify-content:center; gap:12px; max-width:min(760px, calc(100vw - 32px)); padding:12px 16px; border:1px solid rgba(255,0,0,.7); border-radius:10px; background:rgba(10,10,10,.94); color:#fff; z-index:1101; box-shadow:0 4px 18px rgba(0,0,0,.65); font:12px/1.45 Arial, sans-serif; }
+        #proxy-verification-notice[hidden] { display:none !important; }
+        #proxy-verification-notice a, #proxy-verification-notice button { flex:0 0 auto; padding:7px 10px; border:1px solid #ff0000; border-radius:6px; background:#111; color:#ff7777; font:inherit; text-decoration:none; white-space:nowrap; cursor:pointer; }
+        #proxy-verification-notice a:hover, #proxy-verification-notice button:hover { background:#240000; color:#fff; }
+        #proxy-error { position:absolute; inset:0; display:none; align-items:center; justify-content:center; padding:24px; z-index:20; background:#050505; color:#ff4d4d; text-align:center; }
+        #proxy-error[data-visible="true"] { display:flex; }
+        #proxy-error-content { max-width:620px; }
+        #proxy-error h2 { margin-bottom:12px; font-size:clamp(20px,3vw,30px); }
+        #proxy-error p { margin-bottom:18px; color:#ddd; line-height:1.5; }
+        #proxy-error-direct-link { display:inline-block; margin:0 0 18px; color:#ff9a9a; font:inherit; }
+        #proxy-error button { margin:0 6px; padding:8px 14px; border:1px solid #ff0000; border-radius:6px; background:#111; color:#ff5555; font:inherit; cursor:pointer; }
         #back-btn { position: fixed; bottom: 12px; right: 15px; top: auto; padding: 5px 12px; font-size: 11px; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); border: 1px solid #ff0000; border-radius: 16px; color: #ff0000; cursor: pointer; z-index: 1001; font-family: inherit; font-weight: bold; text-shadow: 0 0 5px #ff0000; box-shadow: 0 2px 12px rgba(0,0,0,0.6); transition: all 0.2s; display: none; }
         #back-btn:hover { background: #ff0000; color: #fff; box-shadow: 0 0 15px #ff0000; }
         #terminal-shell { padding: 20px; height: 100%; overflow-y: auto; position: relative; z-index: 5; text-shadow: 0 0 5px currentColor; }
         .live-status { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 10px; font-weight: bold; }
+        #term-settings-button { margin-left: auto; width: 34px; height: 34px; display: inline-grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; background: #111; color: inherit; cursor: pointer; font-size: 15px; text-shadow: none; }
+        #term-settings-button:hover { background: #251010; box-shadow: 0 0 12px currentColor; }
+        #terminal-settings-backdrop { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: start end; padding: 58px 18px 18px; background: rgba(0,0,0,.46); font: 14px/1.45 Arial, sans-serif; text-shadow: none; }
+        #terminal-settings-backdrop[hidden] { display: none; }
+        #terminal-settings-modal { width: min(360px, calc(100vw - 32px)); max-height: calc(100vh - 80px); overflow: auto; padding: 20px; border: 1px solid rgba(255,0,0,.55); border-radius: 16px; background: #151313; color: #f2eeee; box-shadow: 0 16px 50px rgba(0,0,0,.55); }
+        .terminal-settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+        .terminal-settings-head h2 { color: #fff; font-size: 18px; }
+        .terminal-settings-head button { border: 0; background: transparent; color: #ddd; cursor: pointer; font-size: 22px; }
+        .terminal-setting { display: grid; gap: 7px; margin: 14px 0; color: #ddd; font-size: 12px; }
+        .terminal-setting input, .terminal-setting select { width: 100%; padding: 9px 10px; border: 1px solid #544; border-radius: 8px; background: #0b0b0b; color: #fff; font: 13px Arial, sans-serif; }
+        .terminal-setting input:focus, .terminal-setting select:focus { outline: 2px solid rgba(255,0,0,.45); }
+        .terminal-settings-actions { display: flex; gap: 8px; margin-top: 15px; }
+        .terminal-settings-actions button { flex: 1; padding: 9px 10px; border: 1px solid #a33; border-radius: 8px; background: #211313; color: #ff9a9a; cursor: pointer; font-weight: 700; }
+        .terminal-settings-actions button:hover { background: #341818; color: #fff; }
+        .terminal-settings-note { margin-top: 12px; color: #aaa; font-size: 11px; }
         .pulse-ball { width: 10px; height: 10px; background: #00ff00; border-radius: 50%; box-shadow: 0 0 10px #00ff00; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.2); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
         .ascii-art { white-space: pre; font-size: 8px; line-height: 8px; margin-bottom: 20px; opacity: 0.9; }
@@ -76,10 +102,6 @@
         #proxy-nav button:active { transform: scale(0.95); }
         #proxy-nav-input { background: #111; border: 1px solid rgba(255,0,0,0.5); border-radius: 12px; color: #fff; padding: 3px 8px; font-size: 11px; width: 170px; outline: none; font-family: inherit; transition: width 0.2s, border-color 0.2s; }
         #proxy-nav-input:focus { width: 230px; border-color: #ff0000; }
-        #proxy-url-display { color: #ff0000; font-size: 11px; font-family: monospace; opacity: 0.8; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 1px solid rgba(255,0,0,0.4); padding-left: 8px; }
-        .nav-engine-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 1px 5px; font-size: 9px; font-weight: 700; border-radius: 4px; cursor: pointer; font-family: monospace; transition: all 0.2s; }
-        .nav-engine-btn:hover { border-color: #ff0000; color: #ff0000; background: rgba(255,0,0,0.15); }
-        .nav-engine-btn.active { border-color: #ff0000; color: #ff0000; background: rgba(255,0,0,0.25); box-shadow: 0 0 6px rgba(255,0,0,0.4); }
         
         a { color: inherit; text-decoration: underline; font-weight: bold; }
         a:hover { filter: brightness(1.5); }
@@ -99,20 +121,30 @@
                 <form id="proxy-nav-form" onsubmit="window.navigateProxyNav(); return false;" style="display:flex;align-items:center;">
                     <input id="proxy-nav-input" type="text" placeholder="Search or enter URL..." autocomplete="off" spellcheck="false">
                 </form>
-                <div style="margin-left: 5px; display: flex; gap: 5px; align-items: center;">
-                    <button id="btn-engine-sj" class="nav-engine-btn active" onclick="switchEngine('sj')" title="Scramjet (Fastest / Recommended)">SCRAM</button>
-                    <button id="btn-engine-direct" class="nav-engine-btn" onclick="switchEngine('direct')" title="Direct Server Proxy">DIRECT</button>
-                    <button id="btn-engine-rh" class="nav-engine-btn" onclick="switchEngine('rh')" title="Rammerhead Proxy">RH</button>
-                </div>
             </div>
             <iframe id="proxy-frame" name="uiqm-proxy-frame" title="UIQM Proxy Frame" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+            <div id="proxy-verification-notice" hidden role="status" aria-live="polite">
+                <span><strong>This site requires verification.</strong> Complete its check if the page allows. UIQM cannot solve or skip it; if it stays stuck, open the site directly.</span>
+                <a id="proxy-direct-link" href="#" target="_blank" rel="noopener noreferrer">Open directly</a>
+                <button type="button" onclick="document.getElementById('proxy-verification-notice').hidden = true">Dismiss</button>
+            </div>
             <div id="proxy-loading"><pre>   CONNECTING TO TUNNEL...</pre></div>
+            <div id="proxy-error" role="status" aria-live="polite">
+                <div id="proxy-error-content">
+                    <h2>Page did not load</h2>
+                    <p id="proxy-error-message">The proxy received an empty or blocked response. You can retry this address or return to the terminal.</p>
+                    <a id="proxy-error-direct-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open this address directly</a>
+                    <button type="button" onclick="window.retryProxyPage()">Retry</button>
+                    <button type="button" onclick="closeProxy()">Return to terminal</button>
+                </div>
+            </div>
         </div>
         <div id="terminal-shell">
             <div class="live-status">
                 <div class="pulse-ball"></div>
                 <span style="color: #ff0000;">LIVE USERS: <span id="user-count">1</span></span>
                 <span id="live-clock" style="color: #ff0000; margin-left: 20px;">--:--:-- --</span>
+                <button id="term-settings-button" type="button" title="Settings" aria-label="Open settings" onclick="window.openTerminalSettings()"><i class="fas fa-gear" aria-hidden="true"></i></button>
             </div>
             <div class="ascii-art">
                       $$\                                                       $$\                                                               
@@ -136,6 +168,38 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 <span class="term-prefix">root@uiqm:~$</span>
                 <input type="text" id="term-input" autofocus spellcheck="false" autocomplete="off">
             </form>
+        </div>
+        <div id="terminal-settings-backdrop" hidden>
+            <section id="terminal-settings-modal" role="dialog" aria-modal="true" aria-labelledby="terminal-settings-title">
+                <div class="terminal-settings-head">
+                    <h2 id="terminal-settings-title">Terminal settings</h2>
+                    <button type="button" aria-label="Close settings" onclick="window.closeTerminalSettings()">&times;</button>
+                </div>
+                <label class="terminal-setting" for="terminal-theme-select">Accent theme
+                    <select id="terminal-theme-select">
+                        <option value="default">Red</option><option value="green">Green</option><option value="blue">Blue</option>
+                        <option value="white">White</option><option value="pink">Pink</option><option value="purple">Purple</option>
+                        <option value="cyan">Cyan</option><option value="hacker">Matrix</option>
+                    </select>
+                </label>
+                <label class="terminal-setting" for="cloak-preset-select">Tab title and icon preset
+                    <select id="cloak-preset-select"><option value="">Choose a preset…</option></select>
+                </label>
+                <div class="terminal-settings-actions">
+                    <button id="apply-cloak-preset" type="button">Apply preset</button>
+                    <button id="reset-terminal-cloak" type="button">Reset tab</button>
+                </div>
+                <form id="custom-cloak-form">
+                    <label class="terminal-setting" for="custom-cloak-title">Custom tab title
+                        <input id="custom-cloak-title" type="text" maxlength="80" placeholder="UIQM Web Proxy">
+                    </label>
+                    <label class="terminal-setting" for="custom-cloak-icon">Custom favicon URL
+                        <input id="custom-cloak-icon" type="url" placeholder="https://example.com/favicon.ico">
+                    </label>
+                    <div class="terminal-settings-actions"><button type="submit">Apply custom tab</button></div>
+                </form>
+                <p class="terminal-settings-note">Theme and tab settings are saved in this browser. Tab appearance does not change the address bar. Sites may still require their own verification.</p>
+            </section>
         </div>
         <canvas id="matrix-canvas" style="position: fixed; top: 0; left: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 1s;"></canvas>
     </div>
@@ -173,11 +237,17 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         setInterval(draw, 33);
     }
     function closeProxy() {
+        if (window.cancelProxyNavigation) window.cancelProxyNavigation();
         document.getElementById('proxy-shell').style.display = 'none';
         document.getElementById('back-btn').style.display = 'none';
         const pl = document.getElementById('proxy-loading');
         if (pl) pl.style.display = 'none';
+        const error = document.getElementById('proxy-error');
+        if (error) error.dataset.visible = 'false';
+        const verificationNotice = document.getElementById('proxy-verification-notice');
+        if (verificationNotice) verificationNotice.hidden = true;
         document.getElementById('proxy-frame').src = 'about:blank';
+        if (location.pathname.replace(/\/+$/, '') === '/movies') history.replaceState(null, '', '/');
         document.getElementById('term-input').focus();
     }
     document.addEventListener('DOMContentLoaded', async () => {
@@ -185,17 +255,132 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         const input = document.getElementById('term-input'), output = document.getElementById('term-output-lines');
         const terminal = document.getElementById('terminal-shell'), frame = document.getElementById('proxy-frame');
         const loading = document.getElementById('proxy-loading'), proxyShell = document.getElementById('proxy-shell');
+        const proxyError = document.getElementById('proxy-error');
+        const verificationNotice = document.getElementById('proxy-verification-notice');
+        const directLink = document.getElementById('proxy-direct-link');
         const statusLine = document.getElementById('status-line'), backBtn = document.getElementById('back-btn');
         const canvas = document.getElementById('matrix-canvas');
+        const settingsBackdrop = document.getElementById('terminal-settings-backdrop');
+        const themeSelect = document.getElementById('terminal-theme-select');
+        const cloakSelect = document.getElementById('cloak-preset-select');
+        let settingsReturnFocus = null;
+
+        const terminalCloaks = [
+            { name: 'Default', title: 'andy web proxy | private terminal', icon: document.querySelector("link[rel*='icon']")?.href || '' },
+            { name: 'Google', title: 'Google', icon: 'https://www.google.com/favicon.ico' },
+            { name: 'Drive', title: 'My Drive - Google Drive', icon: 'https://ssl.gstatic.com/docs/doclist/images/drive_2022q3_32dp.png' },
+            { name: 'Classroom', title: 'Classes', icon: 'https://www.gstatic.com/classroom/favicon.png' },
+            { name: 'Gmail', title: 'Gmail', icon: 'https://ssl.gstatic.com/ui/v1/icons/mail/images/2023q1/favicon_gmail_general_32dp.png' },
+            { name: 'Canvas', title: 'Canvas', icon: 'https://www.instructure.com/favicon.ico' },
+            { name: 'Schoology', title: 'Home | Schoology', icon: 'https://www.schoology.com/favicon.ico' },
+            { name: 'PowerSchool', title: 'PowerSchool', icon: 'https://www.powerschool.com/favicon.ico' },
+            { name: 'Wikipedia', title: 'Wikipedia', icon: 'https://en.wikipedia.org/favicon.ico' },
+            { name: 'YouTube', title: 'YouTube', icon: 'https://www.youtube.com/favicon.ico' },
+            { name: 'Outlook', title: 'Outlook', icon: 'https://outlook.live.com/favicon.ico' },
+            { name: 'Discord', title: 'Discord | Friends', icon: 'https://discord.com/favicon.ico' },
+            { name: 'Teams', title: 'Microsoft Teams', icon: 'https://statics.teams.cdn.office.net/evergreen-assets/apps/teams_32x32.png' },
+            { name: 'Zoom', title: 'Zoom Meetings', icon: 'https://st1.zoom.us/zoom.ico' },
+            { name: 'Canva', title: 'Canva', icon: 'https://www.canva.com/favicon.ico' },
+            { name: 'Pinterest', title: 'Pinterest', icon: 'https://www.pinterest.com/favicon.ico' },
+            { name: 'Twitch', title: 'Twitch', icon: 'https://static.twitchcdn.net/assets/favicon-32-d6025c14e900565d6177.png' },
+            { name: 'GitHub', title: 'GitHub', icon: 'https://github.com/favicon.ico' },
+            { name: 'Reddit', title: 'Reddit', icon: 'https://www.redditstatic.com/desktop2x/img/favicon/favicon-32x32.png' }
+        ];
+
+        terminalCloaks.forEach((cloak, index) => {
+            const option = document.createElement('option');
+            option.value = String(index);
+            option.textContent = cloak.name;
+            cloakSelect.appendChild(option);
+        });
+
+        const applyTerminalTheme = theme => {
+            const themes = ['default', 'green', 'blue', 'white', 'pink', 'purple', 'cyan', 'hacker'];
+            const chosen = themes.includes(theme) ? theme : 'default';
+            document.body.setAttribute('data-theme', chosen);
+            canvas.style.opacity = chosen === 'hacker' ? '0.3' : '0';
+            themeSelect.value = chosen;
+            try { localStorage.setItem('uiqm-terminal-theme', chosen); } catch (_) {}
+        };
+
+        window.openTerminalSettings = () => {
+            settingsReturnFocus = document.activeElement;
+            settingsBackdrop.hidden = false;
+            themeSelect.focus();
+        };
+        window.closeTerminalSettings = () => {
+            settingsBackdrop.hidden = true;
+            if (settingsReturnFocus instanceof HTMLElement) settingsReturnFocus.focus();
+        };
+        themeSelect.addEventListener('change', () => applyTerminalTheme(themeSelect.value));
+        settingsBackdrop.addEventListener('click', event => {
+            if (event.target === settingsBackdrop) window.closeTerminalSettings();
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && !settingsBackdrop.hidden) window.closeTerminalSettings();
+        });
+        document.getElementById('apply-cloak-preset').addEventListener('click', () => {
+            const cloak = terminalCloaks[Number(cloakSelect.value)];
+            if (cloak) window.setCloak(cloak.title, cloak.icon);
+        });
+        document.getElementById('reset-terminal-cloak').addEventListener('click', () => {
+            try {
+                localStorage.removeItem('term-cloak-title');
+                localStorage.removeItem('term-cloak-icon');
+            } catch (_) {}
+            const fallback = terminalCloaks[0];
+            document.title = fallback.title;
+            const icon = document.querySelector("link[rel*='icon']");
+            if (icon && fallback.icon) icon.href = fallback.icon;
+            cloakSelect.value = '';
+            print('Tab title and icon restored.', 'system');
+        });
+        document.getElementById('custom-cloak-form').addEventListener('submit', event => {
+            event.preventDefault();
+            const title = document.getElementById('custom-cloak-title').value.trim();
+            const iconInput = document.getElementById('custom-cloak-icon').value.trim();
+            const currentIcon = document.querySelector("link[rel*='icon']")?.href || terminalCloaks[0].icon;
+            let icon = currentIcon;
+            if (iconInput) {
+                try {
+                    const parsed = new URL(iconInput, location.href);
+                    if (!['https:', 'data:'].includes(parsed.protocol)) throw new Error('Use an HTTPS or image data URL.');
+                    icon = parsed.href;
+                } catch (error) {
+                    print(error.message || 'Enter a valid favicon URL.', 'system');
+                    return;
+                }
+            }
+            window.setCloak(title || 'andy web proxy | private terminal', icon);
+        });
+        try { applyTerminalTheme(localStorage.getItem('uiqm-terminal-theme') || 'default'); } catch (_) { applyTerminalTheme('default'); }
 
         const WISP_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/cron/';
         const BARE_MUX_WORKER = '/gmt/worker.js';
-        const TRANSPORT_MJS = '/epoch/index.mjs', SCRAMJET_PREFIX = '/worker/network/';
+        const TRANSPORT_MJS = '/epoch/index.mjs';
 
-        window._preferredEngine = 'sj';
-        let sjEncode = url => SCRAMJET_PREFIX + encodeURIComponent(url);
+        // Automatic browsing should use full proxy engines that rewrite page
+        // resources and redirects. The server's /proxy route only fetches the
+        // top-level response and leaves page URLs untouched.
+        const proxyEngineOrder = ['sj', 'rh'];
+        let proxyNavigationId = 0;
+        let cancelProxyAttempt = null;
+        window.cancelProxyNavigation = () => {
+            proxyNavigationId++;
+            if (cancelProxyAttempt) cancelProxyAttempt();
+            if (window._loadTimer) clearTimeout(window._loadTimer);
+            window._loadTimer = null;
+            loading.style.display = 'none';
+        };
         const print = (h, c = '') => { const d = document.createElement('div'); d.className = 'line ' + c; d.innerHTML = h; output.appendChild(d); terminal.scrollTop = terminal.scrollHeight; };
         const setStatus = (m, c = 'yellow') => statusLine.innerHTML = `<span style="color:${c}">${m}</span>`;
+        const stopProxyLoading = () => {
+            if (window._loadTimer) clearTimeout(window._loadTimer);
+            window._loadTimer = null;
+            loading.style.display = 'none';
+            const label = loading.querySelector('pre');
+            if (label) label.textContent = '   CONNECTING TO TUNNEL...';
+        };
         window.showUnitywebNoSupport = () => {
             setStatus('This Unity game could not start in the current browser.', '#ff4444');
             print('The game host may have blocked a required asset or the browser may lack WebGL support.', 'system');
@@ -222,10 +407,10 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 }
                 window._swPromise = window.ensureUiqmProxyWorker();
                 await window._swPromise;
-                setStatus('Secure Channel Active. System ready.', '#00ff00');
+                if (proxyShell.style.display === 'none') setStatus('Secure Channel Active. System ready.', '#00ff00');
             } catch (e) {
                 console.warn('Proxy init:', e);
-                setStatus('Proxy worker failed to update. Refresh and try again.', '#ff4444');
+                if (proxyShell.style.display === 'none') setStatus('Proxy worker failed to update. Refresh and try again.', '#ff4444');
             }
         };
 
@@ -235,41 +420,218 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 launchProxyUrl(inp.value.trim());
             }
         };
+        window.retryProxyPage = () => {
+            proxyError.dataset.visible = 'false';
+            launchProxyUrl(window._currentProxyUrl || document.getElementById('proxy-nav-input')?.value || 'https://www.google.com/');
+        };
 
-        window.switchEngine = (engine) => {
-            window._preferredEngine = engine;
-            ['sj', 'direct', 'rh'].forEach(e => {
-                const btn = document.getElementById('btn-engine-' + e);
-                if (btn) btn.classList.toggle('active', e === engine);
-            });
-            if (!window._currentProxyUrl) return;
-            const f = document.getElementById('proxy-frame');
-            const ld = document.getElementById('proxy-loading');
-            ld.style.display = 'flex';
-            if (window._loadTimer) clearTimeout(window._loadTimer);
-            window._loadTimer = setTimeout(() => { ld.style.display = 'none'; }, 2500);
+        const getRammerheadSession = async () => {
+            if (/^[a-f0-9]{32}$/i.test(window._rhSession || '')) return window._rhSession;
+            const response = await fetch('/newsession', { cache: 'no-store' });
+            if (!response.ok) throw new Error(`Rammerhead session request failed (${response.status}).`);
+            const session = (await response.text()).trim();
+            if (!/^[a-f0-9]{32}$/i.test(session)) throw new Error('Rammerhead returned an invalid session.');
+            window._rhSession = session;
+            return session;
+        };
 
-            const u = window._currentProxyUrl;
-            f.removeAttribute('srcdoc');
-            if (engine === 'rh' && window._rhSession) {
-                f.src = '/' + window._rhSession + '/' + u;
-            } else if (engine === 'sj') {
-                f.src = '/worker/network/' + encodeURIComponent(u);
-            } else {
-                f.src = '/proxy/' + encodeURIComponent(u);
+        const inspectProxyFrame = () => {
+            try {
+                const doc = frame.contentDocument;
+                if (!doc) return 'unknown';
+                const text = `${doc.title || ''}\n${doc.body?.innerText || doc.body?.textContent || ''}`.slice(0, 6000);
+                if (
+                    doc.querySelector('#challenge-form, [id^="cf-chl-"], .cf-turnstile, iframe[src*="challenges.cloudflare.com"]') ||
+                    /captcha.{0,50}(?:verify|robot|human)|recaptcha|i(?:'| a)m not a robot|(?:verify|prove) (?:that )?you are (?:a )?(?:human|person|not a robot)|unusual traffic|checking your browser|verifying your browser|complete the security check|access denied|403 forbidden|too many requests|attention required.{0,40}cloudflare/i.test(text)
+                ) return 'upstream-block';
+                if (/^\s*(?:404\s*not found|403\s*forbidden|500\s*internal server error|502\s*bad gateway|503\s*service unavailable|504\s*gateway timeout)\b/i.test(text)) return 'upstream-error';
+                if (/^\s*(?:Proxy Error:|The proxy could not load this site\.|Scramjet WebAssembly could not be loaded\.)/im.test(text)) return 'proxy-error';
+                if (!doc.location?.href || doc.location.href === 'about:blank') return 'blank';
+                if (!doc.body || (!doc.body.children.length && !doc.body.textContent.trim())) return 'blank';
+                const hasVisibleContent = Boolean(doc.body.innerText?.trim()) || Boolean(doc.querySelector('canvas,video,audio,img[src],iframe,object,embed'));
+                if (!hasVisibleContent) {
+                    const resources = doc.defaultView?.performance?.getEntriesByType('resource') || [];
+                    const failedScript = resources.some(resource => {
+                        if (!(resource.responseStatus >= 400)) return false;
+                        try { return /\.(?:m?js)$/i.test(new URL(resource.name).pathname); } catch (_) { return false; }
+                    });
+                    if (failedScript) return 'upstream-error';
+                    if (doc.querySelector('script[src],script[type="module"]')) return 'pending';
+                }
+                return 'loaded';
+            } catch (_) {
+                // A frame the browser treats as cross-origin is already beyond our safe inspection boundary.
+                return 'unknown';
             }
         };
 
+        const getProxiedTargetUrl = () => {
+            try {
+                const frameUrl = new URL(frame.contentWindow.location.href);
+                const routePrefix = '/worker/network/';
+                if (frameUrl.origin === location.origin && frameUrl.pathname.startsWith(routePrefix)) {
+                    return new URL(decodeURIComponent(frameUrl.pathname.slice(routePrefix.length)));
+                }
+            } catch (_) {}
+            try { return new URL(window._currentProxyUrl); } catch (_) { return null; }
+        };
+
+        const submitYoutubeSearch = (event, form, input) => {
+            const target = getProxiedTargetUrl();
+            // YouTube currently renders its search control outside a form on some
+            // layouts, so support both the traditional form and the live widget.
+            const searchInput = input || form?.querySelector('input[name="search_query"]') ||
+                frame.contentDocument?.querySelector('input[name="search_query"]');
+            const query = searchInput?.value?.trim();
+            if (!target || !/(^|\.)youtube\.com$/i.test(target.hostname) || !query) return false;
+
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            const resultsUrl = new URL('/results', target.origin);
+            resultsUrl.searchParams.set('search_query', query);
+            launchProxyUrl(resultsUrl.href);
+            return true;
+        };
+
+        const installYoutubeSearchFallback = () => {
+            try {
+                const target = getProxiedTargetUrl();
+                if (!target || !/(^|\.)youtube\.com$/i.test(target.hostname)) return;
+                const doc = frame.contentDocument;
+                if (!doc?.documentElement || doc.documentElement.dataset.uiqmSearchFallback === 'installed') return;
+                doc.documentElement.dataset.uiqmSearchFallback = 'installed';
+                doc.addEventListener('submit', event => {
+                    const form = event.target;
+                    if (form instanceof doc.defaultView.HTMLFormElement) submitYoutubeSearch(event, form);
+                }, true);
+                doc.addEventListener('click', event => {
+                    const path = event.composedPath?.() || [event.target];
+                    const button = path.find(node =>
+                        node instanceof doc.defaultView.HTMLButtonElement && node.getAttribute('aria-label') === 'Search'
+                    );
+                    if (!button || button.getAttribute('aria-label') !== 'Search') return;
+                    const form = button?.closest('form');
+                    const input = form?.querySelector('input[name="search_query"]') ||
+                        doc.querySelector('input[name="search_query"]');
+                    if (input) submitYoutubeSearch(event, form, input);
+                }, true);
+                doc.addEventListener('keydown', event => {
+                    if (event.key !== 'Enter') return;
+                    const input = event.composedPath?.().find(node =>
+                        node instanceof doc.defaultView.HTMLInputElement && node.name === 'search_query'
+                    ) || (event.target instanceof doc.defaultView.HTMLInputElement && event.target.name === 'search_query' ? event.target : null);
+                    if (input) {
+                        submitYoutubeSearch(event, input.form || input.closest('form'), input);
+                    }
+                }, true);
+            } catch (_) {}
+        };
+
+        // Scramjet does not consistently bubble the proxied document's load event
+        // to the outer iframe. Poll briefly for the live YouTube document so its
+        // search handlers are installed even when that event is absent.
+        setInterval(installYoutubeSearchFallback, 750);
+
+        const getProxyRoute = async (engine, url) => {
+            if (engine === 'sj') {
+                await (window._swPromise || window.ensureUiqmProxyWorker());
+                return '/worker/network/' + encodeURIComponent(url);
+            }
+            if (engine === 'direct') return '/proxy/' + encodeURIComponent(url);
+            if (engine === 'rh') return `/${await getRammerheadSession()}/${url}`;
+            throw new Error('Unknown proxy route.');
+        };
+
+        const navigateWithEngine = async (engine, url, navigationId) => {
+            const route = await getProxyRoute(engine, url);
+            if (navigationId !== proxyNavigationId) return 'cancelled';
+            return new Promise(resolve => {
+                let finished = false;
+                let loadTimer;
+                let inspectTimer;
+                let previousHref = '';
+                try { previousHref = frame.contentWindow.location.href; } catch (_) {}
+                const finish = (outcome) => {
+                    if (finished) return;
+                    finished = true;
+                    clearTimeout(loadTimer);
+                    clearTimeout(inspectTimer);
+                    frame.removeEventListener('load', onLoad);
+                    frame.removeEventListener('error', onError);
+                    if (cancelProxyAttempt === cancel) cancelProxyAttempt = null;
+                    resolve(outcome);
+                };
+                const cancel = () => finish('cancelled');
+                const onLoad = () => {
+                    try {
+                        if (frame.contentWindow.location.href === 'about:blank') return;
+                    } catch (_) {}
+                    installYoutubeSearchFallback();
+                    clearTimeout(loadTimer);
+                    // Wait only on empty client-rendered shells; ordinary pages can
+                    // report success as soon as their first document load settles.
+                    const inspectLoadedDocument = () => {
+                        const outcome = inspectProxyFrame();
+                        if (outcome !== 'pending') { finish(outcome); return; }
+                        if (Date.now() - loadedAt >= 5000) { finish('blank'); return; }
+                        inspectTimer = setTimeout(inspectLoadedDocument, 250);
+                    };
+                    const loadedAt = Date.now();
+                    inspectTimer = setTimeout(inspectLoadedDocument, 450);
+                };
+                const onError = () => finish('proxy-error');
+
+                cancelProxyAttempt = cancel;
+                frame.removeAttribute('srcdoc');
+                frame.addEventListener('load', onLoad);
+                frame.addEventListener('error', onError);
+                loadTimer = setTimeout(() => {
+                    const outcome = inspectProxyFrame();
+                    let currentHref = '';
+                    try { currentHref = frame.contentWindow.location.href; } catch (_) {}
+                    // Don't mistake a still-visible previous page for a successful new navigation.
+                    if (outcome === 'blank' || (previousHref && currentHref === previousHref)) {
+                        finish('proxy-error');
+                    } else {
+                        finish(outcome);
+                    }
+                }, 12000);
+                frame.src = route;
+            });
+        };
+
         const launchProxyUrl = async targetUrl => {
+            const navigationId = ++proxyNavigationId;
+            if (cancelProxyAttempt) cancelProxyAttempt();
             let url = targetUrl.trim();
-            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            if (/^[a-z][a-z\d+.-]*:\/\//i.test(url) && !/^https?:\/\//i.test(url)) {
+                setStatus('Only HTTP and HTTPS pages can be opened.', '#ff4444');
+                print('Enter an HTTP or HTTPS address and try again.', 'system');
+                return;
+            }
+            if (!/^https?:\/\//i.test(url)) {
                 if (url.includes('.') && !url.includes(' ')) {
                     url = 'https://' + url;
                 } else {
                     url = 'https://www.bing.com/search?q=' + encodeURIComponent(url);
                 }
             }
+            try {
+                const parsedUrl = new URL(url);
+                if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Only HTTP and HTTPS pages are supported.');
+                url = parsedUrl.href;
+            } catch (error) {
+                setStatus(error.message || 'Enter a valid web address.', '#ff4444');
+                print('Enter a valid HTTP or HTTPS address and try again.', 'system');
+                return;
+            }
+            if (location.pathname.replace(/\/+$/, '') === '/movies' && new URL(url).hostname !== 'www.cinejoy.pk' && new URL(url).hostname !== 'cinejoy.pk') {
+                history.replaceState(null, '', '/');
+            }
             window._currentProxyUrl = url;
+            verificationNotice.hidden = true;
+            proxyError.dataset.visible = 'false';
             try {
                 const targetOrigin = new URL(url).origin;
                 document.cookie = '__active_proxy_origin=' + encodeURIComponent(targetOrigin) + '; Path=/; SameSite=Lax';
@@ -279,35 +641,84 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
             const navInput = document.getElementById('proxy-nav-input');
             if (navInput) navInput.value = url;
             if (window._loadTimer) clearTimeout(window._loadTimer);
-            window._loadTimer = setTimeout(() => { loading.style.display = 'none'; }, 3000);
+            window._loadTimer = setTimeout(() => {
+                if (navigationId !== proxyNavigationId) return;
+                proxyNavigationId++;
+                if (cancelProxyAttempt) cancelProxyAttempt();
+                stopProxyLoading();
+                setStatus('The proxy connection timed out. Try reloading or another site.', '#ff4444');
+            }, 65000);
 
-            frame.onload = () => {
-                loading.style.display = 'none';
-            };
+            let savedEngine = '';
+            try { savedEngine = localStorage.getItem('uiqm-auto-proxy-engine') || ''; } catch (_) {}
+            const engineOrder = [...new Set([savedEngine, ...proxyEngineOrder])].filter(engine => proxyEngineOrder.includes(engine));
+            let lastError;
+            let destinationErrorSeen = false;
 
-            const engine = window._preferredEngine || 'sj';
-            if (engine === 'sj') {
+            for (const [index, engine] of engineOrder.entries()) {
+                if (navigationId !== proxyNavigationId) return;
                 try {
-                    await (window._swPromise || window.ensureUiqmProxyWorker());
+                    if (index > 0) {
+                        loading.style.display = 'flex';
+                        loading.querySelector('pre').textContent = '   TRYING ANOTHER CONNECTION...';
+                    }
+                    const outcome = await navigateWithEngine(engine, url, navigationId);
+                    if (outcome === 'cancelled' || navigationId !== proxyNavigationId) return;
+                    if (outcome === 'upstream-block') {
+                        stopProxyLoading();
+                        try {
+                            const directUrl = new URL(url);
+                            if (directUrl.protocol === 'http:' || directUrl.protocol === 'https:') {
+                                directLink.href = directUrl.href;
+                                verificationNotice.hidden = false;
+                            }
+                        } catch (_) {}
+                        setStatus('This site requires verification in its own browser session.', '#ffaa00');
+                        print('The site returned a security check. Automatic retry was stopped; complete it on the page if possible, or open the site directly.', 'system');
+                        return;
+                    }
+                    if (outcome === 'upstream-error') {
+                        destinationErrorSeen = true;
+                        lastError = new Error(`${engine} reached the destination, but it returned an error page.`);
+                        if (index < engineOrder.length - 1) continue;
+                        stopProxyLoading();
+                        const errorMessage = document.getElementById('proxy-error-message');
+                        const errorLink = document.getElementById('proxy-error-direct-link');
+                        if (errorMessage) errorMessage.textContent = 'The destination returned an error page through the proxy. Its host may block server-side traffic or require a browser session; UIQM cannot bypass that restriction.';
+                        try {
+                            if (errorLink) { errorLink.href = url; errorLink.hidden = false; }
+                        } catch (_) {}
+                        proxyError.dataset.visible = 'true';
+                        setStatus('The destination rejected the proxy request. Open it directly to continue.', '#ffaa00');
+                        print('Proxy fallback stopped after the destination returned an error. Use the direct link if you need to complete its own checks.', 'system');
+                        return;
+                    }
+                    if (outcome === 'loaded' || outcome === 'unknown') {
+                        try { localStorage.setItem('uiqm-auto-proxy-engine', engine); } catch (_) {}
+                        stopProxyLoading();
+                        setStatus('Proxy page loaded.', '#00ff00');
+                        print('Tunnel established.', 'system');
+                        return;
+                    }
+                    lastError = new Error(`${engine} could not establish the page.`);
                 } catch (error) {
-                    loading.style.display = 'none';
-                    setStatus('Proxy worker is not controlling this page.', '#ff4444');
-                    print(`Scramjet could not start: ${error.message}`, 'system');
-                    return;
+                    lastError = error;
                 }
             }
-            frame.removeAttribute('srcdoc');
-            if (engine === 'sj' && sjEncode) {
-                frame.src = sjEncode(url);
-            } else if (engine === 'direct') {
-                frame.src = '/proxy/' + encodeURIComponent(url);
-            } else if (engine === 'rh' && window._rhSession) {
-                frame.src = '/' + window._rhSession + '/' + url;
-            } else if (sjEncode) {
-                frame.src = sjEncode(url);
-            } else {
-                frame.src = '/proxy/' + encodeURIComponent(url);
-            }
+
+            if (navigationId !== proxyNavigationId) return;
+            stopProxyLoading();
+            proxyError.dataset.visible = 'true';
+            setStatus(destinationErrorSeen ? 'The destination rejected proxy traffic. Open it directly to continue.' : 'Could not establish a proxy connection.', destinationErrorSeen ? '#ffaa00' : '#ff4444');
+            const errorMessage = document.getElementById('proxy-error-message');
+            const errorLink = document.getElementById('proxy-error-direct-link');
+            if (errorMessage) errorMessage.textContent = destinationErrorSeen
+                ? 'The destination returned an error through the proxy. Its host may block proxy traffic or require a browser session; UIQM cannot bypass that restriction.'
+                : `Automatic proxy routes could not load this address. ${lastError?.message || 'No proxy route responded.'}`;
+            try {
+                if (errorLink) { errorLink.href = url; errorLink.hidden = false; }
+            } catch (_) {}
+            print(`Automatic connection attempts failed: ${lastError?.message || 'no proxy route responded'}`, 'system');
         };
 
         const runCommand = raw => {
@@ -316,23 +727,11 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
             const [base, ...args] = raw.split(' ');
 
             if (base === 'engine') {
-                const eng = (args[0] || '').toLowerCase();
-                if (['rh', 'rammerhead'].includes(eng)) {
-                    window._preferredEngine = 'rh';
-                    print('Default proxy engine set to: <span style="color:#00ff00">Rammerhead</span>', 'system');
-                } else if (['sj', 'scram', 'scramjet'].includes(eng)) {
-                    window._preferredEngine = 'sj';
-                    print('Default proxy engine set to: <span style="color:#00ff00">Scramjet</span>', 'system');
-                } else if (['direct', 'proxy'].includes(eng)) {
-                    window._preferredEngine = 'direct';
-                    print('Default proxy engine set to: <span style="color:#00ff00">Direct Proxy</span>', 'system');
-                } else {
-                    print('Available engines: <span style="color:white">rh</span> (Rammerhead) &nbsp; <span style="color:white">scram</span> (Scramjet) &nbsp; <span style="color:white">direct</span> (Direct Server)', 'system');
-                }
+                print('Connection routing is automatic. Proxy security checks and site verification pages are left to the site.', 'system');
                 return;
             }
             if (base === 'help') {
-                print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">engine [rh|scram|direct]</span> &nbsp; <span style="color:white">theme [color]</span> &nbsp; <span style="color:white">cloak</span> &nbsp; <span style="color:white">aboutblank</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">fix</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
+                print('Commands: <span style="color:white">games</span> &nbsp; <span style="color:white">movies</span> &nbsp; <span style="color:white">creds</span> &nbsp; <span style="color:white">fix</span> &nbsp; <span style="color:white">clear</span> &nbsp; <span style="color:white">[url]</span>', 'system');
                 return;
             }
             if (base === 'fix') {
@@ -351,57 +750,8 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 print('this message is for maykol that dosent believe luis made this', 'system');
                 return;
             }
-            if (base === 'aboutblank') {
-                print('Deploying about:blank cloak...', 'system');
-                try {
-                    const w = window.open('about:blank', '_blank');
-                    if (!w) {
-                        print('Popup blocked by browser. Please allow popups for this site.', 'system');
-                        return;
-                    }
-                    const d = w.document;
-                    d.open();
-                    d.write(`<!DOCTYPE html><html><head><title>${document.title}</title><link rel="icon" href="${document.querySelector("link[rel*='icon']")?.href || ''}"><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000;}iframe{border:none;width:100%;height:100%;}</style></head><body><iframe src="${location.href}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe></body></html>`);
-                    d.close();
-                    location.replace('https://google.com');
-                } catch(e) {
-                    print('Cloak error: ' + e.message, 'system');
-                }
-                return;
-            }
             if (base === 'creds') { 
                 print('skidded by yours truly @uiqm &lt;3', 'system');
-                return;
-            }
-            if (base === 'cloak') {
-                print('Select a cloak to disguise this tab:', 'system');
-                const cloaks = [
-                    { name: 'Default', title: 'andy web proxy | private terminal', icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><circle cx=%2235%22 cy=%2240%22 r=%228%22 fill=%22red%22/><circle cx=%2265%22 cy=%2240%22 r=%228%22 fill=%22red%22/></svg>' },
-                    { name: 'Google', title: 'Google', icon: 'https://www.google.com/favicon.ico' },
-                    { name: 'Drive', title: 'My Drive - Google Drive', icon: 'https://ssl.gstatic.com/docs/doclist/images/drive_2022q3_32dp.png' },
-                    { name: 'Classroom', title: 'Classes', icon: 'https://www.gstatic.com/classroom/favicon.png' },
-                    { name: 'Gmail', title: 'Gmail', icon: 'https://ssl.gstatic.com/ui/v1/icons/mail/images/2023q1/favicon_gmail_general_32dp.png' },
-                    { name: 'Canvas', title: 'Canvas', icon: 'https://www.instructure.com/favicon.ico' },
-                    { name: 'Schoology', title: 'Home | Schoology', icon: 'https://www.schoology.com/favicon.ico' },
-                    { name: 'PowerSchool', title: 'PowerSchool', icon: 'https://www.powerschool.com/favicon.ico' },
-                    { name: 'Wikipedia', title: 'Wikipedia', icon: 'https://en.wikipedia.org/favicon.ico' },
-                    { name: 'Youtube', title: 'YouTube', icon: 'https://www.youtube.com/favicon.ico' },
-                    { name: 'Outlook', title: 'Outlook', icon: 'https://outlook.live.com/favicon.ico' },
-                    { name: 'Discord', title: 'Discord | Friends', icon: 'https://discord.com/favicon.ico' },
-                    { name: 'Teams', title: 'Microsoft Teams', icon: 'https://statics.teams.cdn.office.net/evergreen-assets/apps/teams_32x32.png' },
-                    { name: 'Zoom', title: 'Zoom Meetings', icon: 'https://st1.zoom.us/zoom.ico' },
-                    { name: 'Canva', title: 'Canva', icon: 'https://www.canva.com/favicon.ico' },
-                    { name: 'Pinterest', title: 'Pinterest', icon: 'https://www.pinterest.com/favicon.ico' },
-                    { name: 'Twitch', title: 'Twitch', icon: 'https://static.twitchcdn.net/assets/favicon-32-d6025c14e900565d6177.png' },
-                    { name: 'Github', title: 'GitHub', icon: 'https://github.com/favicon.ico' },
-                    { name: 'Reddit', title: 'Reddit', icon: 'https://www.redditstatic.com/desktop2x/img/favicon/favicon-32x32.png' }
-                ];
-                let h = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:10px;">';
-                cloaks.forEach(c => {
-                    h += `<a href="#" onclick="window.setCloak('${c.title}','${c.icon}');return false;" style="color:#ff0000;text-decoration:none;font-size:12px;background:#111;padding:5px;text-align:center;border-radius:4px;border:1px solid #333;">${c.name}</a>`;
-                });
-                h += '</div>';
-                print(h);
                 return;
             }
             if (base === 'clear') {
@@ -413,14 +763,10 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
                 location.href = '/games';
                 return;
             }
-            if (base === 'theme') { 
-                const c = args[0]?.toLowerCase(), v = ['red','green','blue','white','pink','purple','cyan','hacker']; 
-                if (v.includes(c)) { 
-                    document.body.setAttribute('data-theme', c==='red'?'default':c); 
-                    if (c === 'hacker') canvas.style.opacity = '0.3';
-                    else canvas.style.opacity = '0';
-                    print(`Theme: ${c}`, 'system'); 
-                } 
+            if (base === 'movies') {
+                print('Opening Cinejoy through the standard proxy route. Site ads and verification are unchanged.', 'system');
+                if (location.pathname.replace(/\/+$/, '') !== '/movies') history.pushState(null, '', '/movies');
+                launchProxyUrl('https://www.cinejoy.pk/movies');
                 return;
             }
             if (base === 'youtube' || base === 'yt') {
@@ -441,27 +787,9 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
 
 
         input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runCommand(input.value); input.value = ''; } });
-        document.addEventListener('click', () => { if (!input.disabled) input.focus(); });
-        frame.onload = () => { 
-            if (window._loadTimer) clearTimeout(window._loadTimer);
-            loading.style.display = 'none'; 
-            print('Tunnel established.', 'system'); 
-            try {
-                const path = frame.contentWindow.location.pathname;
-                let rawUrl = '';
-                if (path.includes('/network/')) {
-                    rawUrl = path.split('/network/')[1];
-                } else {
-                    const match = path.match(/[a-z0-9]{32}\/(.+)/);
-                    if (match) rawUrl = match[1];
-                }
-                if (rawUrl && rawUrl !== 'true' && rawUrl !== 'false') {
-                    document.getElementById('proxy-url-display').innerText = decodeURIComponent(rawUrl);
-                }
-            } catch(e) {}
-        };
-
-        
+        document.addEventListener('click', event => {
+            if (!input.disabled && !event.target.closest('#terminal-settings-modal, #term-settings-button')) input.focus();
+        });
         const updateUsers = () => {
             const count = Math.floor(Math.random() * (3 - 1) + 1);
             const el = document.getElementById('user-count');
@@ -478,12 +806,16 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         updateClock(); setInterval(updateClock, 1000);
         
         window.setCloak = (t, i) => {
+            t = String(t || '').trim().slice(0, 80);
+            if (!t) t = 'andy web proxy | private terminal';
             document.title = t;
             const l = document.querySelector("link[rel*='icon']") || document.createElement('link');
-            l.type = 'image/x-icon'; l.rel = 'shortcut icon'; l.href = i;
+            l.type = 'image/x-icon'; l.rel = 'shortcut icon'; l.href = String(i || terminalCloaks[0].icon);
             document.getElementsByTagName('head')[0].appendChild(l);
-            localStorage.setItem('term-cloak-title', t);
-            localStorage.setItem('term-cloak-icon', i);
+            try {
+                localStorage.setItem('term-cloak-title', t);
+                localStorage.setItem('term-cloak-icon', l.href);
+            } catch (_) {}
             if (typeof print === 'function') print(`Cloak applied: ${t}`, 'system');
         };
 
@@ -497,6 +829,10 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
         if (savedIcon) window.setCloak(savedTitle || 'andy web proxy | private terminal', savedIcon);
 
         initProxy();
+        if (location.pathname.replace(/\/+$/, '') === '/movies') {
+            print('Opening Cinejoy through the standard proxy route. Site ads and verification are unchanged.', 'system');
+            launchProxyUrl('https://www.cinejoy.pk/movies');
+        }
     });
     </script>
 </body>

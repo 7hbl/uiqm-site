@@ -1,2 +1,2 @@
-self.__uv$config={prefix:"/service/",encodeUrl:Ultraviolet.codec.xor.encode,decodeUrl:Ultraviolet.codec.xor.decode,handler:"/uv.handler.js",client:"/uv.client.js",bundle:"/uv.bundle.js",config:"/uv.config.js",sw:"/uv.sw.js"};
+self.__uv$config={prefix:"/network/service/",encodeUrl:Ultraviolet.codec.xor.encode,decodeUrl:Ultraviolet.codec.xor.decode,handler:"/network/networking.handler.js",client:"/network/networking.client.js",bundle:"/network/networking.bundle.js",config:"/network/networking.config.js",sw:"/network/networking.sw.js"};
 //# sourceMappingURL=networking.config.js.map

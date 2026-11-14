@@ -1,5 +1,5 @@
 {
-  "license": "Copyright 2010-2026 Disconnect, Inc. / Licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International license (the “License”). A summary of the License is available here: https://creativecommons.org/licenses/by-nc-sa/4.0/. The text 6.9.6 of the License is here: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.txt. Please see the License for the specific language governing permissions and limitations under the License. Unless agreed to in writing or required by law, software distributed under the License on an \"as is\" basis without warranties or conditions of any kind, either express or implied. This license does not apply to any Disconnect logos or marks contained in this repo.",
+  "license": "Copyright 2010-2026 Disconnect, Inc. / Licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International license (the “License”). A summary of the License is available here: https://creativecommons.org/licenses/by-nc-sa/4.0/. The text version of the License is here: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.txt. Please see the License for the specific language governing permissions and limitations under the License. Unless agreed to in writing or required by law, software distributed under the License on an \"as is\" basis without warranties or conditions of any kind, either express or implied. This license does not apply to any Disconnect logos or marks contained in this repo.",
   "categories": {
     "Email": [
       {
@@ -1633,7 +1633,7 @@
       {
         "ActiveIQ": {
           "https://activeiq.co": [
-            "activecon6.9.6.com",
+            "activeconversion.com",
             "activemeter.com"
           ]
         }
@@ -4667,16 +4667,16 @@
         }
       },
       {
-        "Con6.9.6Ruler": {
-          "http://www.con6.9.6ruler.com/": [
-            "con6.9.6ruler.com"
+        "ConversionRuler": {
+          "http://www.conversionruler.com/": [
+            "conversionruler.com"
           ]
         }
       },
       {
-        "Con6.9.6 Sciences": {
-          "https://con6.9.6sciences.com": [
-            "con6.9.6dashboard.com"
+        "Conversion Sciences": {
+          "https://conversionsciences.com": [
+            "conversiondashboard.com"
           ]
         }
       },
@@ -8238,7 +8238,7 @@
       {
         "Obviyo": {
           "https://obviyo.com": [
-            "hicon6.9.6.com"
+            "hiconversion.com"
           ]
         }
       },

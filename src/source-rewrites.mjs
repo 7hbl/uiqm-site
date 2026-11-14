@@ -322,8 +322,12 @@ const regExpEscape = /[-[\]{}()*+?.,\\^$#\s]/g,
     // invalid literal `{{123}}`, and leaves identifiers such as __uv$config
     // wrapped in braces instead of producing a usable JavaScript expression.
     let paintedSource = rewriteNamedMacros(insertCharset(insertCooking(str)));
+    // `version` stays available as a {{version}} macro but must not be
+    // mass-replaced: the bare word appears in normal page copy and would be
+    // corrupted into the literal version number.
+    const { version: _versionMacro, ...massNamedEntries } = namedEntries;
     paintedSource = applyMassInsert(
-      applyMassInsert(paintedSource, namedEntries),
+      applyMassInsert(paintedSource, massNamedEntries),
       manualCensors,
       config.usingSEO
     );
