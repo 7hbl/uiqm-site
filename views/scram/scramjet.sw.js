@@ -244,7 +244,7 @@ function responseToTransport(response, targetUrl) {
 
 function shouldBackoffEpoxy(error) {
   const message = String(error?.message || error || '');
-  return /tls handshake|unexpected eof|network error|fetch failed|connection (?:reset|closed|refused)|timed? ?out/i.test(message);
+  return /tls handshake|unexpected eof|network error|fetch failed|connection (?:reset|closed|refused)|timed? ?out|http2|protocol_error/i.test(message);
 }
 
 function rememberEpoxyFailure(origin, error) {

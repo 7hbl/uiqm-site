@@ -59,6 +59,9 @@ wisp.options.port_blacklist = [
 
 const safeProxyDispatcher = new PublicOnlyProxyAgent({
   connect: { lookup: createPublicLookup() },
+  // Some sites (e.g. YouTube) return very large header blocks that exceed
+  // undici's default limit and fail with UND_ERR_HEADERS_OVERFLOW.
+  maxHeaderSize: 256 * 1024,
 });
 
 // The server will check for the existence of this file when a shutdown is requested.

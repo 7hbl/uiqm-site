@@ -416,9 +416,10 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
 
         window.navigateProxyNav = () => {
             const inp = document.getElementById('proxy-nav-input');
-            if (inp && inp.value.trim()) {
-                launchProxyUrl(inp.value.trim());
-            }
+            const value = (inp?.value || '').trim();
+            // The /movies nav bar shows a masked label, not a real address.
+            if (!value || value === 'uiqm.lol/movies') return;
+            launchProxyUrl(value);
         };
         window.retryProxyPage = () => {
             proxyError.dataset.visible = 'false';
@@ -639,7 +640,12 @@ $$  __$$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |       $$ | $$ | $$ |$$   ____|$$ |  $$ 
             proxyShell.style.display = 'block'; loading.style.display = 'flex';
             backBtn.style.display = 'block';
             const navInput = document.getElementById('proxy-nav-input');
-            if (navInput) navInput.value = url;
+            // On /movies never reveal the real upstream address in the nav bar.
+            const moviesMode = location.pathname.replace(/\/+$/, '') === '/movies';
+            if (navInput) {
+                navInput.value = moviesMode ? 'uiqm.lol/movies' : url;
+                navInput.readOnly = moviesMode;
+            }
             if (window._loadTimer) clearTimeout(window._loadTimer);
             window._loadTimer = setTimeout(() => {
                 if (navigationId !== proxyNavigationId) return;
